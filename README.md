@@ -1,0 +1,1 @@
+Community-content-driven, interest-based commerce with Java 21, Spring Boot, Spring Cloud, MySQL, Redis, Kafka, Elasticsearch, and Spring AI, covering multi-mode transactions, community publishing, and AI agents. 基于 Java 21、Spring Boot、Spring Cloud、MySQL、Redis、Kafka、Elasticsearch 与 Spring AI 的社区内容驱动型兴趣消费多模式交易平台，涵盖平台交易、社区内容发布与 AI Agent。
