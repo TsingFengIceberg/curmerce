@@ -1,0 +1,46 @@
+[submodule "reference-submodules/ruoyi-vue-pro"]
+	path = reference-submodules/ruoyi-vue-pro
+	url = https://github.com/YunaiV/ruoyi-vue-pro.git
+	branch = master-jdk17
+	shallow = true
+[submodule "reference-submodules/yudao-cloud"]
+	path = reference-submodules/yudao-cloud
+	url = https://github.com/YunaiV/yudao-cloud.git
+	branch = master-jdk17
+	shallow = true
+[submodule "reference-submodules/SpringBoot-Labs"]
+	path = reference-submodules/SpringBoot-Labs
+	url = https://github.com/yudaocode/SpringBoot-Labs.git
+	shallow = true
+[submodule "reference-submodules/dianping"]
+	path = reference-submodules/dianping
+	url = https://github.com/KNeegcyao/dianping.git
+	shallow = true
+[submodule "reference-submodules/forem"]
+	path = reference-submodules/forem
+	url = https://github.com/forem/forem.git
+	shallow = true
+[submodule "reference-submodules/pixelfed"]
+	path = reference-submodules/pixelfed
+	url = https://github.com/pixelfed/pixelfed.git
+	shallow = true
+[submodule "reference-submodules/mercur"]
+	path = reference-submodules/mercur
+	url = https://github.com/mercurjs/mercur.git
+	shallow = true
+[submodule "reference-submodules/misskey"]
+	path = reference-submodules/misskey
+	url = https://github.com/misskey-dev/misskey.git
+	shallow = true
+[submodule "reference-submodules/mall-swarm"]
+	path = reference-submodules/mall-swarm
+	url = https://github.com/macrozheng/mall-swarm.git
+	shallow = true
+[submodule "reference-submodules/mall"]
+	path = reference-submodules/mall
+	url = https://github.com/macrozheng/mall.git
+	shallow = true
+[submodule "reference-submodules/lynx"]
+	path = reference-submodules/lynx
+	url = https://github.com/lynx-family/lynx.git
+	shallow = true
