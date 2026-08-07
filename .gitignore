@@ -1,3 +1,7 @@
 # Local project guidance and handoff context
-/AGENTS.md
-/HANDOFF.md
+/AGENTS*.md
+/HANDOFF*.md
+
+# Maven build outputs
+**/target/
+**/.flattened-pom.xml
