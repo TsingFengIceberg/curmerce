@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.commerce.dal.dataobject.product;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -28,12 +29,14 @@ public class ProductSkuDO extends BaseDO {
     private Long productId;
     private Long merchantId;
     private String code;
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = JacksonTypeHandler.class, updateStrategy = FieldStrategy.ALWAYS)
     private List<SpecificationValue> specificationValues;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String imageUrl;
     /** Unit: fen (one hundredth of the currency unit). */
     private Long price;
     /** Unit: fen; nullable comparison price. */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long marketPrice;
     private Integer stock;
     /**

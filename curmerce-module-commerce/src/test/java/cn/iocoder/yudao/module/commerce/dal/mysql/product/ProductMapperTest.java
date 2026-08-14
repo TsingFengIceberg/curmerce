@@ -13,6 +13,7 @@ import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import org.junit.jupiter.api.Test;
 
 import jakarta.annotation.Resource;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,6 +64,23 @@ class ProductMapperTest extends BaseDbUnitTest {
         assertEquals(List.of(skuFast.getId(), skuSlow.getId()),
                 skuMapper.selectListByProductIdAndMerchantId(productA.getId(), merchantA.merchant().getId())
                         .stream().map(ProductSkuDO::getId).toList());
+    }
+
+    @Test
+    void auditUpdateExplicitlyClearsReviewMetadata() {
+        MerchantStore merchant = createMerchantStore("merchant_audit");
+        ProductCategoryDO category = createCategory("category_audit");
+        ProductDO rejected = validProduct(merchant, category, "product_audit")
+                .setAuditStatus(3).setReviewerUserId(99L).setReviewTime(LocalDateTime.now())
+                .setRejectReason("old reason");
+        productMapper.insert(rejected);
+
+        assertEquals(1, productMapper.updateAuditExpected(rejected.getId(), 3, 1, null, null, null));
+
+        ProductDO reloaded = productMapper.selectById(rejected.getId());
+        assertNull(reloaded.getReviewerUserId());
+        assertNull(reloaded.getReviewTime());
+        assertNull(reloaded.getRejectReason());
     }
 
     private ProductCategoryDO createCategory(String code) {

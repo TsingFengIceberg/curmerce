@@ -2,6 +2,12 @@ package cn.iocoder.yudao.module.commerce.controller.admin;
 
 import cn.iocoder.yudao.module.commerce.controller.admin.merchant.MerchantController;
 import cn.iocoder.yudao.module.commerce.controller.admin.merchant.vo.MerchantApproveReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.ProductCategoryController;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.ProductController;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.ProductReviewController;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductCreateOwnReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductSkuSaveReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductUpdateOwnReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.store.StoreController;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,6 +29,21 @@ class CommerceControllerContractTest {
         assertPermission(MerchantController.class, "reject", "commerce:merchant:audit");
         assertPermission(StoreController.class, "getOwn", "commerce:store:self-query");
         assertPermission(StoreController.class, "updateOwn", "commerce:store:self-update");
+        assertPermission(ProductCategoryController.class, "create", "commerce:product-category:create");
+        assertPermission(ProductCategoryController.class, "update", "commerce:product-category:update");
+        assertPermission(ProductCategoryController.class, "updateStatus", "commerce:product-category:update");
+        assertPermission(ProductCategoryController.class, "tree", "commerce:product-category:query");
+        assertPermission(ProductController.class, "createOwn", "commerce:product:self-create");
+        assertPermission(ProductController.class, "updateOwn", "commerce:product:self-update");
+        assertPermission(ProductController.class, "getOwn", "commerce:product:self-query");
+        assertPermission(ProductController.class, "pageOwn", "commerce:product:self-query");
+        assertPermission(ProductController.class, "submitOwn", "commerce:product:self-submit");
+        assertPermission(ProductController.class, "listOwn", "commerce:product:self-publish");
+        assertPermission(ProductController.class, "delistOwn", "commerce:product:self-publish");
+        assertPermission(ProductReviewController.class, "page", "commerce:product:query");
+        assertPermission(ProductReviewController.class, "get", "commerce:product:query");
+        assertPermission(ProductReviewController.class, "approve", "commerce:product:audit");
+        assertPermission(ProductReviewController.class, "reject", "commerce:product:audit");
     }
 
     @Test
@@ -36,6 +57,28 @@ class CommerceControllerContractTest {
         assertTrue(updateOwn.getParameterAnnotations()[0].length > 0);
         assertTrue(Arrays.stream(updateOwn.getParameterAnnotations()[0])
                 .anyMatch(annotation -> annotation.annotationType().equals(RequestBody.class)));
+    }
+
+    @Test
+    void productSelfServiceRequestsDoNotAcceptServerOwnedFields() throws Exception {
+        assertNoField(ProductCreateOwnReqVO.class, "merchantId", "reviewerUserId", "auditStatus", "saleStatus");
+        assertNoField(ProductUpdateOwnReqVO.class, "merchantId", "reviewerUserId", "auditStatus", "saleStatus", "code");
+        assertNoField(ProductSkuSaveReqVO.class, "merchantId", "productId");
+    }
+
+    private static void assertNoField(Class<?> type, String... names) {
+        for (String name : names) {
+            Class<?> current = type;
+            while (current != null) {
+                try {
+                    current.getDeclaredField(name);
+                    fail(type.getSimpleName() + " unexpectedly declares " + name);
+                } catch (NoSuchFieldException ignored) {
+                    // Continue through the inheritance chain.
+                }
+                current = current.getSuperclass();
+            }
+        }
     }
 
     @Test
