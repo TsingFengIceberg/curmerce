@@ -17,6 +17,8 @@ import java.util.Set;
  */
 public interface RoleService {
 
+    RoleDO getRoleByCode(String code);
+
     /**
      * 创建角色
      *

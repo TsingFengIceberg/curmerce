@@ -14,6 +14,7 @@ import cn.iocoder.yudao.framework.common.util.collection.SetUtils;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.framework.common.util.monitor.TracerUtils;
 import cn.iocoder.yudao.framework.common.util.servlet.ServletUtils;
+import cn.iocoder.yudao.framework.apilog.core.util.ApiLogSanitizeUtils;
 import cn.iocoder.yudao.framework.web.core.util.WebFrameworkUtils;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.google.common.util.concurrent.UncheckedExecutionException;
@@ -373,8 +374,8 @@ public class GlobalExceptionHandler {
         errorLog.setApplicationName(applicationName);
         errorLog.setRequestUrl(request.getRequestURI());
         Map<String, Object> requestParams = MapUtil.<String, Object>builder()
-                .put("query", ServletUtils.getParamMap(request))
-                .put("body", ServletUtils.getBody(request)).build();
+                .put("query", ApiLogSanitizeUtils.sanitizeMap(ServletUtils.getParamMap(request), null))
+                .put("body", ApiLogSanitizeUtils.sanitizeJson(ServletUtils.getBody(request), null)).build();
         errorLog.setRequestParams(JsonUtils.toJsonString(requestParams));
         errorLog.setRequestMethod(request.getMethod());
         errorLog.setUserAgent(ServletUtils.getUserAgent(request));

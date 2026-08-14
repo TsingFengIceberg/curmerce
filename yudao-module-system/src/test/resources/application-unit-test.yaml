@@ -24,7 +24,7 @@ spring:
   data:
     redis:
       host: 127.0.0.1 # 地址
-      port: 16379 # 端口（单元测试，使用 16379 端口）
+      port: 16389 # 端口（单元测试专用，避免占用本地持久化 Redis）
       database: 0 # 数据库索引
 
 mybatis:

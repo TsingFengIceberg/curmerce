@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.system.api.user;
 
 import cn.iocoder.yudao.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserProvisionReqDTO;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -14,6 +15,8 @@ import java.util.Map;
  * @author 芋道源码
  */
 public interface AdminUserApi {
+
+    Long provisionUser(@jakarta.validation.Valid AdminUserProvisionReqDTO reqDTO);
 
     /**
      * 通过用户 ID 查询用户

@@ -45,6 +45,11 @@ import static cn.iocoder.yudao.module.system.enums.LogRecordConstants.*;
 @Slf4j
 public class RoleServiceImpl implements RoleService {
 
+    @Override
+    public RoleDO getRoleByCode(String code) {
+        return roleMapper.selectByCode(code);
+    }
+
     @Resource
     private PermissionService permissionService;
 

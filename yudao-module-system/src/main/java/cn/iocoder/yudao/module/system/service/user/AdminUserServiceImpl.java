@@ -7,6 +7,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
+import cn.iocoder.yudao.framework.common.exception.enums.GlobalErrorCodeConstants;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
@@ -20,6 +21,7 @@ import cn.iocoder.yudao.module.system.controller.admin.user.vo.user.UserImportEx
 import cn.iocoder.yudao.module.system.controller.admin.user.vo.user.UserImportRespVO;
 import cn.iocoder.yudao.module.system.controller.admin.user.vo.user.UserPageReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.user.vo.user.UserSaveReqVO;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserProvisionReqDTO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.UserPostDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
@@ -60,6 +62,31 @@ import static cn.iocoder.yudao.module.system.enums.LogRecordConstants.*;
 @Service("adminUserService")
 @Slf4j
 public class AdminUserServiceImpl implements AdminUserService {
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long provisionUser(AdminUserProvisionReqDTO reqDTO) {
+        if (reqDTO == null || StrUtil.isBlank(reqDTO.getUsername()) || StrUtil.isBlank(reqDTO.getNickname())
+                || StrUtil.isBlank(reqDTO.getPassword()) || StrUtil.isBlank(reqDTO.getRoleCode())
+                || !reqDTO.getUsername().matches("^[a-zA-Z0-9]{4,30}$")
+                || reqDTO.getNickname().length() < 2 || reqDTO.getNickname().length() > 30
+                || reqDTO.getPassword().length() < 8 || reqDTO.getPassword().length() > 64
+                || (StrUtil.isNotBlank(reqDTO.getMobile()) && !ValidationUtils.isMobile(reqDTO.getMobile()))) {
+            throw exception(GlobalErrorCodeConstants.BAD_REQUEST);
+        }
+        tenantService.handleTenantInfo(tenant -> {
+            if (userMapper.selectCount() >= tenant.getAccountCount()) {
+                throw exception(USER_COUNT_MAX, tenant.getAccountCount());
+            }
+        });
+        validateUserForCreateOrUpdate(null, reqDTO.getUsername(), reqDTO.getMobile(), null, null, null);
+        AdminUserDO user = new AdminUserDO().setUsername(reqDTO.getUsername())
+                .setNickname(reqDTO.getNickname()).setMobile(reqDTO.getMobile())
+                .setStatus(CommonStatusEnum.ENABLE.getStatus())
+                .setPassword(encodePassword(reqDTO.getPassword()));
+        userMapper.insert(user);
+        return user.getId();
+    }
 
     static final String USER_INIT_PASSWORD_KEY = "system.user.init-password";
 

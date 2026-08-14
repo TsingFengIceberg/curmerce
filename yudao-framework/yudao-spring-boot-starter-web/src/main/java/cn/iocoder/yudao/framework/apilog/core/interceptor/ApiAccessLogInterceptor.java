@@ -6,6 +6,7 @@ import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.servlet.ServletUtils;
 import cn.iocoder.yudao.framework.common.util.spring.SpringUtils;
+import cn.iocoder.yudao.framework.apilog.core.util.ApiLogSanitizeUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -48,8 +49,10 @@ public class ApiAccessLogInterceptor implements HandlerInterceptor {
             if (CollUtil.isEmpty(queryString) && StrUtil.isEmpty(requestBody)) {
                 log.info("[preHandle][开始请求 URL({}) 无参数]", request.getRequestURI());
             } else {
+                String safeBody = ApiLogSanitizeUtils.sanitizeJson(requestBody, null);
+                String safeQuery = ApiLogSanitizeUtils.sanitizeMap(queryString, null);
                 log.info("[preHandle][开始请求 URL({}) 参数({})]", request.getRequestURI(),
-                        StrUtil.blankToDefault(requestBody, queryString.toString()));
+                        StrUtil.blankToDefault(safeBody, StrUtil.blankToDefault(safeQuery, "<omitted>")));
             }
             // 计时
             StopWatch stopWatch = new StopWatch();

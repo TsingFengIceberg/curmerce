@@ -11,6 +11,7 @@ import cn.iocoder.yudao.module.system.controller.admin.user.vo.user.UserImportRe
 import cn.iocoder.yudao.module.system.controller.admin.user.vo.user.UserPageReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.user.vo.user.UserSaveReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserProvisionReqDTO;
 import jakarta.validation.Valid;
 
 import java.util.Collection;
@@ -24,6 +25,8 @@ import java.util.Map;
  * @author 芋道源码
  */
 public interface AdminUserService {
+
+    Long provisionUser(@Valid AdminUserProvisionReqDTO reqDTO);
 
     /**
      * 创建用户
