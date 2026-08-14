@@ -1,6 +1,8 @@
 # Local project guidance and handoff context
 /AGENTS*.md
 /HANDOFF*.md
+/.handoff/
+/.plans/
 
 # Maven build outputs
 **/target/

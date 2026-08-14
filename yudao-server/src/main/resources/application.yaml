@@ -1,0 +1,128 @@
+spring:
+  application:
+    name: curmerce-server
+  profiles:
+    active: local
+  main:
+    allow-circular-references: true
+  servlet:
+    multipart:
+      max-file-size: 16MB
+      max-request-size: 32MB
+  jackson:
+    serialization:
+      write-dates-as-timestamps: true
+      write-date-timestamps-as-nanoseconds: false
+      write-durations-as-timestamps: true
+      fail-on-empty-beans: false
+  cache:
+    type: REDIS
+    redis:
+      time-to-live: 1h
+  data:
+    redis:
+      repositories:
+        enabled: false
+
+server:
+  servlet:
+    encoding:
+      enabled: true
+      charset: UTF-8
+      force: true
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+  default-flat-param-object: true
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: NONE
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+    banner: false
+  type-aliases-package: ${yudao.info.base-package}.module.*.dal.dataobject
+  encryptor:
+    password: ${CURMERCE_MYBATIS_ENCRYPTOR_PASSWORD:local-development-only}
+
+mybatis-plus-join:
+  banner: false
+  sub-table-logic: true
+  ms-cache: true
+  table-alias: t
+  logic-del-type: on
+
+easy-trans:
+  is-enable-global: false
+
+aj:
+  captcha:
+    jigsaw: classpath:images/jigsaw
+    pic-click: classpath:images/pic-click
+    cache-type: redis
+    type: blockPuzzle
+
+yudao:
+  info:
+    version: 0.1.0-SNAPSHOT
+    base-package: cn.iocoder.yudao
+  web:
+    admin-ui:
+      url: http://127.0.0.1:48080
+  security:
+    mock-enable: false
+  api-encrypt:
+    enable: false
+  websocket:
+    enable: false
+  swagger:
+    title: Curmerce Platform API
+    description: Curmerce platform foundation APIs
+    author: Curmerce
+    version: ${yudao.info.version}
+    url: ${yudao.web.admin-ui.url}
+    email: devnull@localhost
+    license: MIT
+    license-url: https://opensource.org/licenses/MIT
+  codegen:
+    base-package: ${yudao.info.base-package}
+    db-schemas:
+      - ${MYSQL_DATABASE:curmerce}
+    front-type: 20
+    vo-type: 10
+    delete-batch-enable: true
+    unit-test-enable: false
+    import-enable: false
+  tenant:
+    enable: false
+  captcha:
+    enable: false
+  sms-code:
+    expire-times: 10m
+    send-frequency: 1m
+    send-maximum-quantity-per-day: 10
+    begin-code: 100000
+    end-code: 999999
+  access-log:
+    enable: true
+  demo: false
+  metrics:
+    enable: false
+  tracer:
+    enable: false
+
+justauth:
+  enabled: false

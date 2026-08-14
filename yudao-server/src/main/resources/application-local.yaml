@@ -1,0 +1,76 @@
+server:
+  address: 127.0.0.1
+  port: ${CURMERCE_SERVER_PORT:48080}
+
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration
+  datasource:
+    druid:
+      web-stat-filter:
+        enabled: false
+      stat-view-servlet:
+        enabled: false
+      filter:
+        stat:
+          enabled: true
+          log-slow-sql: true
+          slow-sql-millis: 500
+        wall:
+          config:
+            multi-statement-allow: false
+    dynamic:
+      primary: master
+      strict: true
+      druid:
+        initial-size: 1
+        min-idle: 1
+        max-active: 10
+        max-wait: 60000
+        validation-query: SELECT 1
+        test-while-idle: true
+      datasource:
+        master:
+          name: ${MYSQL_DATABASE:curmerce}
+          url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:13306}/${MYSQL_DATABASE:curmerce}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+          username: ${MYSQL_USER:curmerce}
+          password: ${MYSQL_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:16379}
+      database: ${REDIS_DATABASE:0}
+      username: ${REDIS_USER:curmerce}
+      password: ${REDIS_PASSWORD}
+  quartz:
+    auto-startup: false
+
+management:
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info
+
+logging:
+  file:
+    name: ${CURMERCE_LOG_FILE:${user.home}/.local/state/curmerce/yudao-server.log}
+  level:
+    root: INFO
+    cn.iocoder.yudao: INFO
+
+wx:
+  mp:
+    app-id: local-disabled
+    secret: local-disabled
+  miniapp:
+    appid: local-disabled
+    secret: local-disabled
+
+yudao:
+  access-log:
+    enable: false
