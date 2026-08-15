@@ -46,4 +46,7 @@ public interface ErrorCodeConstants {
     ErrorCode PRODUCT_SALE_STATE_INVALID = new ErrorCode(1_023_003_014, "当前商品销售状态不允许该操作");
     ErrorCode PRODUCT_NO_SELLABLE_SKU = new ErrorCode(1_023_003_015, "商品没有可售 SKU 或库存");
     ErrorCode PRODUCT_STATE_CONFLICT = new ErrorCode(1_023_003_016, "商品状态已被其他请求改变");
+    ErrorCode CART_SKU_NOT_AVAILABLE = new ErrorCode(1_023_004_100, "商品规格当前不可购买");
+    ErrorCode CART_QUANTITY_INVALID = new ErrorCode(1_023_004_101, "购物车数量超出当前库存或上限");
+    ErrorCode CART_ITEM_NOT_EXISTS = new ErrorCode(1_023_004_102, "购物车项不存在");
 }

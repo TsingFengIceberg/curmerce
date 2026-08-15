@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.commerce.dal.mysql.product;
 
 import cn.iocoder.yudao.framework.test.core.ut.BaseDbUnitTest;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductCategoryDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO;
@@ -81,6 +83,27 @@ class ProductMapperTest extends BaseDbUnitTest {
         assertNull(reloaded.getReviewerUserId());
         assertNull(reloaded.getReviewTime());
         assertNull(reloaded.getRejectReason());
+    }
+
+    @Test
+    void publicPageAppliesVisibilityBeforePaginationAndTotal() {
+        MerchantStore merchant = createMerchantStore("merchant_public");
+        ProductCategoryDO category = createCategory("category_public");
+
+        ProductDO visible = validProduct(merchant, category, "product_public")
+                .setAuditStatus(2).setSaleStatus(1).setReviewerUserId(1L).setReviewTime(LocalDateTime.now());
+        productMapper.insert(visible);
+        skuMapper.insert(validSku(visible, merchant, "sku_public", 0, 1000L, 2));
+
+        ProductDO withoutSku = validProduct(merchant, category, "product_without_sku")
+                .setAuditStatus(2).setSaleStatus(1).setReviewerUserId(1L).setReviewTime(LocalDateTime.now());
+        productMapper.insert(withoutSku);
+
+        PageResult<ProductDO> page = productMapper.selectPublicPage(new PageParam().setPageNo(1).setPageSize(10),
+                List.of(category.getId()), null);
+
+        assertEquals(1L, page.getTotal());
+        assertEquals(List.of(visible.getId()), page.getList().stream().map(ProductDO::getId).toList());
     }
 
     private ProductCategoryDO createCategory(String code) {

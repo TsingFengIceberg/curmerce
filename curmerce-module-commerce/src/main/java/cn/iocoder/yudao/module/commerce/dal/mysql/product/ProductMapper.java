@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.commerce.dal.mysql.product;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.framework.mybatis.core.util.MyBatisUtils;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductPageOwnReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductReviewPageReqVO;
@@ -8,13 +10,51 @@ import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.Collection;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Mapper
 public interface ProductMapper extends BaseMapperX<ProductDO> {
+
+    /**
+     * Public catalog pagination must apply every visibility predicate before the
+     * pagination interceptor calculates records and totals.
+     */
+    IPage<ProductDO> selectPublicPage(IPage<ProductDO> page,
+                                      @Param("categoryIds") Collection<Long> categoryIds,
+                                      @Param("keyword") String keyword);
+
+    default PageResult<ProductDO> selectPublicPage(PageParam pageParam,
+                                                   Collection<Long> categoryIds,
+                                                   String keyword) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return PageResult.empty();
+        }
+        if (PageParam.PAGE_SIZE_NONE.equals(pageParam.getPageSize())) {
+            List<ProductDO> list = selectPublicPage(new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, -1),
+                    categoryIds, keyword).getRecords();
+            return new PageResult<>(list, (long) list.size());
+        }
+        IPage<ProductDO> page = MyBatisUtils.buildPage(pageParam);
+        selectPublicPage(page, categoryIds, keyword);
+        return new PageResult<>(page.getRecords(), page.getTotal());
+    }
+
+    default List<ProductDO> selectPublicCandidates(String keyword) {
+        LambdaQueryWrapper<ProductDO> wrapper = new LambdaQueryWrapper<ProductDO>()
+                .eq(ProductDO::getAuditStatus, cn.iocoder.yudao.module.commerce.enums.product.ProductAuditStatusEnum.APPROVED.getStatus())
+                .eq(ProductDO::getSaleStatus, cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum.ON_SALE.getStatus())
+                .orderByAsc(ProductDO::getSort).orderByDesc(ProductDO::getId);
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.and(w -> w.like(ProductDO::getName, keyword).or().like(ProductDO::getSubtitle, keyword));
+        }
+        return selectList(wrapper);
+    }
 
     default ProductDO selectByIdAndMerchantId(Long id, Long merchantId) {
         return selectOne(new LambdaQueryWrapper<ProductDO>()

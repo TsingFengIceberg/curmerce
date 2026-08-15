@@ -12,6 +12,12 @@ import java.util.List;
 @Mapper
 public interface ProductSkuMapper extends BaseMapperX<ProductSkuDO> {
 
+    default List<ProductSkuDO> selectPublicListByProductId(Long productId) {
+        return selectList(new LambdaQueryWrapper<ProductSkuDO>().eq(ProductSkuDO::getProductId, productId)
+                .eq(ProductSkuDO::getStatus, cn.iocoder.yudao.framework.common.enums.CommonStatusEnum.ENABLE.getStatus())
+                .orderByAsc(ProductSkuDO::getSort).orderByAsc(ProductSkuDO::getId));
+    }
+
     default ProductSkuDO selectByMerchantIdAndCode(Long merchantId, String code) {
         return selectOne(new LambdaQueryWrapper<ProductSkuDO>()
                 .eq(ProductSkuDO::getMerchantId, merchantId)

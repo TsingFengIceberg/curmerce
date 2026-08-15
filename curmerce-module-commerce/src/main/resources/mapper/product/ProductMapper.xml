@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper">
+
+    <select id="selectPublicPage" resultType="cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO">
+        SELECT p.*
+        FROM commerce_product p
+        INNER JOIN commerce_merchant m
+            ON m.id = p.merchant_id
+            AND m.deleted = 0
+            AND m.status = 1
+        INNER JOIN commerce_store s
+            ON s.id = p.store_id
+            AND s.merchant_id = p.merchant_id
+            AND s.deleted = 0
+            AND s.status = 0
+        WHERE p.deleted = 0
+          AND p.audit_status = 2
+          AND p.sale_status = 1
+          AND p.category_id IN
+          <foreach collection="categoryIds" item="categoryId" open="(" separator="," close=")">
+              #{categoryId}
+          </foreach>
+          AND EXISTS (
+              SELECT 1
+              FROM commerce_product_sku sku
+              WHERE sku.product_id = p.id
+                AND sku.merchant_id = p.merchant_id
+                AND sku.deleted = 0
+                AND sku.status = 0
+          )
+        <if test="keyword != null and keyword != ''">
+          AND (p.name LIKE CONCAT('%', #{keyword}, '%')
+               OR p.subtitle LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY p.sort ASC, p.id DESC
+    </select>
+</mapper>
