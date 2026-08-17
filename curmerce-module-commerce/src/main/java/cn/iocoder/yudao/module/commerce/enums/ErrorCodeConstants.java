@@ -58,4 +58,15 @@ public interface ErrorCodeConstants {
     ErrorCode ORDER_NOT_FOUND = new ErrorCode(1_023_005_005, "订单不存在");
     ErrorCode ORDER_IDEMPOTENCY_KEY_INVALID = new ErrorCode(1_023_005_006, "幂等键格式无效");
     ErrorCode ORDER_AMOUNT_OVERFLOW = new ErrorCode(1_023_005_007, "订单金额超出允许范围");
+
+    ErrorCode PAYMENT_METHOD_INVALID = new ErrorCode(1_023_006_000, "当前仅支持模拟支付方式");
+    ErrorCode PAYMENT_ORDER_NOT_PAYABLE = new ErrorCode(1_023_006_001, "当前订单状态不可支付");
+    ErrorCode PAYMENT_ALREADY_EXISTS = new ErrorCode(1_023_006_002, "订单支付单状态异常");
+    ErrorCode PAYMENT_NOT_FOUND = new ErrorCode(1_023_006_003, "支付单不存在");
+    ErrorCode PAYMENT_NO_INVALID = new ErrorCode(1_023_006_004, "支付单号格式无效");
+    ErrorCode PAYMENT_CALLBACK_ID_INVALID = new ErrorCode(1_023_006_005, "支付回调标识格式无效");
+    ErrorCode PAYMENT_AMOUNT_INVALID = new ErrorCode(1_023_006_006, "支付金额无效");
+    ErrorCode PAYMENT_AMOUNT_MISMATCH = new ErrorCode(1_023_006_007, "支付金额与订单应付金额不一致");
+    ErrorCode PAYMENT_CALLBACK_CONFLICT = new ErrorCode(1_023_006_008, "支付回调重复或内容冲突");
+    ErrorCode PAYMENT_ORDER_STATE_INVALID = new ErrorCode(1_023_006_009, "支付单与订单状态不一致");
 }
