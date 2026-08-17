@@ -22,6 +22,10 @@ public interface MemberAddressMapper extends BaseMapperX<MemberAddressDO> {
         return selectOne(new LambdaQueryWrapper<MemberAddressDO>().eq(MemberAddressDO::getId, id)
                 .eq(MemberAddressDO::getUserId, userId));
     }
+    default MemberAddressDO selectByIdAndUserIdForUpdate(Long id, Long userId) {
+        return selectOneForUpdate(new LambdaQueryWrapper<MemberAddressDO>().eq(MemberAddressDO::getId, id)
+                .eq(MemberAddressDO::getUserId, userId));
+    }
     default int clearDefault(Long userId) {
         return update(new MemberAddressDO().setDefaultStatus(false).setDefaultMarker(null),
                 new LambdaUpdateWrapper<MemberAddressDO>().eq(MemberAddressDO::getUserId, userId)

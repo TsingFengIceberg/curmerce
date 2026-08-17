@@ -4,7 +4,9 @@ import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductSkuDO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.Collection;
 import java.util.List;
@@ -45,6 +47,15 @@ public interface ProductSkuMapper extends BaseMapperX<ProductSkuDO> {
                 .orderByAsc(ProductSkuDO::getId)
                 .last("FOR UPDATE"));
     }
+
+    default ProductSkuDO selectByIdAndProductIdForUpdate(Long id, Long productId) {
+        return selectOneForUpdate(new LambdaQueryWrapper<ProductSkuDO>().eq(ProductSkuDO::getId, id)
+                .eq(ProductSkuDO::getProductId, productId));
+    }
+
+    @Update("UPDATE commerce_product_sku SET stock = stock - #{quantity}, update_time = CURRENT_TIMESTAMP "
+            + "WHERE id = #{id} AND deleted = 0 AND stock >= #{quantity}")
+    int deductStock(@Param("id") Long id, @Param("quantity") int quantity);
 
     default List<ProductSkuDO> selectListByProductIdAndMerchantIdForUpdate(Long productId, Long merchantId) {
         return selectList(new LambdaQueryWrapper<ProductSkuDO>()

@@ -86,6 +86,10 @@ public class MemberAddressServiceImpl implements MemberAddressService {
         userService.requireActiveUser(userId);
         return addressMapper.selectListByUserId(userId).stream().map(this::toResp).toList();
     }
+    @Override public MemberAddressDO getAddressForUpdate(Long userId, Long id) {
+        userService.requireActiveUserForUpdate(userId);
+        return addressMapper.selectByIdAndUserIdForUpdate(id, userId);
+    }
     private MemberAddressDO toDO(Long userId, MemberAddressBaseVO req) {
         return new MemberAddressDO().setUserId(userId).setName(StrUtil.trim(req.getName()))
                 .setMobile(StrUtil.trim(req.getMobile())).setAreaId(req.getAreaId())

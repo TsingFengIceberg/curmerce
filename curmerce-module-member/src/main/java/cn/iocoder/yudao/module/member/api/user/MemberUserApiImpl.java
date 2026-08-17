@@ -26,4 +26,9 @@ public class MemberUserApiImpl implements MemberUserApi {
     public void validateActiveUser(Long id) {
         if (userService.getActiveUser(id) == null) throw exception(USER_NOT_EXISTS);
     }
+
+    @Override
+    public void validateActiveUserForUpdate(Long id) {
+        userService.requireActiveUserForUpdate(id);
+    }
 }

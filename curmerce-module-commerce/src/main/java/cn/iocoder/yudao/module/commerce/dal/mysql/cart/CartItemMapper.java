@@ -20,6 +20,12 @@ public interface CartItemMapper extends BaseMapperX<CartItemDO> {
     default List<CartItemDO> selectListByUserId(Long userId) {
         return selectList(new LambdaQueryWrapper<CartItemDO>().eq(CartItemDO::getMemberUserId, userId).orderByDesc(CartItemDO::getId));
     }
+    default List<CartItemDO> selectSelectedListByUserIdForUpdate(Long userId) {
+        return selectList(new LambdaQueryWrapper<CartItemDO>().eq(CartItemDO::getMemberUserId, userId)
+                .eq(CartItemDO::getSelected, true)
+                .orderByAsc(CartItemDO::getProductId).orderByAsc(CartItemDO::getSkuId).orderByAsc(CartItemDO::getId)
+                .last("FOR UPDATE"));
+    }
     default int updateQuantity(Long id, Long userId, int quantity) {
         return update(new CartItemDO().setQuantity(quantity), new LambdaUpdateWrapper<CartItemDO>().eq(CartItemDO::getId, id).eq(CartItemDO::getMemberUserId, userId));
     }

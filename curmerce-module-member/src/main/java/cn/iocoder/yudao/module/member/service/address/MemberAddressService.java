@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.member.service.address;
 
 import cn.iocoder.yudao.module.member.controller.app.address.vo.*;
+import cn.iocoder.yudao.module.member.dal.dataobject.address.MemberAddressDO;
 import java.util.List;
 
 public interface MemberAddressService {
@@ -10,4 +11,5 @@ public interface MemberAddressService {
     MemberAddressRespVO getAddress(Long userId, Long id);
     MemberAddressRespVO getDefaultAddress(Long userId);
     List<MemberAddressRespVO> getAddressList(Long userId);
+    MemberAddressDO getAddressForUpdate(Long userId, Long id);
 }

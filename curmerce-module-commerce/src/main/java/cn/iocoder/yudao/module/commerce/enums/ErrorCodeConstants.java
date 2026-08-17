@@ -49,4 +49,13 @@ public interface ErrorCodeConstants {
     ErrorCode CART_SKU_NOT_AVAILABLE = new ErrorCode(1_023_004_100, "商品规格当前不可购买");
     ErrorCode CART_QUANTITY_INVALID = new ErrorCode(1_023_004_101, "购物车数量超出当前库存或上限");
     ErrorCode CART_ITEM_NOT_EXISTS = new ErrorCode(1_023_004_102, "购物车项不存在");
+
+    ErrorCode ORDER_CHECKOUT_EMPTY = new ErrorCode(1_023_005_000, "没有选中的购物车商品");
+    ErrorCode ORDER_CHECKOUT_MULTI_STORE = new ErrorCode(1_023_005_001, "一次下单只能包含同一店铺的商品");
+    ErrorCode ORDER_ADDRESS_NOT_AVAILABLE = new ErrorCode(1_023_005_002, "收货地址不存在或无权使用");
+    ErrorCode ORDER_ITEM_NOT_AVAILABLE = new ErrorCode(1_023_005_003, "订单商品当前不可购买");
+    ErrorCode ORDER_STOCK_INSUFFICIENT = new ErrorCode(1_023_005_004, "商品库存不足");
+    ErrorCode ORDER_NOT_FOUND = new ErrorCode(1_023_005_005, "订单不存在");
+    ErrorCode ORDER_IDEMPOTENCY_KEY_INVALID = new ErrorCode(1_023_005_006, "幂等键格式无效");
+    ErrorCode ORDER_AMOUNT_OVERFLOW = new ErrorCode(1_023_005_007, "订单金额超出允许范围");
 }

@@ -1,3 +1,5 @@
+DELETE FROM commerce_order_item;
+DELETE FROM commerce_order;
 DELETE FROM commerce_cart_item;
 DELETE FROM commerce_product_sku;
 DELETE FROM commerce_product;

@@ -1,0 +1,227 @@
+package cn.iocoder.yudao.module.commerce.service.order;
+
+import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.commerce.controller.app.order.vo.*;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.cart.CartItemDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderItemDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductCategoryDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductSkuDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.store.StoreDO;
+import cn.iocoder.yudao.module.commerce.dal.mysql.cart.CartItemMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.merchant.MerchantMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderItemMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductCategoryMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
+import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
+import cn.iocoder.yudao.module.member.api.address.MemberAddressApi;
+import cn.iocoder.yudao.module.member.api.address.dto.MemberAddressRespDTO;
+import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
+import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
+import jakarta.annotation.Resource;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.regex.Pattern;
+
+import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.*;
+
+@Service
+public class OrderServiceImpl implements OrderService {
+    private static final Pattern IDEMPOTENCY_KEY_PATTERN = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:-]{7,63}");
+    private static final DateTimeFormatter ORDER_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+
+    @Resource private MemberUserApi memberUserApi;
+    @Resource private MemberAddressApi memberAddressApi;
+    @Resource private CartItemMapper cartItemMapper;
+    @Resource private ProductMapper productMapper;
+    @Resource private ProductSkuMapper productSkuMapper;
+    @Resource private ProductCategoryMapper productCategoryMapper;
+    @Resource private MerchantMapper merchantMapper;
+    @Resource private StoreMapper storeMapper;
+    @Resource private CommerceOrderMapper orderMapper;
+    @Resource private CommerceOrderItemMapper orderItemMapper;
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OrderCreateRespVO createOrder(Long userId, Long addressId, String idempotencyKey) {
+        String key = normalizeIdempotencyKey(idempotencyKey);
+        memberUserApi.validateActiveUserForUpdate(userId);
+        CommerceOrderDO existing = orderMapper.selectByUserAndIdempotencyKey(userId, key);
+        if (existing != null) return toCreateResponse(existing);
+
+        MemberAddressRespDTO address = memberAddressApi.getOwnedAddressForUpdate(userId, addressId);
+        if (address == null) throw exception(ORDER_ADDRESS_NOT_AVAILABLE);
+        List<CartItemDO> cartItems = cartItemMapper.selectSelectedListByUserIdForUpdate(userId);
+        if (cartItems.isEmpty()) throw exception(ORDER_CHECKOUT_EMPTY);
+
+        List<CheckoutLine> lines = new ArrayList<>();
+        Long merchantId = null;
+        Long storeId = null;
+        long totalAmount = 0L;
+        int itemCount = 0;
+        for (CartItemDO cartItem : cartItems) {
+            if (cartItem.getQuantity() == null || cartItem.getQuantity() < 1 || cartItem.getQuantity() > 99) {
+                throw exception(ORDER_ITEM_NOT_AVAILABLE);
+            }
+            ProductDO product = productMapper.selectByIdForUpdate(cartItem.getProductId());
+            ProductSkuDO sku = productSkuMapper.selectByIdAndProductIdForUpdate(cartItem.getSkuId(), cartItem.getProductId());
+            if (!isSellable(product, sku)) throw exception(ORDER_ITEM_NOT_AVAILABLE);
+            MerchantDO merchant = merchantMapper.selectById(product.getMerchantId());
+            StoreDO store = storeMapper.selectById(product.getStoreId());
+            ProductCategoryDO category = productCategoryMapper.selectById(product.getCategoryId());
+            if (merchant == null || !Objects.equals(merchant.getStatus(), 1)
+                    || store == null || !Objects.equals(store.getMerchantId(), product.getMerchantId())
+                    || !CommonStatusEnum.isEnable(store.getStatus()) || !categoryTreeEnabled(category)
+                    || !Objects.equals(sku.getMerchantId(), product.getMerchantId())) {
+                throw exception(ORDER_ITEM_NOT_AVAILABLE);
+            }
+            if (merchantId == null) {
+                merchantId = product.getMerchantId();
+                storeId = product.getStoreId();
+            } else if (!Objects.equals(merchantId, product.getMerchantId()) || !Objects.equals(storeId, product.getStoreId())) {
+                throw exception(ORDER_CHECKOUT_MULTI_STORE);
+            }
+            long lineTotal = multiplyAmount(sku.getPrice(), cartItem.getQuantity());
+            totalAmount = addAmount(totalAmount, lineTotal);
+            itemCount = Math.addExact(itemCount, cartItem.getQuantity());
+            lines.add(new CheckoutLine(cartItem, product, sku, lineTotal));
+        }
+
+        CommerceOrderDO order = new CommerceOrderDO().setOrderNo(generateOrderNo())
+                .setMemberUserId(userId).setMerchantId(merchantId).setStoreId(storeId)
+                .setIdempotencyKey(key).setStatus(OrderStatusEnum.PENDING_PAYMENT.getStatus())
+                .setItemCount(itemCount).setTotalAmount(totalAmount).setPayableAmount(totalAmount)
+                .setReceiverName(address.getName()).setReceiverMobile(address.getMobile())
+                .setReceiverAreaId(address.getAreaId()).setReceiverAreaName(address.getAreaName())
+                .setReceiverDetailAddress(address.getDetailAddress());
+        orderMapper.insert(order);
+        for (CheckoutLine line : lines) {
+            if (productSkuMapper.deductStock(line.sku().getId(), line.cartItem().getQuantity()) != 1) {
+                throw exception(ORDER_STOCK_INSUFFICIENT);
+            }
+            CommerceOrderItemDO item = new CommerceOrderItemDO().setOrderId(order.getId())
+                    .setProductId(line.product().getId()).setSkuId(line.sku().getId())
+                    .setProductName(line.product().getName()).setProductImageUrl(line.product().getMainImageUrl())
+                    .setSkuCode(line.sku().getCode()).setSpecificationValues(line.sku().getSpecificationValues())
+                    .setSkuImageUrl(line.sku().getImageUrl()).setPrice(line.sku().getPrice())
+                    .setQuantity(line.cartItem().getQuantity()).setTotalAmount(line.lineTotal());
+            orderItemMapper.insert(item);
+        }
+        cartItemMapper.deleteOwned(userId, lines.stream().map(line -> line.cartItem().getId()).toList());
+        return toCreateResponse(order);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<OrderSummaryRespVO> getOrderPage(Long userId, OrderPageReqVO reqVO) {
+        memberUserApi.validateActiveUser(userId);
+        PageResult<CommerceOrderDO> page = orderMapper.selectPageOwned(userId, reqVO);
+        return new PageResult<>(page.getList().stream().map(this::toSummary).toList(), page.getTotal());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderDetailRespVO getOrder(Long userId, Long id) {
+        memberUserApi.validateActiveUser(userId);
+        CommerceOrderDO order = orderMapper.selectOwned(userId, id);
+        if (order == null) throw exception(ORDER_NOT_FOUND);
+        OrderDetailRespVO response = new OrderDetailRespVO();
+        copySummary(order, response);
+        response.setReceiverName(order.getReceiverName()).setReceiverMobile(order.getReceiverMobile())
+                .setReceiverAreaId(order.getReceiverAreaId()).setReceiverAreaName(order.getReceiverAreaName())
+                .setReceiverDetailAddress(order.getReceiverDetailAddress())
+                .setItems(orderItemMapper.selectListByOrderId(order.getId()).stream().map(this::toItem).toList());
+        return response;
+    }
+
+    private boolean isSellable(ProductDO product, ProductSkuDO sku) {
+        return product != null && Objects.equals(product.getAuditStatus(), 2)
+                && Objects.equals(product.getSaleStatus(), 1)
+                && sku != null && CommonStatusEnum.isEnable(sku.getStatus())
+                && sku.getPrice() != null && sku.getPrice() >= 0
+                && sku.getStock() != null && sku.getStock() >= 0;
+    }
+
+    private boolean categoryTreeEnabled(ProductCategoryDO category) {
+        if (category == null || !CommonStatusEnum.isEnable(category.getStatus())) return false;
+        Set<Long> seen = new HashSet<>();
+        Long current = category.getId();
+        while (current != null) {
+            if (!seen.add(current)) return false;
+            ProductCategoryDO node = productCategoryMapper.selectById(current);
+            if (node == null || !CommonStatusEnum.isEnable(node.getStatus())) return false;
+            current = node.getParentId();
+        }
+        return true;
+    }
+
+    private String normalizeIdempotencyKey(String value) {
+        String key = StrUtil.trim(value);
+        if (key == null || !IDEMPOTENCY_KEY_PATTERN.matcher(key).matches()) {
+            throw exception(ORDER_IDEMPOTENCY_KEY_INVALID);
+        }
+        return key;
+    }
+
+    private long multiplyAmount(Long price, int quantity) {
+        if (price == null || price < 0) throw exception(ORDER_ITEM_NOT_AVAILABLE);
+        try {
+            return Math.multiplyExact(price, (long) quantity);
+        } catch (ArithmeticException ex) {
+            throw exception(ORDER_AMOUNT_OVERFLOW);
+        }
+    }
+
+    private long addAmount(long left, long right) {
+        try {
+            return Math.addExact(left, right);
+        } catch (ArithmeticException ex) {
+            throw exception(ORDER_AMOUNT_OVERFLOW);
+        }
+    }
+
+    private String generateOrderNo() {
+        return "C" + LocalDateTime.now().format(ORDER_TIME_FORMAT)
+                + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+    }
+
+    private OrderCreateRespVO toCreateResponse(CommerceOrderDO order) {
+        return new OrderCreateRespVO().setOrderId(order.getId()).setOrderNo(order.getOrderNo())
+                .setStatus(order.getStatus()).setPayableAmount(order.getPayableAmount());
+    }
+
+    private OrderSummaryRespVO toSummary(CommerceOrderDO order) {
+        OrderSummaryRespVO response = new OrderSummaryRespVO();
+        copySummary(order, response);
+        return response;
+    }
+
+    private void copySummary(CommerceOrderDO order, OrderSummaryRespVO response) {
+        response.setId(order.getId()).setOrderNo(order.getOrderNo()).setMerchantId(order.getMerchantId())
+                .setStoreId(order.getStoreId()).setStatus(order.getStatus()).setItemCount(order.getItemCount())
+                .setTotalAmount(order.getTotalAmount()).setPayableAmount(order.getPayableAmount())
+                .setCreateTime(order.getCreateTime());
+    }
+
+    private OrderItemRespVO toItem(CommerceOrderItemDO item) {
+        return new OrderItemRespVO().setId(item.getId()).setProductId(item.getProductId()).setSkuId(item.getSkuId())
+                .setProductName(item.getProductName()).setProductImageUrl(item.getProductImageUrl())
+                .setSkuCode(item.getSkuCode()).setSpecificationValues(item.getSpecificationValues())
+                .setSkuImageUrl(item.getSkuImageUrl()).setPrice(item.getPrice()).setQuantity(item.getQuantity())
+                .setTotalAmount(item.getTotalAmount());
+    }
+
+    private record CheckoutLine(CartItemDO cartItem, ProductDO product, ProductSkuDO sku, long lineTotal) { }
+}
