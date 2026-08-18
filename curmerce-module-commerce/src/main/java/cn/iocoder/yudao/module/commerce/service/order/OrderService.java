@@ -10,6 +10,7 @@ public interface OrderService {
     OrderCreateRespVO createOrder(Long userId, Long addressId, String idempotencyKey);
     PageResult<OrderSummaryRespVO> getOrderPage(Long userId, OrderPageReqVO reqVO);
     OrderDetailRespVO getOrder(Long userId, Long id);
+    void confirmReceipt(Long userId, Long id);
     PageResult<MerchantOrderRespVO> getOwnPendingShipmentPage(MerchantOrderPageReqVO reqVO);
     void shipOwnOrder(MerchantOrderShipReqVO reqVO);
 }

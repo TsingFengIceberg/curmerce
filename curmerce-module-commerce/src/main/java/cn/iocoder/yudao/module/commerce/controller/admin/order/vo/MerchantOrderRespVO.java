@@ -28,6 +28,7 @@ public class MerchantOrderRespVO {
     private LocalDateTime shippingTime;
     private String logisticsCompany;
     private String trackingNo;
+    private LocalDateTime completionTime;
     private LocalDateTime createTime;
     private List<OrderItemRespVO> items;
 }

@@ -32,4 +32,5 @@ public class CommerceOrderDO extends BaseDO {
     private LocalDateTime shippingTime;
     private String logisticsCompany;
     private String trackingNo;
+    private LocalDateTime completionTime;
 }

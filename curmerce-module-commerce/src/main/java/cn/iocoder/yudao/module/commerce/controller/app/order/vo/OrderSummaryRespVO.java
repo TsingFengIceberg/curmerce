@@ -14,4 +14,5 @@ public class OrderSummaryRespVO {
     private Long totalAmount;
     private Long payableAmount;
     private LocalDateTime createTime;
+    private LocalDateTime completionTime;
 }

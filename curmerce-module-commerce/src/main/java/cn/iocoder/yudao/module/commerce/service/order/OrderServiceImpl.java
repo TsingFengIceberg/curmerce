@@ -149,9 +149,26 @@ public class OrderServiceImpl implements OrderService {
                 .setReceiverAreaId(order.getReceiverAreaId()).setReceiverAreaName(order.getReceiverAreaName())
                 .setReceiverDetailAddress(order.getReceiverDetailAddress())
                 .setShippingTime(order.getShippingTime()).setLogisticsCompany(order.getLogisticsCompany())
-                .setTrackingNo(order.getTrackingNo())
+                .setTrackingNo(order.getTrackingNo()).setCompletionTime(order.getCompletionTime())
                 .setItems(orderItemMapper.selectListByOrderId(order.getId()).stream().map(this::toItem).toList());
         return response;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmReceipt(Long userId, Long id) {
+        memberUserApi.validateActiveUserForUpdate(userId);
+        CommerceOrderDO order = orderMapper.selectOwnedForUpdate(userId, id);
+        if (order == null) {
+            // Keep foreign and missing orders indistinguishable to the caller.
+            throw exception(ORDER_NOT_FOUND);
+        }
+        if (!OrderStatusEnum.SHIPPED.getStatus().equals(order.getStatus())) {
+            throw exception(ORDER_RECEIPT_STATE_INVALID);
+        }
+        if (orderMapper.markCompleted(userId, id, LocalDateTime.now()) != 1) {
+            throw exception(ORDER_RECEIPT_STATE_INVALID);
+        }
     }
 
     @Override
@@ -259,6 +276,7 @@ public class OrderServiceImpl implements OrderService {
                 .setReceiverAreaName(order.getReceiverAreaName())
                 .setReceiverDetailAddress(order.getReceiverDetailAddress()).setShippingTime(order.getShippingTime())
                 .setLogisticsCompany(order.getLogisticsCompany()).setTrackingNo(order.getTrackingNo())
+                .setCompletionTime(order.getCompletionTime())
                 .setCreateTime(order.getCreateTime())
                 .setItems(orderItemMapper.selectListByOrderId(order.getId()).stream().map(this::toItem).toList());
         MemberUserRespDTO buyer = memberUserApi.getUser(order.getMemberUserId());
@@ -273,7 +291,7 @@ public class OrderServiceImpl implements OrderService {
         response.setId(order.getId()).setOrderNo(order.getOrderNo()).setMerchantId(order.getMerchantId())
                 .setStoreId(order.getStoreId()).setStatus(order.getStatus()).setItemCount(order.getItemCount())
                 .setTotalAmount(order.getTotalAmount()).setPayableAmount(order.getPayableAmount())
-                .setCreateTime(order.getCreateTime());
+                .setCreateTime(order.getCreateTime()).setCompletionTime(order.getCompletionTime());
     }
 
     private OrderItemRespVO toItem(CommerceOrderItemDO item) {

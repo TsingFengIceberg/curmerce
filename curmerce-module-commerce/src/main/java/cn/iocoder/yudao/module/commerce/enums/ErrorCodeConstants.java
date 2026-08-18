@@ -60,6 +60,13 @@ public interface ErrorCodeConstants {
     ErrorCode ORDER_AMOUNT_OVERFLOW = new ErrorCode(1_023_005_007, "订单金额超出允许范围");
     ErrorCode ORDER_SHIP_STATE_INVALID = new ErrorCode(1_023_005_008, "当前订单状态不可发货");
     ErrorCode ORDER_SHIPPING_INFO_INVALID = new ErrorCode(1_023_005_009, "物流公司和物流单号不能为空");
+    ErrorCode ORDER_RECEIPT_STATE_INVALID = new ErrorCode(1_023_005_010, "当前订单状态不可确认收货");
+
+    ErrorCode REFUND_ORDER_NOT_REFUNDABLE = new ErrorCode(1_023_007_000, "当前订单不可申请退款");
+    ErrorCode REFUND_ALREADY_EXISTS = new ErrorCode(1_023_007_001, "该订单已存在退款记录");
+    ErrorCode REFUND_NOT_FOUND = new ErrorCode(1_023_007_002, "退款记录不存在");
+    ErrorCode REFUND_STATE_INVALID = new ErrorCode(1_023_007_003, "当前退款状态不允许该操作");
+    ErrorCode REFUND_AMOUNT_INVALID = new ErrorCode(1_023_007_004, "退款金额无效");
 
     ErrorCode PAYMENT_METHOD_INVALID = new ErrorCode(1_023_006_000, "当前仅支持模拟支付方式");
     ErrorCode PAYMENT_ORDER_NOT_PAYABLE = new ErrorCode(1_023_006_001, "当前订单状态不可支付");

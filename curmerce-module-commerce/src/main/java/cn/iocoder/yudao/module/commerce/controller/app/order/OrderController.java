@@ -42,4 +42,11 @@ public class OrderController {
     public CommonResult<OrderDetailRespVO> get(@RequestParam Long id) {
         return success(orderService.getOrder(getLoginUserId(), id));
     }
+
+    @PutMapping("/confirm-receipt")
+    @Operation(summary = "确认收货")
+    public CommonResult<Boolean> confirmReceipt(@Valid @RequestBody OrderConfirmReceiptReqVO reqVO) {
+        orderService.confirmReceipt(getLoginUserId(), reqVO.getId());
+        return success(true);
+    }
 }

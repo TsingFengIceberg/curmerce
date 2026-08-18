@@ -15,6 +15,7 @@ public class OrderDetailRespVO extends OrderSummaryRespVO {
     private String receiverAreaName;
     private String receiverDetailAddress;
     private LocalDateTime shippingTime;
+    private LocalDateTime completionTime;
     private String logisticsCompany;
     private String trackingNo;
     private List<OrderItemRespVO> items;

@@ -64,4 +64,12 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
                         .eq(CommerceOrderDO::getStoreId, storeId)
                         .eq(CommerceOrderDO::getStatus, OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()));
     }
+
+    default int markCompleted(Long userId, Long id, LocalDateTime completionTime) {
+        return update(new CommerceOrderDO().setStatus(OrderStatusEnum.COMPLETED.getStatus())
+                        .setCompletionTime(completionTime),
+                new LambdaUpdateWrapper<CommerceOrderDO>().eq(CommerceOrderDO::getId, id)
+                        .eq(CommerceOrderDO::getMemberUserId, userId)
+                        .eq(CommerceOrderDO::getStatus, OrderStatusEnum.SHIPPED.getStatus()));
+    }
 }

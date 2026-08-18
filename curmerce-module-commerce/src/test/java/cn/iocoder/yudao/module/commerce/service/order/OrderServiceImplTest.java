@@ -220,6 +220,47 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void confirmReceipt_movesShippedOrderToCompletedWithBuyerAndStateGuard() {
+        CommerceOrderDO order = new CommerceOrderDO().setId(9001L).setMemberUserId(101L)
+                .setStatus(OrderStatusEnum.SHIPPED.getStatus());
+        when(orderMapper.selectOwnedForUpdate(101L, 9001L)).thenReturn(order);
+        when(orderMapper.markCompleted(eq(101L), eq(9001L), any())).thenReturn(1);
+
+        service.confirmReceipt(101L, 9001L);
+
+        verify(memberUserApi).validateActiveUserForUpdate(101L);
+        verify(orderMapper).selectOwnedForUpdate(101L, 9001L);
+        verify(orderMapper).markCompleted(eq(101L), eq(9001L), any());
+    }
+
+    @Test
+    void confirmReceipt_rejectsForeignOrder() {
+        when(orderMapper.selectOwnedForUpdate(101L, 9001L)).thenReturn(null);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.confirmReceipt(101L, 9001L));
+
+        assertEquals(ORDER_NOT_FOUND.getCode(), error.getCode());
+        verify(orderMapper, never()).markCompleted(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    void confirmReceipt_rejectsUnshippedAndAlreadyCompletedOrders() {
+        for (Integer status : List.of(OrderStatusEnum.PENDING_PAYMENT.getStatus(),
+                OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus(), OrderStatusEnum.COMPLETED.getStatus())) {
+            reset(orderMapper);
+            when(orderMapper.selectOwnedForUpdate(101L, 9001L)).thenReturn(new CommerceOrderDO()
+                    .setId(9001L).setMemberUserId(101L).setStatus(status));
+
+            ServiceException error = assertThrows(ServiceException.class,
+                    () -> service.confirmReceipt(101L, 9001L));
+
+            assertEquals(ORDER_RECEIPT_STATE_INVALID.getCode(), error.getCode());
+            verify(orderMapper, never()).markCompleted(anyLong(), anyLong(), any());
+        }
+    }
+
+    @Test
     void getOrder_missingOrForeignOrderIsNeutral() {
         when(orderMapper.selectOwned(202L, 9001L)).thenReturn(null);
 
