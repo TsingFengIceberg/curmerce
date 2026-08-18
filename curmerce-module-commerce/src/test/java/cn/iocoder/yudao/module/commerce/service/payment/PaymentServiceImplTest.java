@@ -95,6 +95,18 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void createPayment_rejectsCanceledOrder() {
+        when(orderMapper.selectOwnedForUpdate(101L, 9001L)).thenReturn(
+                pendingOrder().setStatus(OrderStatusEnum.CANCELED.getStatus()));
+
+        ServiceException error = assertThrows(ServiceException.class, () -> service.createPayment(101L,
+                new PaymentCreateReqVO().setOrderId(9001L).setPaymentMethod("SIMULATED")));
+
+        assertEquals(PAYMENT_ORDER_NOT_PAYABLE.getCode(), error.getCode());
+        verifyNoInteractions(paymentMapper);
+    }
+
+    @Test
     void simulateCallback_marksPaymentAndOrderPaidWithMatchingAmount() {
         CommercePaymentDO payment = payment(PaymentStatusEnum.INITIATED.getStatus(), null);
         CommerceOrderDO order = pendingOrder();
@@ -163,6 +175,23 @@ class PaymentServiceImplTest {
 
         assertEquals(PAYMENT_CALLBACK_CONFLICT.getCode(), error.getCode());
         verify(paymentMapper, never()).markSuccess(anyLong(), anyString(), any());
+    }
+
+    @Test
+    void simulateCallback_rejectsCanceledPaymentWithoutStateChange() {
+        CommercePaymentDO payment = payment(PaymentStatusEnum.CANCELED.getStatus(), null);
+        when(paymentMapper.selectByPaymentNo("P-20260817-001")).thenReturn(payment);
+        when(orderMapper.selectByIdForUpdate(9001L)).thenReturn(
+                pendingOrder().setStatus(OrderStatusEnum.CANCELED.getStatus()));
+        when(paymentMapper.selectByIdForUpdate(9101L)).thenReturn(payment);
+
+        ServiceException error = assertThrows(ServiceException.class, () -> service.simulateCallback(
+                new PaymentSimulateCallbackReqVO().setPaymentNo("P-20260817-001")
+                        .setCallbackId("callback-001").setPaidAmount(3300L)));
+
+        assertEquals(PAYMENT_CALLBACK_CONFLICT.getCode(), error.getCode());
+        verify(paymentMapper, never()).markSuccess(anyLong(), anyString(), any());
+        verify(orderMapper, never()).markPaid(anyLong());
     }
 
     @Test

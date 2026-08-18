@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderPageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -44,6 +45,18 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
         return selectPage(req, new LambdaQueryWrapperX<CommerceOrderDO>()
                 .eq(CommerceOrderDO::getMemberUserId, userId)
                 .orderByDesc(CommerceOrderDO::getId));
+    }
+
+    default PageResult<CommerceOrderDO> selectPageOwned(Long userId, OrderPageReqVO req) {
+        return selectPage(req, new LambdaQueryWrapperX<CommerceOrderDO>()
+                .eq(CommerceOrderDO::getMemberUserId, userId)
+                .eqIfPresent(CommerceOrderDO::getStatus, req.getStatus())
+                .orderByDesc(CommerceOrderDO::getId));
+    }
+
+    default int markRefundStatus(Long orderId, Integer refundStatus) {
+        return update(new CommerceOrderDO().setRefundStatus(refundStatus),
+                new LambdaUpdateWrapper<CommerceOrderDO>().eq(CommerceOrderDO::getId, orderId));
     }
 
     default PageResult<CommerceOrderDO> selectPagePendingShipment(MerchantOrderPageReqVO req,

@@ -9,6 +9,7 @@ import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderS
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderCreateRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderDetailRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderPageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderSummaryRespVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.cart.CartItemDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
@@ -28,7 +29,10 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.payment.CommercePaymentMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.refund.RefundStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
 import cn.iocoder.yudao.module.member.api.address.MemberAddressApi;
@@ -226,6 +230,50 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void getOrderPage_scopesByBuyerAndForwardsStatusFilter() {
+        OrderPageReqVO request = new OrderPageReqVO().setStatus(OrderStatusEnum.SHIPPED.getStatus());
+        CommerceOrderDO order = new CommerceOrderDO().setId(9001L).setOrderNo("C-1")
+                .setMemberUserId(101L).setStatus(OrderStatusEnum.SHIPPED.getStatus())
+                .setRefundStatus(RefundStatusEnum.NONE.getStatus()).setItemCount(1)
+                .setTotalAmount(1250L).setPayableAmount(1250L);
+        when(orderMapper.selectPageOwned(101L, request)).thenReturn(new PageResult<>(List.of(order), 1L));
+
+        PageResult<OrderSummaryRespVO> response = service.getOrderPage(101L, request);
+
+        assertEquals(1L, response.getTotal());
+        assertEquals(OrderStatusEnum.SHIPPED.getStatus(), response.getList().get(0).getStatus());
+        assertEquals(RefundStatusEnum.NONE.getStatus(), response.getList().get(0).getRefundStatus());
+        verify(orderMapper).selectPageOwned(101L, request);
+    }
+
+    @Test
+    void getOrder_includesPaymentAndRefundSummaries() {
+        CommerceOrderDO order = new CommerceOrderDO().setId(9001L).setOrderNo("C-1")
+                .setMemberUserId(101L).setStatus(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus())
+                .setRefundStatus(RefundStatusEnum.APPROVED.getStatus()).setItemCount(1)
+                .setTotalAmount(1250L).setPayableAmount(1250L);
+        CommercePaymentDO payment = new CommercePaymentDO().setPaymentNo("P-1")
+                .setAmount(1250L).setStatus(PaymentStatusEnum.SUCCESS.getStatus())
+                .setPaidTime(LocalDateTime.of(2026, 8, 18, 10, 0));
+        CommerceRefundDO refund = new CommerceRefundDO().setId(9201L).setRefundNo("R-1")
+                .setOrderId(9001L).setAmount(1250L).setStatus(RefundStatusEnum.APPROVED.getStatus())
+                .setReason("商品问题");
+        when(orderMapper.selectOwned(101L, 9001L)).thenReturn(order);
+        when(orderItemMapper.selectListByOrderId(9001L)).thenReturn(List.of());
+        when(paymentMapper.selectByOrderId(9001L)).thenReturn(payment);
+        when(refundMapper.selectByOrderId(9001L)).thenReturn(refund);
+
+        OrderDetailRespVO response = service.getOrder(101L, 9001L);
+
+        assertEquals("P-1", response.getPaymentNo());
+        assertEquals(PaymentStatusEnum.SUCCESS.getStatus(), response.getPaymentStatus());
+        assertEquals(1250L, response.getPaymentAmount());
+        assertEquals(payment.getPaidTime(), response.getPaidTime());
+        assertEquals(RefundStatusEnum.APPROVED.getStatus(), response.getRefundStatus());
+        assertEquals("R-1", response.getRefund().getRefundNo());
+    }
+
+    @Test
     void cancelOrder_restoresSnapshotStockAndCancelsInitiatedPayment() {
         CommerceOrderDO order = new CommerceOrderDO().setId(9001L).setMemberUserId(101L)
                 .setStatus(OrderStatusEnum.PENDING_PAYMENT.getStatus());
@@ -258,6 +306,23 @@ class OrderServiceImplTest {
         assertEquals(ORDER_CANCEL_STATE_INVALID.getCode(), error.getCode());
         verifyNoInteractions(orderItemMapper, productSkuMapper, paymentMapper);
         verify(orderMapper, never()).markCanceled(anyLong(), anyLong());
+    }
+
+    @Test
+    void cancelOrder_rejectsShippedCompletedAndCanceledOrders() {
+        for (Integer status : List.of(OrderStatusEnum.SHIPPED.getStatus(),
+                OrderStatusEnum.COMPLETED.getStatus(), OrderStatusEnum.CANCELED.getStatus())) {
+            reset(orderMapper);
+            when(orderMapper.selectOwnedForUpdate(101L, 9001L)).thenReturn(new CommerceOrderDO()
+                    .setId(9001L).setMemberUserId(101L).setStatus(status));
+
+            ServiceException error = assertThrows(ServiceException.class,
+                    () -> service.cancelOrder(101L, 9001L));
+
+            assertEquals(ORDER_CANCEL_STATE_INVALID.getCode(), error.getCode());
+            verify(orderMapper, never()).markCanceled(anyLong(), anyLong());
+            verifyNoInteractions(orderItemMapper, productSkuMapper, paymentMapper);
+        }
     }
 
     @Test

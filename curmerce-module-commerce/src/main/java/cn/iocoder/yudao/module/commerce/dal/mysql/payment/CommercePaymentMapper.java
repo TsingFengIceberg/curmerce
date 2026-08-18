@@ -17,6 +17,11 @@ public interface CommercePaymentMapper extends BaseMapperX<CommercePaymentDO> {
                 .eq(CommercePaymentDO::getOrderId, orderId));
     }
 
+    default CommercePaymentDO selectByOrderId(Long orderId) {
+        return selectOne(new LambdaQueryWrapper<CommercePaymentDO>()
+                .eq(CommercePaymentDO::getOrderId, orderId));
+    }
+
     default CommercePaymentDO selectByPaymentNo(String paymentNo) {
         return selectOne(new LambdaQueryWrapper<CommercePaymentDO>()
                 .eq(CommercePaymentDO::getPaymentNo, paymentNo));

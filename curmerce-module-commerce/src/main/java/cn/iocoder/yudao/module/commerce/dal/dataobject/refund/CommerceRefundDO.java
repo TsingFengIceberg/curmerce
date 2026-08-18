@@ -24,5 +24,10 @@ public class CommerceRefundDO extends BaseDO {
     private Integer status;
     private String reason;
     private LocalDateTime requestedTime;
+    private Long reviewerUserId;
+    private LocalDateTime reviewedTime;
+    private String reviewRemark;
+    private String callbackId;
+    private Boolean callbackSuccess;
     private LocalDateTime processedTime;
 }

@@ -10,6 +10,7 @@ public class OrderSummaryRespVO {
     private Long merchantId;
     private Long storeId;
     private Integer status;
+    private Integer refundStatus;
     private Integer itemCount;
     private Long totalAmount;
     private Long payableAmount;

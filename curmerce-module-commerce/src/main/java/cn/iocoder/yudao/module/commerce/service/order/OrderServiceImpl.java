@@ -163,6 +163,11 @@ public class OrderServiceImpl implements OrderService {
                 .setTrackingNo(order.getTrackingNo()).setCompletionTime(order.getCompletionTime())
                 .setItems(orderItemMapper.selectListByOrderId(order.getId()).stream().map(this::toItem).toList());
         response.setRefund(toRefundSummary(refundMapper.selectByOrderId(order.getId())));
+        CommercePaymentDO payment = paymentMapper.selectByOrderId(order.getId());
+        if (payment != null) {
+            response.setPaymentNo(payment.getPaymentNo()).setPaymentStatus(payment.getStatus())
+                    .setPaymentAmount(payment.getAmount()).setPaidTime(payment.getPaidTime());
+        }
         return response;
     }
 
@@ -359,6 +364,7 @@ public class OrderServiceImpl implements OrderService {
         response.setId(order.getId()).setOrderNo(order.getOrderNo()).setMerchantId(order.getMerchantId())
                 .setStoreId(order.getStoreId()).setStatus(order.getStatus()).setItemCount(order.getItemCount())
                 .setTotalAmount(order.getTotalAmount()).setPayableAmount(order.getPayableAmount())
+                .setRefundStatus(order.getRefundStatus() == null ? 0 : order.getRefundStatus())
                 .setCreateTime(order.getCreateTime()).setCompletionTime(order.getCompletionTime());
     }
 

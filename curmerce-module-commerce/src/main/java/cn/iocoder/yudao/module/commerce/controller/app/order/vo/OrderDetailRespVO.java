@@ -9,6 +9,10 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class OrderDetailRespVO extends OrderSummaryRespVO {
+    private String paymentNo;
+    private Integer paymentStatus;
+    private Long paymentAmount;
+    private LocalDateTime paidTime;
     private String receiverName;
     private String receiverMobile;
     private Integer receiverAreaId;

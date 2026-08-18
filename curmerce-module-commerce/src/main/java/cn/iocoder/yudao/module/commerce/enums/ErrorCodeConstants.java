@@ -69,6 +69,9 @@ public interface ErrorCodeConstants {
     ErrorCode REFUND_NOT_FOUND = new ErrorCode(1_023_007_002, "退款记录不存在");
     ErrorCode REFUND_STATE_INVALID = new ErrorCode(1_023_007_003, "当前退款状态不允许该操作");
     ErrorCode REFUND_AMOUNT_INVALID = new ErrorCode(1_023_007_004, "退款金额无效");
+    ErrorCode REFUND_CALLBACK_ID_INVALID = new ErrorCode(1_023_007_005, "退款回调标识格式无效");
+    ErrorCode REFUND_CALLBACK_CONFLICT = new ErrorCode(1_023_007_006, "退款回调重复或内容冲突");
+    ErrorCode REFUND_REVIEW_REMARK_INVALID = new ErrorCode(1_023_007_007, "退款审核备注不能为空");
 
     ErrorCode PAYMENT_METHOD_INVALID = new ErrorCode(1_023_006_000, "当前仅支持模拟支付方式");
     ErrorCode PAYMENT_ORDER_NOT_PAYABLE = new ErrorCode(1_023_006_001, "当前订单状态不可支付");

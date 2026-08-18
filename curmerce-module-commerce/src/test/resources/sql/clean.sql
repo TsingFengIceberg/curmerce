@@ -1,5 +1,6 @@
 DELETE FROM commerce_order_item;
 DELETE FROM commerce_payment;
+DELETE FROM commerce_refund;
 DELETE FROM commerce_order;
 DELETE FROM commerce_cart_item;
 DELETE FROM commerce_product_sku;

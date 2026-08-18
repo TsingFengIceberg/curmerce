@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS commerce_order (
     store_id BIGINT NOT NULL,
     idempotency_key VARCHAR(64) NOT NULL,
     status TINYINT NOT NULL,
+    refund_status TINYINT NOT NULL DEFAULT 0,
     payment_deadline TIMESTAMP,
     item_count INT NOT NULL,
     total_amount BIGINT NOT NULL,
@@ -167,6 +168,7 @@ CREATE TABLE IF NOT EXISTS commerce_order (
     CONSTRAINT uk_commerce_order_order_no UNIQUE (order_no),
     CONSTRAINT uk_commerce_order_member_idempotency UNIQUE (member_user_id, idempotency_key),
     CONSTRAINT chk_commerce_order_status CHECK (status IN (10, 20, 30, 40, 50)),
+    CONSTRAINT chk_commerce_order_refund_status CHECK (refund_status IN (0, 10, 20, 30, 40, 50)),
     CONSTRAINT chk_commerce_order_item_count CHECK (item_count > 0),
     CONSTRAINT chk_commerce_order_total_amount CHECK (total_amount >= 0),
     CONSTRAINT chk_commerce_order_payable_amount CHECK (payable_amount >= 0),
@@ -232,6 +234,11 @@ CREATE TABLE IF NOT EXISTS commerce_refund (
     status TINYINT NOT NULL,
     reason VARCHAR(255) NOT NULL,
     requested_time TIMESTAMP NOT NULL,
+    reviewer_user_id BIGINT,
+    reviewed_time TIMESTAMP,
+    review_remark VARCHAR(255),
+    callback_id VARCHAR(64),
+    callback_success BOOLEAN,
     processed_time TIMESTAMP,
     creator VARCHAR(64) DEFAULT '', create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updater VARCHAR(64) DEFAULT '', update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -240,12 +247,12 @@ CREATE TABLE IF NOT EXISTS commerce_refund (
     CONSTRAINT uk_commerce_refund_order UNIQUE (order_id),
     CONSTRAINT fk_commerce_refund_order FOREIGN KEY (order_id)
         REFERENCES commerce_order (id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-    CONSTRAINT chk_commerce_refund_status CHECK (status IN (10, 20, 30, 40)),
+    CONSTRAINT chk_commerce_refund_status CHECK (status IN (10, 20, 30, 40, 50)),
     CONSTRAINT chk_commerce_refund_amount CHECK (amount >= 0),
     CONSTRAINT chk_commerce_refund_reason CHECK (CHAR_LENGTH(TRIM(reason)) BETWEEN 1 AND 255),
     CONSTRAINT chk_commerce_refund_processed_time CHECK (
         (status IN (10, 20) AND processed_time IS NULL)
-        OR (status IN (30, 40) AND processed_time IS NOT NULL)
+        OR (status IN (30, 40, 50) AND processed_time IS NOT NULL)
     )
 );
 

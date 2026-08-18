@@ -30,7 +30,7 @@ public class RefundController {
     private RefundService refundService;
 
     @PostMapping("/apply")
-    @Operation(summary = "申请基础退款", description = "当前为模拟退款，申请成功后同步返回退款成功记录；订单状态保持原交易状态")
+    @Operation(summary = "申请基础退款", description = "申请后进入待审核状态，订单主交易状态与售后退款状态分开维护")
     public CommonResult<RefundRespVO> apply(@Valid @RequestBody RefundApplyReqVO reqVO) {
         return success(refundService.applyRefund(getLoginUserId(), reqVO));
     }

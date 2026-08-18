@@ -12,6 +12,10 @@ import cn.iocoder.yudao.module.commerce.controller.admin.store.StoreController;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.OrderController;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderShipReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.refund.RefundController;
+import cn.iocoder.yudao.module.commerce.controller.admin.refund.vo.RefundAuditReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.refund.vo.RefundCallbackReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.refund.vo.RefundPageReqVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -49,6 +53,15 @@ class CommerceControllerContractTest {
         assertPermission(ProductReviewController.class, "reject", "commerce:product:audit");
         assertPermission(OrderController.class, "pageOwnPendingShipment", "commerce:order:self-query");
         assertPermission(OrderController.class, "shipOwn", "commerce:order:self-ship");
+        assertPermission(RefundController.class, "page", "commerce:refund:query");
+        assertPermission(RefundController.class, "get", "commerce:refund:query");
+        assertPermission(RefundController.class, "approve", "commerce:refund:audit");
+        assertPermission(RefundController.class, "reject", "commerce:refund:audit");
+        assertPermission(RefundController.class, "simulateCallback", "commerce:refund:callback");
+        assertPermission(RefundController.class, "pageOwn", "commerce:refund:self-query");
+        assertPermission(RefundController.class, "getOwn", "commerce:refund:self-query");
+        assertPermission(RefundController.class, "approveOwn", "commerce:refund:self-audit");
+        assertPermission(RefundController.class, "rejectOwn", "commerce:refund:self-audit");
     }
 
     @Test
@@ -75,6 +88,14 @@ class CommerceControllerContractTest {
     void merchantOrderSelfServiceRequestsDoNotAcceptClientOwnershipFields() {
         assertNoField(MerchantOrderPageReqVO.class, "merchantId", "storeId");
         assertNoField(MerchantOrderShipReqVO.class, "merchantId", "storeId");
+    }
+
+    @Test
+    void refundRequestsDoNotAcceptServerOwnedFields() {
+        assertNoField(RefundPageReqVO.class, "merchantId", "storeId", "reviewerUserId", "callbackSuccess");
+        assertNoField(RefundAuditReqVO.class, "reviewerUserId", "merchantId", "storeId");
+        assertNoField(RefundCallbackReqVO.class, "merchantId", "storeId", "reviewerUserId",
+                "processedTime", "callbackSuccess");
     }
 
     private static void assertNoField(Class<?> type, String... names) {

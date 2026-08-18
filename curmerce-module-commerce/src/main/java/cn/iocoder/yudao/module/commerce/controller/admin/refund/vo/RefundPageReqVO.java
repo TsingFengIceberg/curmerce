@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.commerce.controller.app.refund.vo;
+package cn.iocoder.yudao.module.commerce.controller.admin.refund.vo;
 
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.validation.InEnum;
@@ -12,4 +12,5 @@ public class RefundPageReqVO extends PageParam {
     @InEnum(RefundStatusEnum.class)
     private Integer status;
     private String orderNo;
+    private Long memberUserId;
 }

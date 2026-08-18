@@ -21,6 +21,8 @@ public class CommerceOrderDO extends BaseDO {
     private Long storeId;
     private String idempotencyKey;
     private Integer status;
+    /** 售后退款状态，与订单主交易状态独立。 */
+    private Integer refundStatus;
     private LocalDateTime paymentDeadline;
     private Integer itemCount;
     private Long totalAmount;
