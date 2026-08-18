@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS commerce_order (
     store_id BIGINT NOT NULL,
     idempotency_key VARCHAR(64) NOT NULL,
     status TINYINT NOT NULL,
+    payment_deadline TIMESTAMP,
     item_count INT NOT NULL,
     total_amount BIGINT NOT NULL,
     payable_amount BIGINT NOT NULL,
@@ -165,7 +166,7 @@ CREATE TABLE IF NOT EXISTS commerce_order (
     deleted BOOLEAN DEFAULT FALSE,
     CONSTRAINT uk_commerce_order_order_no UNIQUE (order_no),
     CONSTRAINT uk_commerce_order_member_idempotency UNIQUE (member_user_id, idempotency_key),
-    CONSTRAINT chk_commerce_order_status CHECK (status IN (10, 20, 30, 40)),
+    CONSTRAINT chk_commerce_order_status CHECK (status IN (10, 20, 30, 40, 50)),
     CONSTRAINT chk_commerce_order_item_count CHECK (item_count > 0),
     CONSTRAINT chk_commerce_order_total_amount CHECK (total_amount >= 0),
     CONSTRAINT chk_commerce_order_payable_amount CHECK (payable_amount >= 0),
@@ -217,7 +218,7 @@ CREATE TABLE IF NOT EXISTS commerce_payment (
     CONSTRAINT uk_commerce_payment_order UNIQUE (order_id),
     CONSTRAINT fk_commerce_payment_order FOREIGN KEY (order_id)
         REFERENCES commerce_order (id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-    CONSTRAINT chk_commerce_payment_status CHECK (status IN (10, 20)),
+    CONSTRAINT chk_commerce_payment_status CHECK (status IN (10, 20, 30)),
     CONSTRAINT chk_commerce_payment_amount CHECK (amount >= 0)
 );
 

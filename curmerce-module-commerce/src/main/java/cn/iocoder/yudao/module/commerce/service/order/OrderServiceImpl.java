@@ -23,6 +23,11 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductCategoryMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.payment.CommercePaymentMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
+import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
@@ -46,6 +51,7 @@ import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.*;
 public class OrderServiceImpl implements OrderService {
     private static final Pattern IDEMPOTENCY_KEY_PATTERN = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:-]{7,63}");
     private static final DateTimeFormatter ORDER_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final long DEFAULT_PAYMENT_TIMEOUT_MINUTES = 30L;
 
     @Resource private MemberUserApi memberUserApi;
     @Resource private MemberAddressApi memberAddressApi;
@@ -58,6 +64,10 @@ public class OrderServiceImpl implements OrderService {
     @Resource private CommerceOrderMapper orderMapper;
     @Resource private CommerceOrderItemMapper orderItemMapper;
     @Resource private MerchantAccessService merchantAccessService;
+    @Resource private CommercePaymentMapper paymentMapper;
+    @Resource private CommerceRefundMapper refundMapper;
+    @org.springframework.beans.factory.annotation.Value("${curmerce.order.payment-timeout-minutes:30}")
+    private long paymentTimeoutMinutes = DEFAULT_PAYMENT_TIMEOUT_MINUTES;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -108,6 +118,7 @@ public class OrderServiceImpl implements OrderService {
         CommerceOrderDO order = new CommerceOrderDO().setOrderNo(generateOrderNo())
                 .setMemberUserId(userId).setMerchantId(merchantId).setStoreId(storeId)
                 .setIdempotencyKey(key).setStatus(OrderStatusEnum.PENDING_PAYMENT.getStatus())
+                .setPaymentDeadline(LocalDateTime.now().plusMinutes(Math.max(1L, paymentTimeoutMinutes)))
                 .setItemCount(itemCount).setTotalAmount(totalAmount).setPayableAmount(totalAmount)
                 .setReceiverName(address.getName()).setReceiverMobile(address.getMobile())
                 .setReceiverAreaId(address.getAreaId()).setReceiverAreaName(address.getAreaName())
@@ -151,6 +162,7 @@ public class OrderServiceImpl implements OrderService {
                 .setShippingTime(order.getShippingTime()).setLogisticsCompany(order.getLogisticsCompany())
                 .setTrackingNo(order.getTrackingNo()).setCompletionTime(order.getCompletionTime())
                 .setItems(orderItemMapper.selectListByOrderId(order.getId()).stream().map(this::toItem).toList());
+        response.setRefund(toRefundSummary(refundMapper.selectByOrderId(order.getId())));
         return response;
     }
 
@@ -168,6 +180,62 @@ public class OrderServiceImpl implements OrderService {
         }
         if (orderMapper.markCompleted(userId, id, LocalDateTime.now()) != 1) {
             throw exception(ORDER_RECEIPT_STATE_INVALID);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void cancelOrder(Long userId, Long id) {
+        memberUserApi.validateActiveUserForUpdate(userId);
+        CommerceOrderDO order = orderMapper.selectOwnedForUpdate(userId, id);
+        if (order == null) {
+            throw exception(ORDER_NOT_FOUND);
+        }
+        if (!OrderStatusEnum.PENDING_PAYMENT.getStatus().equals(order.getStatus())) {
+            throw exception(ORDER_CANCEL_STATE_INVALID);
+        }
+        restoreOrderStock(order.getId());
+        CommercePaymentDO payment = paymentMapper.selectByOrderIdForUpdate(order.getId());
+        if (payment != null && PaymentStatusEnum.SUCCESS.getStatus().equals(payment.getStatus())) {
+            throw exception(ORDER_CANCEL_STATE_INVALID);
+        }
+        if (payment != null && PaymentStatusEnum.INITIATED.getStatus().equals(payment.getStatus())
+                && paymentMapper.markCanceled(payment.getId()) != 1) {
+            throw exception(ORDER_CANCEL_STATE_INVALID);
+        }
+        if (orderMapper.markCanceled(userId, id) != 1) {
+            throw exception(ORDER_CANCEL_STATE_INVALID);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int closeExpiredPendingPaymentOrders(LocalDateTime cutoffTime, int batchSize) {
+        List<CommerceOrderDO> orders = orderMapper.selectExpiredPendingPaymentForUpdate(cutoffTime, batchSize);
+        int closed = 0;
+        for (CommerceOrderDO order : orders) {
+            restoreOrderStock(order.getId());
+            CommercePaymentDO payment = paymentMapper.selectByOrderIdForUpdate(order.getId());
+            if (payment != null && PaymentStatusEnum.SUCCESS.getStatus().equals(payment.getStatus())) {
+                throw exception(ORDER_CANCEL_STATE_INVALID);
+            }
+            if (payment != null && PaymentStatusEnum.INITIATED.getStatus().equals(payment.getStatus())
+                    && paymentMapper.markCanceled(payment.getId()) != 1) {
+                throw exception(ORDER_CANCEL_STATE_INVALID);
+            }
+            if (orderMapper.markCanceled(order.getId()) != 1) {
+                throw exception(ORDER_CANCEL_STATE_INVALID);
+            }
+            closed++;
+        }
+        return closed;
+    }
+
+    private void restoreOrderStock(Long orderId) {
+        for (CommerceOrderItemDO item : orderItemMapper.selectListByOrderId(orderId)) {
+            if (productSkuMapper.restoreStock(item.getSkuId(), item.getQuantity()) != 1) {
+                throw exception(ORDER_STOCK_RESTORE_FAILED);
+            }
         }
     }
 
@@ -300,6 +368,13 @@ public class OrderServiceImpl implements OrderService {
                 .setSkuCode(item.getSkuCode()).setSpecificationValues(item.getSpecificationValues())
                 .setSkuImageUrl(item.getSkuImageUrl()).setPrice(item.getPrice()).setQuantity(item.getQuantity())
                 .setTotalAmount(item.getTotalAmount());
+    }
+
+    private RefundSummaryRespVO toRefundSummary(CommerceRefundDO refund) {
+        if (refund == null) return null;
+        return new RefundSummaryRespVO().setId(refund.getId()).setRefundNo(refund.getRefundNo())
+                .setAmount(refund.getAmount()).setStatus(refund.getStatus()).setReason(refund.getReason())
+                .setRequestedTime(refund.getRequestedTime()).setProcessedTime(refund.getProcessedTime());
     }
 
     private record CheckoutLine(CartItemDO cartItem, ProductDO product, ProductSkuDO sku, long lineTotal) { }

@@ -19,4 +19,5 @@ public class OrderDetailRespVO extends OrderSummaryRespVO {
     private String logisticsCompany;
     private String trackingNo;
     private List<OrderItemRespVO> items;
+    private RefundSummaryRespVO refund;
 }

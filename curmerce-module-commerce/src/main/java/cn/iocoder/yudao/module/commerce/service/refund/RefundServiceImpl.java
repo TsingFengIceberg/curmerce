@@ -1,7 +1,9 @@
 package cn.iocoder.yudao.module.commerce.service.refund;
 
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundApplyReqVO;
+import cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundRespVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
@@ -66,6 +68,25 @@ public class RefundServiceImpl implements RefundService {
             throw exception(REFUND_STATE_INVALID);
         }
         refund.setStatus(RefundStatusEnum.SUCCESS.getStatus()).setProcessedTime(processedTime);
+        return toResponse(refund);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<RefundRespVO> getRefundPage(Long userId, RefundPageReqVO reqVO) {
+        memberUserApi.validateActiveUser(userId);
+        PageResult<CommerceRefundDO> page = refundMapper.selectPageOwned(userId, reqVO);
+        return new PageResult<>(page.getList().stream().map(this::toResponse).toList(), page.getTotal());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RefundRespVO getRefund(Long userId, Long id) {
+        memberUserApi.validateActiveUser(userId);
+        CommerceRefundDO refund = refundMapper.selectOwned(userId, id);
+        if (refund == null) {
+            throw exception(REFUND_NOT_FOUND);
+        }
         return toResponse(refund);
     }
 

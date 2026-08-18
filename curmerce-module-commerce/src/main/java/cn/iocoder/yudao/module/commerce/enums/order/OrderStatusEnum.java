@@ -9,7 +9,8 @@ public enum OrderStatusEnum {
     PENDING_PAYMENT(10, "待支付"),
     PAID_PENDING_SHIPMENT(20, "已支付待发货"),
     SHIPPED(30, "已发货"),
-    COMPLETED(40, "已完成");
+    COMPLETED(40, "已完成"),
+    CANCELED(50, "已取消");
 
     private final Integer status;
     private final String name;

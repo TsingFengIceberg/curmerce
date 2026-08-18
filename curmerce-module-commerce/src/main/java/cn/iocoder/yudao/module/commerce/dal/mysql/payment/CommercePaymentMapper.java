@@ -33,4 +33,10 @@ public interface CommercePaymentMapper extends BaseMapperX<CommercePaymentDO> {
                 new LambdaUpdateWrapper<CommercePaymentDO>().eq(CommercePaymentDO::getId, id)
                         .eq(CommercePaymentDO::getStatus, PaymentStatusEnum.INITIATED.getStatus()));
     }
+
+    default int markCanceled(Long id) {
+        return update(new CommercePaymentDO().setStatus(PaymentStatusEnum.CANCELED.getStatus()),
+                new LambdaUpdateWrapper<CommercePaymentDO>().eq(CommercePaymentDO::getId, id)
+                        .eq(CommercePaymentDO::getStatus, PaymentStatusEnum.INITIATED.getStatus()));
+    }
 }

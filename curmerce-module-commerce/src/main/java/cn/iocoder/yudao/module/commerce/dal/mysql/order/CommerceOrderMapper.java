@@ -12,6 +12,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Mapper
 public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
@@ -71,5 +72,28 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
                 new LambdaUpdateWrapper<CommerceOrderDO>().eq(CommerceOrderDO::getId, id)
                         .eq(CommerceOrderDO::getMemberUserId, userId)
                         .eq(CommerceOrderDO::getStatus, OrderStatusEnum.SHIPPED.getStatus()));
+    }
+
+    default int markCanceled(Long userId, Long id) {
+        return update(new CommerceOrderDO().setStatus(OrderStatusEnum.CANCELED.getStatus()),
+                new LambdaUpdateWrapper<CommerceOrderDO>().eq(CommerceOrderDO::getId, id)
+                        .eq(CommerceOrderDO::getMemberUserId, userId)
+                        .eq(CommerceOrderDO::getStatus, OrderStatusEnum.PENDING_PAYMENT.getStatus()));
+    }
+
+    default int markCanceled(Long id) {
+        return update(new CommerceOrderDO().setStatus(OrderStatusEnum.CANCELED.getStatus()),
+                new LambdaUpdateWrapper<CommerceOrderDO>().eq(CommerceOrderDO::getId, id)
+                        .eq(CommerceOrderDO::getStatus, OrderStatusEnum.PENDING_PAYMENT.getStatus()));
+    }
+
+    default List<CommerceOrderDO> selectExpiredPendingPaymentForUpdate(LocalDateTime cutoffTime, int batchSize) {
+        int safeBatchSize = Math.max(1, Math.min(batchSize, 1000));
+        return selectList(new LambdaQueryWrapper<CommerceOrderDO>()
+                .eq(CommerceOrderDO::getStatus, OrderStatusEnum.PENDING_PAYMENT.getStatus())
+                .isNotNull(CommerceOrderDO::getPaymentDeadline)
+                .le(CommerceOrderDO::getPaymentDeadline, cutoffTime)
+                .orderByAsc(CommerceOrderDO::getId)
+                .last("LIMIT " + safeBatchSize + " FOR UPDATE"));
     }
 }

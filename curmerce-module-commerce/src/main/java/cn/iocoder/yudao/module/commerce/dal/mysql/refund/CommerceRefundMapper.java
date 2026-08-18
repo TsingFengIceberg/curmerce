@@ -8,6 +8,9 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.time.LocalDateTime;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 
 @Mapper
 public interface CommerceRefundMapper extends BaseMapperX<CommerceRefundDO> {
@@ -15,6 +18,22 @@ public interface CommerceRefundMapper extends BaseMapperX<CommerceRefundDO> {
     default CommerceRefundDO selectByOrderIdForUpdate(Long orderId) {
         return selectOneForUpdate(new LambdaQueryWrapper<CommerceRefundDO>()
                 .eq(CommerceRefundDO::getOrderId, orderId));
+    }
+
+    default CommerceRefundDO selectByOrderId(Long orderId) {
+        return selectOne(new LambdaQueryWrapper<CommerceRefundDO>()
+                .eq(CommerceRefundDO::getOrderId, orderId));
+    }
+
+    default CommerceRefundDO selectOwned(Long userId, Long id) {
+        return selectOne(new LambdaQueryWrapper<CommerceRefundDO>().eq(CommerceRefundDO::getId, id)
+                .eq(CommerceRefundDO::getMemberUserId, userId));
+    }
+
+    default PageResult<CommerceRefundDO> selectPageOwned(Long userId, PageParam req) {
+        return selectPage(req, new LambdaQueryWrapperX<CommerceRefundDO>()
+                .eq(CommerceRefundDO::getMemberUserId, userId)
+                .orderByDesc(CommerceRefundDO::getId));
     }
 
     default int markSuccess(Long id, LocalDateTime processedTime) {

@@ -2,6 +2,8 @@ package cn.iocoder.yudao.module.commerce.service.refund;
 
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundApplyReqVO;
+import cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundPageReqVO;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
@@ -91,6 +93,30 @@ class RefundServiceImplTest {
         assertEquals("原申请", response.getReason());
         verify(refundMapper, never()).insert(any(CommerceRefundDO.class));
         verify(refundMapper, never()).markSuccess(anyLong(), any());
+    }
+
+    @Test
+    void getRefund_rejectsForeignRecord() {
+        when(refundMapper.selectOwned(101L, 9201L)).thenReturn(null);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.getRefund(101L, 9201L));
+
+        assertEquals(REFUND_NOT_FOUND.getCode(), error.getCode());
+    }
+
+    @Test
+    void getRefundPage_returnsOnlyOwnedRecordsFromMapperPage() {
+        CommerceRefundDO refund = new CommerceRefundDO().setId(9201L).setMemberUserId(101L)
+                .setOrderId(9001L).setAmount(3300L).setStatus(RefundStatusEnum.SUCCESS.getStatus());
+        when(refundMapper.selectPageOwned(eq(101L), any(RefundPageReqVO.class)))
+                .thenReturn(new PageResult<>(java.util.List.of(refund), 1L));
+
+        PageResult<?> page = service.getRefundPage(101L, new RefundPageReqVO());
+
+        assertEquals(1L, page.getTotal());
+        assertEquals(9201L, ((cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundRespVO)
+                page.getList().get(0)).getId());
     }
 
     private static CommerceOrderDO order(Integer status) {

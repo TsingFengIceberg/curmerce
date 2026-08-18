@@ -61,6 +61,8 @@ public interface ErrorCodeConstants {
     ErrorCode ORDER_SHIP_STATE_INVALID = new ErrorCode(1_023_005_008, "当前订单状态不可发货");
     ErrorCode ORDER_SHIPPING_INFO_INVALID = new ErrorCode(1_023_005_009, "物流公司和物流单号不能为空");
     ErrorCode ORDER_RECEIPT_STATE_INVALID = new ErrorCode(1_023_005_010, "当前订单状态不可确认收货");
+    ErrorCode ORDER_CANCEL_STATE_INVALID = new ErrorCode(1_023_005_011, "当前订单状态不可取消");
+    ErrorCode ORDER_STOCK_RESTORE_FAILED = new ErrorCode(1_023_005_012, "订单库存恢复失败");
 
     ErrorCode REFUND_ORDER_NOT_REFUNDABLE = new ErrorCode(1_023_007_000, "当前订单不可申请退款");
     ErrorCode REFUND_ALREADY_EXISTS = new ErrorCode(1_023_007_001, "该订单已存在退款记录");

@@ -16,7 +16,7 @@ import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "Curmerce 买家订单")
-@RestController
+@RestController("commerceAppOrderController")
 @RequestMapping("/commerce/order")
 @Validated
 public class OrderController {
@@ -47,6 +47,13 @@ public class OrderController {
     @Operation(summary = "确认收货")
     public CommonResult<Boolean> confirmReceipt(@Valid @RequestBody OrderConfirmReceiptReqVO reqVO) {
         orderService.confirmReceipt(getLoginUserId(), reqVO.getId());
+        return success(true);
+    }
+
+    @PutMapping("/cancel")
+    @Operation(summary = "取消待支付订单", description = "仅买家本人可以取消待支付订单，取消后恢复订单商品库存")
+    public CommonResult<Boolean> cancel(@Valid @RequestBody OrderCancelReqVO reqVO) {
+        orderService.cancelOrder(getLoginUserId(), reqVO.getId());
         return success(true);
     }
 }

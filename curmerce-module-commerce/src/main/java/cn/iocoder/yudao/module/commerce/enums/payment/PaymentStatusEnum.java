@@ -7,7 +7,8 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum PaymentStatusEnum {
     INITIATED(10, "待支付"),
-    SUCCESS(20, "支付成功");
+    SUCCESS(20, "支付成功"),
+    CANCELED(30, "已取消");
 
     private final Integer status;
     private final String name;

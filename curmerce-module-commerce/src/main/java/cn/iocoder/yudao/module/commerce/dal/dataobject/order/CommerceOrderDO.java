@@ -21,6 +21,7 @@ public class CommerceOrderDO extends BaseDO {
     private Long storeId;
     private String idempotencyKey;
     private Integer status;
+    private LocalDateTime paymentDeadline;
     private Integer itemCount;
     private Long totalAmount;
     private Long payableAmount;

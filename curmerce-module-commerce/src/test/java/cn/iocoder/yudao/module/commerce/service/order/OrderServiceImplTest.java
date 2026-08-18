@@ -25,6 +25,9 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductCategoryMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.payment.CommercePaymentMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
@@ -40,6 +43,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -60,6 +64,8 @@ class OrderServiceImplTest {
     @Mock private CommerceOrderMapper orderMapper;
     @Mock private CommerceOrderItemMapper orderItemMapper;
     @Mock private MerchantAccessService merchantAccessService;
+    @Mock private CommercePaymentMapper paymentMapper;
+    @Mock private CommerceRefundMapper refundMapper;
     @InjectMocks private OrderServiceImpl service;
 
     @Test
@@ -217,6 +223,58 @@ class OrderServiceImplTest {
         verify(orderMapper).selectOwned(101L, 9001L);
         verify(orderItemMapper).selectListByOrderId(9001L);
         verifyNoInteractions(productMapper, productSkuMapper, memberAddressApi);
+    }
+
+    @Test
+    void cancelOrder_restoresSnapshotStockAndCancelsInitiatedPayment() {
+        CommerceOrderDO order = new CommerceOrderDO().setId(9001L).setMemberUserId(101L)
+                .setStatus(OrderStatusEnum.PENDING_PAYMENT.getStatus());
+        CommerceOrderItemDO item = new CommerceOrderItemDO().setOrderId(9001L).setSkuId(301L).setQuantity(2);
+        CommercePaymentDO payment = new CommercePaymentDO().setId(9301L)
+                .setStatus(cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum.INITIATED.getStatus());
+        when(orderMapper.selectOwnedForUpdate(101L, 9001L)).thenReturn(order);
+        when(orderItemMapper.selectListByOrderId(9001L)).thenReturn(List.of(item));
+        when(productSkuMapper.restoreStock(301L, 2)).thenReturn(1);
+        when(paymentMapper.selectByOrderIdForUpdate(9001L)).thenReturn(payment);
+        when(paymentMapper.markCanceled(9301L)).thenReturn(1);
+        when(orderMapper.markCanceled(101L, 9001L)).thenReturn(1);
+
+        service.cancelOrder(101L, 9001L);
+
+        verify(productSkuMapper).restoreStock(301L, 2);
+        verify(paymentMapper).markCanceled(9301L);
+        verify(orderMapper).markCanceled(101L, 9001L);
+    }
+
+    @Test
+    void cancelOrder_rejectsPaidOrderWithoutRestoringStock() {
+        when(orderMapper.selectOwnedForUpdate(101L, 9001L)).thenReturn(new CommerceOrderDO()
+                .setId(9001L).setMemberUserId(101L)
+                .setStatus(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()));
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.cancelOrder(101L, 9001L));
+
+        assertEquals(ORDER_CANCEL_STATE_INVALID.getCode(), error.getCode());
+        verifyNoInteractions(orderItemMapper, productSkuMapper, paymentMapper);
+        verify(orderMapper, never()).markCanceled(anyLong(), anyLong());
+    }
+
+    @Test
+    void closeExpiredPendingPaymentOrders_closesOrderAndRestoresStock() {
+        CommerceOrderDO order = new CommerceOrderDO().setId(9001L)
+                .setStatus(OrderStatusEnum.PENDING_PAYMENT.getStatus())
+                .setPaymentDeadline(LocalDateTime.now().minusMinutes(1));
+        CommerceOrderItemDO item = new CommerceOrderItemDO().setOrderId(9001L).setSkuId(301L).setQuantity(1);
+        when(orderMapper.selectExpiredPendingPaymentForUpdate(any(), eq(10))).thenReturn(List.of(order));
+        when(orderItemMapper.selectListByOrderId(9001L)).thenReturn(List.of(item));
+        when(productSkuMapper.restoreStock(301L, 1)).thenReturn(1);
+        when(paymentMapper.selectByOrderIdForUpdate(9001L)).thenReturn(null);
+        when(orderMapper.markCanceled(9001L)).thenReturn(1);
+
+        assertEquals(1, service.closeExpiredPendingPaymentOrders(LocalDateTime.now(), 10));
+        verify(productSkuMapper).restoreStock(301L, 1);
+        verify(orderMapper).markCanceled(9001L);
     }
 
     @Test

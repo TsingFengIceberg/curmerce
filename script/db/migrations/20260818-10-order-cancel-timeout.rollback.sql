@@ -1,0 +1,8 @@
+-- Rollback aid for 20260818-10-order-cancel-timeout.sql.
+-- Do not run against shared or production data. Existing canceled orders and
+-- payment deadline values must be reviewed before any destructive rollback.
+-- ALTER TABLE commerce_order DROP COLUMN payment_deadline;
+-- ALTER TABLE commerce_order DROP CHECK chk_commerce_order_status;
+-- ALTER TABLE commerce_order ADD CONSTRAINT chk_commerce_order_status CHECK (status IN (10, 20, 30, 40));
+-- ALTER TABLE commerce_payment DROP CHECK chk_commerce_payment_status;
+-- ALTER TABLE commerce_payment ADD CONSTRAINT chk_commerce_payment_status CHECK (status IN (10, 20));

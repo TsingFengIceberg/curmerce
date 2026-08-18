@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 
 @Tag(name = "管理后台 - Curmerce 商家订单履约")
-@RestController
+@RestController("commerceAdminOrderController")
 @RequestMapping("/commerce/order")
 @Validated
 public class OrderController {
