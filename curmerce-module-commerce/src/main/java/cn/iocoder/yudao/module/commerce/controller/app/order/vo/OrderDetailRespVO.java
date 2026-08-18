@@ -2,6 +2,8 @@ package cn.iocoder.yudao.module.commerce.controller.app.order.vo;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -12,5 +14,8 @@ public class OrderDetailRespVO extends OrderSummaryRespVO {
     private Integer receiverAreaId;
     private String receiverAreaName;
     private String receiverDetailAddress;
+    private LocalDateTime shippingTime;
+    private String logisticsCompany;
+    private String trackingNo;
     private List<OrderItemRespVO> items;
 }

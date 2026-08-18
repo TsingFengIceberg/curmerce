@@ -156,12 +156,15 @@ CREATE TABLE IF NOT EXISTS commerce_order (
     receiver_area_id INT NOT NULL,
     receiver_area_name VARCHAR(64),
     receiver_detail_address VARCHAR(255) NOT NULL,
+    shipping_time TIMESTAMP,
+    logistics_company VARCHAR(64),
+    tracking_no VARCHAR(64),
     creator VARCHAR(64) DEFAULT '', create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updater VARCHAR(64) DEFAULT '', update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted BOOLEAN DEFAULT FALSE,
     CONSTRAINT uk_commerce_order_order_no UNIQUE (order_no),
     CONSTRAINT uk_commerce_order_member_idempotency UNIQUE (member_user_id, idempotency_key),
-    CONSTRAINT chk_commerce_order_status CHECK (status IN (10, 20)),
+    CONSTRAINT chk_commerce_order_status CHECK (status IN (10, 20, 30, 40)),
     CONSTRAINT chk_commerce_order_item_count CHECK (item_count > 0),
     CONSTRAINT chk_commerce_order_total_amount CHECK (total_amount >= 0),
     CONSTRAINT chk_commerce_order_payable_amount CHECK (payable_amount >= 0),
@@ -221,6 +224,8 @@ CREATE INDEX IF NOT EXISTS idx_commerce_order_member_status_time
     ON commerce_order (member_user_id, status, create_time, id);
 CREATE INDEX IF NOT EXISTS idx_commerce_order_merchant_status_time
     ON commerce_order (merchant_id, status, create_time, id);
+CREATE INDEX IF NOT EXISTS idx_commerce_order_merchant_store_status_time
+    ON commerce_order (merchant_id, store_id, status, create_time, id);
 CREATE INDEX IF NOT EXISTS idx_commerce_order_item_order_id
     ON commerce_order_item (order_id, id);
 CREATE INDEX IF NOT EXISTS idx_commerce_order_item_product_sku

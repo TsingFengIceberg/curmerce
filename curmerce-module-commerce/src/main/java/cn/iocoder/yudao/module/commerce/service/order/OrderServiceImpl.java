@@ -3,6 +3,9 @@ package cn.iocoder.yudao.module.commerce.service.order;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderPageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderRespVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderShipReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.*;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.cart.CartItemDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
@@ -21,6 +24,8 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
+import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
+import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
 import cn.iocoder.yudao.module.member.api.address.MemberAddressApi;
 import cn.iocoder.yudao.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
@@ -52,6 +57,7 @@ public class OrderServiceImpl implements OrderService {
     @Resource private StoreMapper storeMapper;
     @Resource private CommerceOrderMapper orderMapper;
     @Resource private CommerceOrderItemMapper orderItemMapper;
+    @Resource private MerchantAccessService merchantAccessService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -142,8 +148,43 @@ public class OrderServiceImpl implements OrderService {
         response.setReceiverName(order.getReceiverName()).setReceiverMobile(order.getReceiverMobile())
                 .setReceiverAreaId(order.getReceiverAreaId()).setReceiverAreaName(order.getReceiverAreaName())
                 .setReceiverDetailAddress(order.getReceiverDetailAddress())
+                .setShippingTime(order.getShippingTime()).setLogisticsCompany(order.getLogisticsCompany())
+                .setTrackingNo(order.getTrackingNo())
                 .setItems(orderItemMapper.selectListByOrderId(order.getId()).stream().map(this::toItem).toList());
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<MerchantOrderRespVO> getOwnPendingShipmentPage(MerchantOrderPageReqVO reqVO) {
+        MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
+        PageResult<CommerceOrderDO> page = orderMapper.selectPagePendingShipment(reqVO,
+                context.merchant().getId(), context.store().getId());
+        return new PageResult<>(page.getList().stream().map(this::toMerchantResponse).toList(), page.getTotal());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void shipOwnOrder(MerchantOrderShipReqVO reqVO) {
+        MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
+        CommerceOrderDO order = orderMapper.selectOwnedForUpdate(reqVO.getId(), context.merchant().getId(),
+                context.store().getId());
+        if (order == null) {
+            // Keep foreign and missing orders indistinguishable to the caller.
+            throw exception(ORDER_NOT_FOUND);
+        }
+        if (!OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus().equals(order.getStatus())) {
+            throw exception(ORDER_SHIP_STATE_INVALID);
+        }
+        String logisticsCompany = StrUtil.trim(reqVO.getLogisticsCompany());
+        String trackingNo = StrUtil.trim(reqVO.getTrackingNo());
+        if (StrUtil.isBlank(logisticsCompany) || StrUtil.isBlank(trackingNo)) {
+            throw exception(ORDER_SHIPPING_INFO_INVALID);
+        }
+        if (orderMapper.markShipped(order.getId(), context.merchant().getId(), context.store().getId(),
+                logisticsCompany, trackingNo, LocalDateTime.now()) != 1) {
+            throw exception(ORDER_SHIP_STATE_INVALID);
+        }
     }
 
     private boolean isSellable(ProductDO product, ProductSkuDO sku) {
@@ -205,6 +246,26 @@ public class OrderServiceImpl implements OrderService {
     private OrderSummaryRespVO toSummary(CommerceOrderDO order) {
         OrderSummaryRespVO response = new OrderSummaryRespVO();
         copySummary(order, response);
+        return response;
+    }
+
+    private MerchantOrderRespVO toMerchantResponse(CommerceOrderDO order) {
+        MerchantOrderRespVO response = new MerchantOrderRespVO().setId(order.getId())
+                .setOrderNo(order.getOrderNo()).setMemberUserId(order.getMemberUserId())
+                .setMerchantId(order.getMerchantId()).setStoreId(order.getStoreId()).setStatus(order.getStatus())
+                .setItemCount(order.getItemCount()).setTotalAmount(order.getTotalAmount())
+                .setPayableAmount(order.getPayableAmount()).setReceiverName(order.getReceiverName())
+                .setReceiverMobile(order.getReceiverMobile()).setReceiverAreaId(order.getReceiverAreaId())
+                .setReceiverAreaName(order.getReceiverAreaName())
+                .setReceiverDetailAddress(order.getReceiverDetailAddress()).setShippingTime(order.getShippingTime())
+                .setLogisticsCompany(order.getLogisticsCompany()).setTrackingNo(order.getTrackingNo())
+                .setCreateTime(order.getCreateTime())
+                .setItems(orderItemMapper.selectListByOrderId(order.getId()).stream().map(this::toItem).toList());
+        MemberUserRespDTO buyer = memberUserApi.getUser(order.getMemberUserId());
+        if (buyer != null) {
+            response.setBuyerMobile(buyer.getMobile()).setBuyerNickname(buyer.getNickname())
+                    .setBuyerEmail(buyer.getEmail());
+        }
         return response;
     }
 

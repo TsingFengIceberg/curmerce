@@ -58,6 +58,8 @@ public interface ErrorCodeConstants {
     ErrorCode ORDER_NOT_FOUND = new ErrorCode(1_023_005_005, "订单不存在");
     ErrorCode ORDER_IDEMPOTENCY_KEY_INVALID = new ErrorCode(1_023_005_006, "幂等键格式无效");
     ErrorCode ORDER_AMOUNT_OVERFLOW = new ErrorCode(1_023_005_007, "订单金额超出允许范围");
+    ErrorCode ORDER_SHIP_STATE_INVALID = new ErrorCode(1_023_005_008, "当前订单状态不可发货");
+    ErrorCode ORDER_SHIPPING_INFO_INVALID = new ErrorCode(1_023_005_009, "物流公司和物流单号不能为空");
 
     ErrorCode PAYMENT_METHOD_INVALID = new ErrorCode(1_023_006_000, "当前仅支持模拟支付方式");
     ErrorCode PAYMENT_ORDER_NOT_PAYABLE = new ErrorCode(1_023_006_001, "当前订单状态不可支付");

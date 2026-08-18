@@ -9,6 +9,9 @@ import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.Prod
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductSkuSaveReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductUpdateOwnReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.store.StoreController;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.OrderController;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderPageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderShipReqVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -44,6 +47,8 @@ class CommerceControllerContractTest {
         assertPermission(ProductReviewController.class, "get", "commerce:product:query");
         assertPermission(ProductReviewController.class, "approve", "commerce:product:audit");
         assertPermission(ProductReviewController.class, "reject", "commerce:product:audit");
+        assertPermission(OrderController.class, "pageOwnPendingShipment", "commerce:order:self-query");
+        assertPermission(OrderController.class, "shipOwn", "commerce:order:self-ship");
     }
 
     @Test
@@ -64,6 +69,12 @@ class CommerceControllerContractTest {
         assertNoField(ProductCreateOwnReqVO.class, "merchantId", "reviewerUserId", "auditStatus", "saleStatus");
         assertNoField(ProductUpdateOwnReqVO.class, "merchantId", "reviewerUserId", "auditStatus", "saleStatus", "code");
         assertNoField(ProductSkuSaveReqVO.class, "merchantId", "productId");
+    }
+
+    @Test
+    void merchantOrderSelfServiceRequestsDoNotAcceptClientOwnershipFields() {
+        assertNoField(MerchantOrderPageReqVO.class, "merchantId", "storeId");
+        assertNoField(MerchantOrderShipReqVO.class, "merchantId", "storeId");
     }
 
     private static void assertNoField(Class<?> type, String... names) {

@@ -1,25 +1,21 @@
-package cn.iocoder.yudao.module.commerce.dal.dataobject.order;
+package cn.iocoder.yudao.module.commerce.controller.admin.order.vo;
 
-import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
-import com.baomidou.mybatisplus.annotation.KeySequence;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
+import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderItemRespVO;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
-@TableName("commerce_order")
-@KeySequence("commerce_order_seq")
 @Data
-@EqualsAndHashCode(callSuper = true)
-public class CommerceOrderDO extends BaseDO {
-    @TableId private Long id;
+public class MerchantOrderRespVO {
+    private Long id;
     private String orderNo;
     private Long memberUserId;
+    private String buyerMobile;
+    private String buyerNickname;
+    private String buyerEmail;
     private Long merchantId;
     private Long storeId;
-    private String idempotencyKey;
     private Integer status;
     private Integer itemCount;
     private Long totalAmount;
@@ -32,4 +28,6 @@ public class CommerceOrderDO extends BaseDO {
     private LocalDateTime shippingTime;
     private String logisticsCompany;
     private String trackingNo;
+    private LocalDateTime createTime;
+    private List<OrderItemRespVO> items;
 }

@@ -3,6 +3,9 @@ package cn.iocoder.yudao.module.commerce.service.order;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderPageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderRespVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderShipReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderCreateRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderDetailRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderPageReqVO;
@@ -23,9 +26,12 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
+import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
+import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
 import cn.iocoder.yudao.module.member.api.address.MemberAddressApi;
 import cn.iocoder.yudao.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
+import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -53,6 +59,7 @@ class OrderServiceImplTest {
     @Mock private StoreMapper storeMapper;
     @Mock private CommerceOrderMapper orderMapper;
     @Mock private CommerceOrderItemMapper orderItemMapper;
+    @Mock private MerchantAccessService merchantAccessService;
     @InjectMocks private OrderServiceImpl service;
 
     @Test
@@ -221,6 +228,89 @@ class OrderServiceImplTest {
 
         assertEquals(ORDER_NOT_FOUND.getCode(), error.getCode());
         verifyNoInteractions(orderItemMapper, productMapper, memberAddressApi);
+    }
+
+    @Test
+    void getOwnPendingShipmentPage_scopesByMerchantAndStoreAndReturnsSnapshotsAndBuyer() {
+        when(merchantAccessService.requireApprovedOwner()).thenReturn(accessContext(401L, 501L));
+        CommerceOrderDO order = new CommerceOrderDO().setId(9001L).setOrderNo("C-1")
+                .setMemberUserId(101L).setMerchantId(401L).setStoreId(501L)
+                .setStatus(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()).setItemCount(1)
+                .setTotalAmount(1250L).setPayableAmount(1250L)
+                .setReceiverName("Alice").setReceiverMobile("13800138000")
+                .setReceiverAreaId(310115).setReceiverAreaName("Shanghai Pudong")
+                .setReceiverDetailAddress("Snapshot address");
+        CommerceOrderItemDO item = new CommerceOrderItemDO().setId(9101L).setOrderId(9001L)
+                .setProductId(201L).setSkuId(301L).setProductName("Snapshot tea")
+                .setPrice(1250L).setQuantity(1).setTotalAmount(1250L);
+        when(orderMapper.selectPagePendingShipment(any(MerchantOrderPageReqVO.class), eq(401L), eq(501L)))
+                .thenReturn(new PageResult<>(List.of(order), 1L));
+        when(orderItemMapper.selectListByOrderId(9001L)).thenReturn(List.of(item));
+        when(memberUserApi.getUser(101L)).thenReturn(new MemberUserRespDTO().setId(101L)
+                .setMobile("13900000000").setNickname("Alice buyer").setEmail("alice@example.com"));
+
+        MerchantOrderPageReqVO request = new MerchantOrderPageReqVO();
+        request.setPageNo(1);
+        request.setPageSize(20);
+        PageResult<MerchantOrderRespVO> result = service.getOwnPendingShipmentPage(request);
+
+        assertEquals(1L, result.getTotal());
+        MerchantOrderRespVO response = result.getList().get(0);
+        assertEquals(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus(), response.getStatus());
+        assertEquals("Snapshot address", response.getReceiverDetailAddress());
+        assertEquals(1250L, response.getPayableAmount());
+        assertEquals("Alice buyer", response.getBuyerNickname());
+        assertEquals("Snapshot tea", response.getItems().get(0).getProductName());
+        verify(orderMapper).selectPagePendingShipment(request, 401L, 501L);
+        verifyNoInteractions(productMapper, productSkuMapper, memberAddressApi);
+    }
+
+    @Test
+    void shipOwnOrder_updatesOnlyPendingOrderForCurrentMerchantAndStore() {
+        when(merchantAccessService.requireApprovedOwner()).thenReturn(accessContext(401L, 501L));
+        CommerceOrderDO order = new CommerceOrderDO().setId(9001L).setMerchantId(401L).setStoreId(501L)
+                .setStatus(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus());
+        when(orderMapper.selectOwnedForUpdate(9001L, 401L, 501L)).thenReturn(order);
+        when(orderMapper.markShipped(eq(9001L), eq(401L), eq(501L), eq("SF Express"), eq("SF123"), any()))
+                .thenReturn(1);
+
+        service.shipOwnOrder(new MerchantOrderShipReqVO().setId(9001L)
+                .setLogisticsCompany("  SF Express ").setTrackingNo(" SF123 "));
+
+        verify(orderMapper).selectOwnedForUpdate(9001L, 401L, 501L);
+        verify(orderMapper).markShipped(eq(9001L), eq(401L), eq(501L), eq("SF Express"), eq("SF123"), any());
+    }
+
+    @Test
+    void shipOwnOrder_rejectsMissingForeignOrderAndDoesNotUpdate() {
+        when(merchantAccessService.requireApprovedOwner()).thenReturn(accessContext(401L, 501L));
+        when(orderMapper.selectOwnedForUpdate(9001L, 401L, 501L)).thenReturn(null);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.shipOwnOrder(new MerchantOrderShipReqVO().setId(9001L)
+                        .setLogisticsCompany("SF Express").setTrackingNo("SF123")));
+
+        assertEquals(ORDER_NOT_FOUND.getCode(), error.getCode());
+        verify(orderMapper, never()).markShipped(anyLong(), anyLong(), anyLong(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void shipOwnOrder_rejectsAlreadyShippedOrder() {
+        when(merchantAccessService.requireApprovedOwner()).thenReturn(accessContext(401L, 501L));
+        when(orderMapper.selectOwnedForUpdate(9001L, 401L, 501L)).thenReturn(new CommerceOrderDO()
+                .setId(9001L).setMerchantId(401L).setStoreId(501L)
+                .setStatus(OrderStatusEnum.SHIPPED.getStatus()));
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.shipOwnOrder(new MerchantOrderShipReqVO().setId(9001L)
+                        .setLogisticsCompany("SF Express").setTrackingNo("SF123")));
+
+        assertEquals(ORDER_SHIP_STATE_INVALID.getCode(), error.getCode());
+        verify(orderMapper, never()).markShipped(anyLong(), anyLong(), anyLong(), anyString(), anyString(), any());
+    }
+
+    private static MerchantAccessContext accessContext(Long merchantId, Long storeId) {
+        return new MerchantAccessContext(merchant(merchantId), store(storeId, merchantId));
     }
 
     private void prepareSellable(Long userId, CartItemDO cart, ProductDO product, ProductSkuDO sku) {
