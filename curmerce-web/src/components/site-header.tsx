@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { clearToken, getAccessToken } from "@/lib/auth/storage";
+import { clearToken, getAccessToken, getAdminAccessToken } from "@/lib/auth/storage";
 import { memberApi } from "@/lib/api/member";
 
 export function SiteHeader() {
   const router = useRouter();
   const loggedIn = Boolean(getAccessToken());
+  const adminLoggedIn = Boolean(getAdminAccessToken());
 
   async function logout() {
     try {
@@ -30,6 +31,8 @@ export function SiteHeader() {
           <Link href="/catalog">商城首页</Link>
           <Link href="/cart">购物车</Link>
           {loggedIn ? <Link href="/orders">我的订单</Link> : null}
+          {loggedIn ? <Link href="/refunds">退款中心</Link> : null}
+          <Link href={adminLoggedIn ? "/merchant/orders" : "/merchant/login"}>商家后台</Link>
           <Link href="/addresses">收货地址</Link>
           {loggedIn ? (
             <button className="link-button" type="button" onClick={logout}>

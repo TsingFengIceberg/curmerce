@@ -106,11 +106,23 @@ export interface OrderItem {
 export interface RefundSummary {
   id: number;
   refundNo: string;
+  orderId?: number;
+  orderNo?: string;
   amount: number;
   status: number;
   reason?: string | null;
   requestedTime?: ApiDateValue;
+  reviewerUserId?: number | null;
+  reviewedTime?: ApiDateValue;
+  reviewRemark?: string | null;
+  callbackId?: string | null;
+  callbackSuccess?: boolean | null;
   processedTime?: ApiDateValue;
+}
+
+export interface RefundDetail extends RefundSummary {
+  orderId: number;
+  orderNo: string;
 }
 
 export interface OrderDetail extends OrderSummary {
@@ -190,4 +202,30 @@ export interface MemberAddressInput {
 
 export interface MemberAddressUpdateInput extends MemberAddressInput {
   id: number;
+}
+
+export interface MerchantOrder {
+  id: number;
+  orderNo: string;
+  memberUserId: number;
+  buyerMobile?: string | null;
+  buyerNickname?: string | null;
+  buyerEmail?: string | null;
+  merchantId: number;
+  storeId: number;
+  status: number;
+  itemCount: number;
+  totalAmount: number;
+  payableAmount: number;
+  receiverName?: string | null;
+  receiverMobile?: string | null;
+  receiverAreaId?: number | null;
+  receiverAreaName?: string | null;
+  receiverDetailAddress?: string | null;
+  shippingTime?: ApiDateValue;
+  logisticsCompany?: string | null;
+  trackingNo?: string | null;
+  completionTime?: ApiDateValue;
+  createTime?: ApiDateValue;
+  items: OrderItem[];
 }

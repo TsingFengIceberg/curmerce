@@ -20,12 +20,25 @@ export const PAYMENT_STATUS_LABELS: Record<number, string> = {
   30: "已取消",
 };
 
+export const REFUND_STATUS_LABELS: Record<number, string> = {
+  0: "无售后",
+  10: "退款申请中",
+  20: "退款通过 / 处理中",
+  30: "退款成功",
+  40: "退款拒绝",
+  50: "退款失败",
+};
+
 export function formatOrderStatus(status?: number | null) {
   return status ? ORDER_STATUS_LABELS[status] ?? `状态 ${status}` : "未知状态";
 }
 
 export function formatPaymentStatus(status?: number | null) {
   return status ? PAYMENT_STATUS_LABELS[status] ?? `状态 ${status}` : "未创建支付单";
+}
+
+export function formatRefundStatus(status?: number | null) {
+  return status === null || status === undefined ? "无售后" : REFUND_STATUS_LABELS[status] ?? `状态 ${status}`;
 }
 
 export function formatDateTime(value?: string | number | null) {

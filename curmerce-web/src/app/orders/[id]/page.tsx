@@ -7,8 +7,9 @@ import { Notice } from "@/components/notice";
 import { CurmerceApiError, assetUrl } from "@/lib/api/client";
 import { orderApi } from "@/lib/api/order";
 import { paymentApi } from "@/lib/api/payment";
+import { refundApi } from "@/lib/api/refund";
 import { clearToken, getAccessToken } from "@/lib/auth/storage";
-import { formatDateTime, formatMoney, formatOrderStatus, formatPaymentStatus } from "@/lib/format";
+import { formatDateTime, formatMoney, formatOrderStatus, formatPaymentStatus, formatRefundStatus } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types/api";
 
 export default function OrderDetailPage() {
@@ -17,6 +18,8 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [refundReason, setRefundReason] = useState("");
+  const [showRefundForm, setShowRefundForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -104,6 +107,29 @@ export default function OrderDetailPage() {
     }
   }
 
+  async function applyRefund() {
+    if (!order) return;
+    const reason = refundReason.trim();
+    if (!reason) {
+      setError("请填写退款原因");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await refundApi.apply(order.id, reason);
+      setRefundReason("");
+      setShowRefundForm(false);
+      setMessage("退款申请已提交，请在退款中心查看审核状态");
+      await loadOrder(order.id);
+    } catch (cause) {
+      setError(cause instanceof CurmerceApiError ? cause.message : "提交退款申请失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) return <p className="empty-state">订单详情加载中…</p>;
   if (!order) return <section className="content-section"><Notice>{error ?? "订单不存在"}</Notice></section>;
 
@@ -158,6 +184,28 @@ export default function OrderDetailPage() {
             {order.status === 10 ? <button className="button button--primary button--full" disabled={busy} type="button" onClick={() => void pay()}>{busy ? "支付中…" : "模拟支付"}</button> : null}
             {order.status === 10 ? <button className="button button--secondary button--full" disabled={busy} type="button" onClick={() => void cancel()}>取消订单</button> : null}
             {order.status === 30 ? <button className="button button--primary button--full" disabled={busy} type="button" onClick={() => void confirmReceipt()}>{busy ? "处理中…" : "确认收货"}</button> : null}
+            {order.refund ? (
+              <div className="refund-status-box">
+                <span>售后状态</span>
+                <strong>{formatRefundStatus(order.refund.status)}</strong>
+                <small>退款单：{order.refund.refundNo}</small>
+              </div>
+            ) : null}
+            {[20, 30, 40].includes(order.status) && !order.refund ? (
+              <>
+                {!showRefundForm ? <button className="button button--secondary button--full" disabled={busy} type="button" onClick={() => setShowRefundForm(true)}>申请退款</button> : null}
+                {showRefundForm ? (
+                  <div className="refund-form">
+                    <label htmlFor="refund-reason">退款原因</label>
+                    <textarea id="refund-reason" maxLength={255} onChange={(event) => setRefundReason(event.target.value)} placeholder="请说明申请退款的原因" rows={4} value={refundReason} />
+                    <div className="inline-actions">
+                      <button className="button button--primary" disabled={busy} type="button" onClick={() => void applyRefund()}>{busy ? "提交中…" : "提交申请"}</button>
+                      <button className="button button--secondary" disabled={busy} type="button" onClick={() => setShowRefundForm(false)}>取消</button>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
             {order.status === 40 ? <p className="action-complete">订单已完成，感谢你的购买。</p> : null}
             {order.status === 50 ? <p className="action-complete">订单已取消，库存已按规则处理。</p> : null}
           </section>
