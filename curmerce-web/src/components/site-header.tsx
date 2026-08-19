@@ -29,6 +29,7 @@ export function SiteHeader() {
         <nav className="site-nav" aria-label="主导航">
           <Link href="/catalog">商城首页</Link>
           <Link href="/cart">购物车</Link>
+          {loggedIn ? <Link href="/orders">我的订单</Link> : null}
           <Link href="/addresses">收货地址</Link>
           {loggedIn ? (
             <button className="link-button" type="button" onClick={logout}>

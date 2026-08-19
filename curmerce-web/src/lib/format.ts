@@ -5,3 +5,38 @@ export function formatMoney(fen?: number | null) {
 export function formatStock(stock?: number | null) {
   return stock && stock > 0 ? `库存 ${stock}` : "暂时缺货";
 }
+
+export const ORDER_STATUS_LABELS: Record<number, string> = {
+  10: "待支付",
+  20: "待发货",
+  30: "已发货",
+  40: "已完成",
+  50: "已取消",
+};
+
+export const PAYMENT_STATUS_LABELS: Record<number, string> = {
+  10: "待支付",
+  20: "支付成功",
+  30: "已取消",
+};
+
+export function formatOrderStatus(status?: number | null) {
+  return status ? ORDER_STATUS_LABELS[status] ?? `状态 ${status}` : "未知状态";
+}
+
+export function formatPaymentStatus(status?: number | null) {
+  return status ? PAYMENT_STATUS_LABELS[status] ?? `状态 ${status}` : "未创建支付单";
+}
+
+export function formatDateTime(value?: string | number | null) {
+  if (value === null || value === undefined || value === "") return "—";
+  const date = typeof value === "number" ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}

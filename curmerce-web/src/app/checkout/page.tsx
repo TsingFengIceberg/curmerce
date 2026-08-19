@@ -113,7 +113,7 @@ export default function CheckoutPage() {
           <h2>订单已创建</h2>
           <p>订单号：<strong>{result.orderNo}</strong></p>
           <p>待支付金额：<strong>{formatMoney(result.payableAmount)}</strong></p>
-          <div className="hero-card__actions"><Link className="button button--primary" href="/catalog">继续购物</Link><Link className="button button--secondary" href="/cart">查看购物车</Link></div>
+          <div className="hero-card__actions"><Link className="button button--primary" href={`/orders/${result.orderId}`}>去订单支付</Link><Link className="button button--secondary" href="/catalog">继续购物</Link><Link className="button button--secondary" href="/cart">查看购物车</Link></div>
         </div>
       ) : null}
       {!loading && !result ? (

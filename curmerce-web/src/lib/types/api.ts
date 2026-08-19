@@ -73,6 +73,82 @@ export interface OrderCreateResult {
   payableAmount: number;
 }
 
+export type ApiDateValue = string | number | null;
+
+export interface OrderSummary {
+  id: number;
+  orderNo: string;
+  merchantId?: number | null;
+  storeId?: number | null;
+  status: number;
+  refundStatus?: number | null;
+  itemCount: number;
+  totalAmount: number;
+  payableAmount: number;
+  createTime?: ApiDateValue;
+  completionTime?: ApiDateValue;
+}
+
+export interface OrderItem {
+  id: number;
+  productId: number;
+  skuId: number;
+  productName: string;
+  productImageUrl?: string | null;
+  skuCode?: string | null;
+  specificationValues?: ProductSpecificationValue[] | null;
+  skuImageUrl?: string | null;
+  price: number;
+  quantity: number;
+  totalAmount: number;
+}
+
+export interface RefundSummary {
+  id: number;
+  refundNo: string;
+  amount: number;
+  status: number;
+  reason?: string | null;
+  requestedTime?: ApiDateValue;
+  processedTime?: ApiDateValue;
+}
+
+export interface OrderDetail extends OrderSummary {
+  paymentNo?: string | null;
+  paymentStatus?: number | null;
+  paymentAmount?: number | null;
+  paidTime?: ApiDateValue;
+  receiverName?: string | null;
+  receiverMobile?: string | null;
+  receiverAreaId?: number | null;
+  receiverAreaName?: string | null;
+  receiverDetailAddress?: string | null;
+  shippingTime?: ApiDateValue;
+  logisticsCompany?: string | null;
+  trackingNo?: string | null;
+  items: OrderItem[];
+  refund?: RefundSummary | null;
+}
+
+export interface PaymentCreateResult {
+  paymentId: number;
+  paymentNo: string;
+  orderId: number;
+  orderNo: string;
+  amount: number;
+  status: number;
+}
+
+export interface PaymentCallbackResult {
+  paymentId: number;
+  paymentNo: string;
+  orderId: number;
+  paymentStatus: number;
+  orderStatus: number;
+  paidAmount: number;
+  callbackId: string;
+}
+
 export interface ApiErrorShape {
   code?: number;
   msg?: string;
