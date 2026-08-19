@@ -1,7 +1,7 @@
 import { getAccessToken } from "@/lib/auth/storage";
 import type { ApiErrorShape, CommonResult } from "@/lib/types/api";
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:48080").replace(/\/$/, "");
+export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:48080").replace(/\/$/, "");
 const APP_API_PREFIX = "/app-api";
 const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID ?? "1";
 
@@ -20,6 +20,11 @@ export class CurmerceApiError extends Error {
 function toAbsoluteUrl(path: string) {
   if (/^https?:\/\//.test(path)) return path;
   return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+export function assetUrl(path?: string | null) {
+  if (!path) return null;
+  return /^https?:\/\//.test(path) ? path : `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 async function readJson(response: Response): Promise<unknown> {

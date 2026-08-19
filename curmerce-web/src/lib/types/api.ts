@@ -9,6 +9,70 @@ export interface ApiPage<T> {
   total: number;
 }
 
+export interface PublicCategoryNode {
+  id: number;
+  parentId: number | null;
+  name: string;
+  imageUrl?: string | null;
+  children: PublicCategoryNode[];
+}
+
+export interface ProductSpecificationValue {
+  name: string;
+  value: string;
+}
+
+export interface PublicProductSummary {
+  id: number;
+  categoryId: number;
+  storeId: number;
+  storeName: string;
+  name: string;
+  subtitle?: string | null;
+  mainImageUrl?: string | null;
+  minPrice: number;
+  minMarketPrice?: number | null;
+  totalStock: number;
+  available: boolean;
+}
+
+export interface PublicProductSku {
+  id: number;
+  specificationValues: ProductSpecificationValue[];
+  imageUrl?: string | null;
+  price: number;
+  marketPrice?: number | null;
+  stock: number;
+  available: boolean;
+}
+
+export interface PublicProductDetail extends PublicProductSummary {
+  imageUrls: string[];
+  description?: string | null;
+  skus: PublicProductSku[];
+}
+
+export interface CartItem {
+  id: number;
+  quantity: number;
+  selected: boolean;
+  product?: PublicProductSummary | null;
+  sku?: PublicProductSku | null;
+  invalidReason?: string | null;
+}
+
+export interface CartList {
+  validList: CartItem[];
+  invalidList: CartItem[];
+}
+
+export interface OrderCreateResult {
+  orderId: number;
+  orderNo: string;
+  status: number;
+  payableAmount: number;
+}
+
 export interface ApiErrorShape {
   code?: number;
   msg?: string;

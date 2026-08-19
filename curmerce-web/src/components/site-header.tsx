@@ -27,7 +27,8 @@ export function SiteHeader() {
           <span>Curmerce</span>
         </Link>
         <nav className="site-nav" aria-label="主导航">
-          <Link href="/">商城首页</Link>
+          <Link href="/catalog">商城首页</Link>
+          <Link href="/cart">购物车</Link>
           <Link href="/addresses">收货地址</Link>
           {loggedIn ? (
             <button className="link-button" type="button" onClick={logout}>
