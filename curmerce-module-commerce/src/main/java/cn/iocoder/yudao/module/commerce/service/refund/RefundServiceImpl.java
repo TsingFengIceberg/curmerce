@@ -65,7 +65,7 @@ public class RefundServiceImpl implements RefundService {
         CommerceRefundDO refund = new CommerceRefundDO().setRefundNo(generateRefundNo())
                 .setOrderId(order.getId()).setOrderNo(order.getOrderNo()).setMemberUserId(userId)
                 .setAmount(order.getPayableAmount()).setStatus(RefundStatusEnum.REQUESTED.getStatus())
-                .setReason(StrUtil.trim(reqVO.getReason())).setRequestedTime(LocalDateTime.now());
+                .setReason(StrUtil.trim(reqVO.getReason())).setRequestedTime(nowPersisted());
         refundMapper.insert(refund);
         if (orderMapper.markRefundStatus(order.getId(), RefundStatusEnum.REQUESTED.getStatus()) != 1) {
             throw exception(REFUND_STATE_INVALID);
@@ -141,7 +141,10 @@ public class RefundServiceImpl implements RefundService {
         if (!RefundStatusEnum.APPROVED.getStatus().equals(refund.getStatus())) {
             throw exception(REFUND_STATE_INVALID);
         }
-        LocalDateTime processedTime = LocalDateTime.now();
+        // MySQL DATETIME has second precision in the current schema. Truncate
+        // before writing so the first callback response and an idempotent replay
+        // expose the same durable timestamp.
+        LocalDateTime processedTime = nowPersisted();
         if (refundMapper.markCallback(refund.getId(), callbackId, success, processedTime) != 1) {
             throw exception(REFUND_CALLBACK_CONFLICT);
         }
@@ -247,6 +250,10 @@ public class RefundServiceImpl implements RefundService {
     private String generateRefundNo() {
         return "R" + LocalDateTime.now().format(REFUND_TIME_FORMAT)
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+    }
+
+    private LocalDateTime nowPersisted() {
+        return LocalDateTime.now().withNano(0);
     }
 
     private RefundRespVO toResponse(CommerceRefundDO refund) {

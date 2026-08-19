@@ -74,12 +74,22 @@ public class OrderServiceImpl implements OrderService {
     public OrderCreateRespVO createOrder(Long userId, Long addressId, String idempotencyKey) {
         String key = normalizeIdempotencyKey(idempotencyKey);
         memberUserApi.validateActiveUserForUpdate(userId);
+
         CommerceOrderDO existing = orderMapper.selectByUserAndIdempotencyKey(userId, key);
         if (existing != null) return toCreateResponse(existing);
 
         MemberAddressRespDTO address = memberAddressApi.getOwnedAddressForUpdate(userId, addressId);
         if (address == null) throw exception(ORDER_ADDRESS_NOT_AVAILABLE);
+
+        // Serialize checkout attempts that are still racing to create the same
+        // idempotency key. The second lookup is required because the first
+        // transaction deletes its selected cart rows before it commits; once
+        // the row lock is released, the retry must observe that committed order
+        // rather than racing into a duplicate-key failure.
         List<CartItemDO> cartItems = cartItemMapper.selectSelectedListByUserIdForUpdate(userId);
+        existing = orderMapper.selectByUserAndIdempotencyKey(userId, key);
+        if (existing != null) return toCreateResponse(existing);
+
         if (cartItems.isEmpty()) throw exception(ORDER_CHECKOUT_EMPTY);
 
         List<CheckoutLine> lines = new ArrayList<>();
