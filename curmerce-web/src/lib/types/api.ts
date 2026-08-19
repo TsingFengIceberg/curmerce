@@ -229,3 +229,111 @@ export interface MerchantOrder {
   createTime?: ApiDateValue;
   items: OrderItem[];
 }
+
+export interface AdminRefundPageQuery {
+  pageNo: number;
+  pageSize: number;
+  status?: number;
+  orderNo?: string;
+  memberUserId?: number;
+}
+
+export interface ProductCategoryNode {
+  id: number;
+  parentId?: number | null;
+  code: string;
+  name: string;
+  imageUrl?: string | null;
+  sort: number;
+  status: number;
+  children: ProductCategoryNode[];
+}
+
+export interface StoreSummary {
+  id: number;
+  merchantId: number;
+  name: string;
+  code: string;
+  description?: string | null;
+  contactName?: string | null;
+  contactMobile?: string | null;
+  status: number;
+  createTime?: ApiDateValue;
+  updateTime?: ApiDateValue;
+}
+
+export interface ProductSpecificationValueAdmin {
+  name: string;
+  value: string;
+}
+
+export interface ProductSkuAdmin {
+  id?: number;
+  productId?: number;
+  code: string;
+  specificationValues?: ProductSpecificationValueAdmin[] | null;
+  imageUrl?: string | null;
+  price: number;
+  marketPrice?: number | null;
+  stock: number;
+  status: number;
+  sort: number;
+}
+
+export interface ProductAdmin {
+  id: number;
+  merchantId: number;
+  storeId: number;
+  categoryId: number;
+  code: string;
+  name: string;
+  subtitle?: string | null;
+  mainImageUrl?: string | null;
+  imageUrls?: string[] | null;
+  description?: string | null;
+  auditStatus: number;
+  saleStatus: number;
+  reviewerUserId?: number | null;
+  reviewTime?: ApiDateValue;
+  rejectReason?: string | null;
+  sort: number;
+  createTime?: ApiDateValue;
+  updateTime?: ApiDateValue;
+  skus: ProductSkuAdmin[];
+}
+
+export interface ProductPageQuery {
+  pageNo: number;
+  pageSize: number;
+  storeId?: number;
+  merchantId?: number;
+  categoryId?: number;
+  code?: string;
+  name?: string;
+  auditStatus?: number;
+  saleStatus?: number;
+}
+
+export interface ProductSkuInput {
+  id?: number;
+  code: string;
+  specificationValues: ProductSpecificationValueAdmin[];
+  imageUrl: string;
+  price: number;
+  marketPrice: number;
+  stock: number;
+  status: number;
+  sort: number;
+}
+
+export interface ProductSaveInput {
+  storeId: number;
+  categoryId: number;
+  name: string;
+  subtitle: string;
+  mainImageUrl: string;
+  imageUrls: string[];
+  description: string;
+  sort: number;
+  skus: ProductSkuInput[];
+}

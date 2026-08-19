@@ -1,0 +1,102 @@
+import { adminApi, jsonBody } from "@/lib/api/client";
+import type {
+  ApiPage,
+  ProductAdmin,
+  ProductCategoryNode,
+  ProductPageQuery,
+  ProductSaveInput,
+  StoreSummary,
+} from "@/lib/types/api";
+
+function productQuery(input: ProductPageQuery) {
+  const params = new URLSearchParams({
+    pageNo: String(input.pageNo),
+    pageSize: String(input.pageSize),
+  });
+  const optional: Array<[string, string | number | undefined]> = [
+    ["storeId", input.storeId],
+    ["merchantId", input.merchantId],
+    ["categoryId", input.categoryId],
+    ["code", input.code?.trim()],
+    ["name", input.name?.trim()],
+    ["auditStatus", input.auditStatus],
+    ["saleStatus", input.saleStatus],
+  ];
+  optional.forEach(([key, value]) => {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  });
+  return params.toString();
+}
+
+export const adminCategoryApi = {
+  tree() {
+    return adminApi<ProductCategoryNode[]>("/commerce/product-category/tree");
+  },
+
+  create(input: { parentId?: number; code: string; name: string; imageUrl: string; sort: number }) {
+    return adminApi<number>("/commerce/product-category/create", { method: "POST", body: jsonBody(input) });
+  },
+
+  update(input: { id: number; parentId?: number; name: string; imageUrl: string; sort: number }) {
+    return adminApi<boolean>("/commerce/product-category/update", { method: "PUT", body: jsonBody(input) });
+  },
+
+  updateStatus(input: { id: number; status: number }) {
+    return adminApi<boolean>("/commerce/product-category/update-status", { method: "PUT", body: jsonBody(input) });
+  },
+};
+
+export const adminStoreApi = {
+  own() {
+    return adminApi<StoreSummary>("/commerce/store/get-own");
+  },
+};
+
+export const adminProductApi = {
+  pageOwn(input: ProductPageQuery) {
+    return adminApi<ApiPage<ProductAdmin>>(`/commerce/product/page-own?${productQuery(input)}`);
+  },
+
+  detailOwn(id: number) {
+    return adminApi<ProductAdmin>(`/commerce/product/get-own?id=${id}`);
+  },
+
+  createOwn(input: ProductSaveInput & { code: string }) {
+    return adminApi<number>("/commerce/product/create-own", { method: "POST", body: jsonBody(input) });
+  },
+
+  updateOwn(input: ProductSaveInput & { id: number }) {
+    return adminApi<boolean>("/commerce/product/update-own", { method: "PUT", body: jsonBody(input) });
+  },
+
+  submitOwn(id: number) {
+    return adminApi<boolean>("/commerce/product/submit-own", { method: "PUT", body: jsonBody({ id }) });
+  },
+
+  listOwn(id: number) {
+    return adminApi<boolean>("/commerce/product/list-own", { method: "PUT", body: jsonBody({ id }) });
+  },
+
+  delistOwn(id: number) {
+    return adminApi<boolean>("/commerce/product/delist-own", { method: "PUT", body: jsonBody({ id }) });
+  },
+
+  reviewPage(input: ProductPageQuery) {
+    return adminApi<ApiPage<ProductAdmin>>(`/commerce/product-review/page?${productQuery(input)}`);
+  },
+
+  reviewDetail(id: number) {
+    return adminApi<ProductAdmin>(`/commerce/product-review/get?id=${id}`);
+  },
+
+  approve(id: number) {
+    return adminApi<boolean>("/commerce/product-review/approve", { method: "PUT", body: jsonBody({ id }) });
+  },
+
+  reject(id: number, reason: string) {
+    return adminApi<boolean>("/commerce/product-review/reject", {
+      method: "PUT",
+      body: jsonBody({ id, reason: reason.trim() }),
+    });
+  },
+};

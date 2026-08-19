@@ -32,7 +32,13 @@ export function SiteHeader() {
           <Link href="/cart">购物车</Link>
           {loggedIn ? <Link href="/orders">我的订单</Link> : null}
           {loggedIn ? <Link href="/refunds">退款中心</Link> : null}
-          <Link href={adminLoggedIn ? "/merchant/orders" : "/merchant/login"}>商家后台</Link>
+          {adminLoggedIn ? (
+            <>
+              <Link href="/merchant/orders">待发货订单</Link>
+              <Link href="/merchant/products">商品管理</Link>
+              <Link href="/merchant/refunds">退款审核</Link>
+            </>
+          ) : <Link href="/merchant/login">商家后台</Link>}
           <Link href="/addresses">收货地址</Link>
           {loggedIn ? (
             <button className="link-button" type="button" onClick={logout}>
