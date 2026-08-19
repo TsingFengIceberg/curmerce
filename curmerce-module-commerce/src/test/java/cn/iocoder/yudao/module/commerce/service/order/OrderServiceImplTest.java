@@ -32,9 +32,11 @@ import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO
 import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
 import cn.iocoder.yudao.module.commerce.enums.refund.RefundStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
+import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxEventAppender;
 import cn.iocoder.yudao.module.member.api.address.MemberAddressApi;
 import cn.iocoder.yudao.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
@@ -70,6 +72,7 @@ class OrderServiceImplTest {
     @Mock private MerchantAccessService merchantAccessService;
     @Mock private CommercePaymentMapper paymentMapper;
     @Mock private CommerceRefundMapper refundMapper;
+    @Mock private CommerceOutboxEventAppender outboxEventAppender;
     @InjectMocks private OrderServiceImpl service;
 
     @Test
@@ -292,6 +295,7 @@ class OrderServiceImplTest {
         verify(productSkuMapper).restoreStock(301L, 2);
         verify(paymentMapper).markCanceled(9301L);
         verify(orderMapper).markCanceled(101L, 9001L);
+        verify(outboxEventAppender).append(eq(CommerceOutboxEventTypeEnum.ORDER_CANCELED), eq(9001L), any());
     }
 
     @Test
@@ -340,6 +344,7 @@ class OrderServiceImplTest {
         assertEquals(1, service.closeExpiredPendingPaymentOrders(LocalDateTime.now(), 10));
         verify(productSkuMapper).restoreStock(301L, 1);
         verify(orderMapper).markCanceled(9001L);
+        verify(outboxEventAppender).append(eq(CommerceOutboxEventTypeEnum.ORDER_CANCELED), eq(9001L), any());
     }
 
     @Test
@@ -354,6 +359,7 @@ class OrderServiceImplTest {
         verify(memberUserApi).validateActiveUserForUpdate(101L);
         verify(orderMapper).selectOwnedForUpdate(101L, 9001L);
         verify(orderMapper).markCompleted(eq(101L), eq(9001L), any());
+        verify(outboxEventAppender).append(eq(CommerceOutboxEventTypeEnum.ORDER_COMPLETED), eq(9001L), any());
     }
 
     @Test
@@ -443,6 +449,7 @@ class OrderServiceImplTest {
 
         verify(orderMapper).selectOwnedForUpdate(9001L, 401L, 501L);
         verify(orderMapper).markShipped(eq(9001L), eq(401L), eq(501L), eq("SF Express"), eq("SF123"), any());
+        verify(outboxEventAppender).append(eq(CommerceOutboxEventTypeEnum.ORDER_SHIPPED), eq(9001L), any());
     }
 
     @Test
@@ -471,6 +478,45 @@ class OrderServiceImplTest {
 
         assertEquals(ORDER_SHIP_STATE_INVALID.getCode(), error.getCode());
         verify(orderMapper, never()).markShipped(anyLong(), anyLong(), anyLong(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void shipOwnOrder_rejectsActiveRefundBeforeShipping() {
+        when(merchantAccessService.requireApprovedOwner()).thenReturn(accessContext(401L, 501L));
+        for (Integer refundStatus : List.of(RefundStatusEnum.REQUESTED.getStatus(),
+                RefundStatusEnum.APPROVED.getStatus(), RefundStatusEnum.SUCCESS.getStatus())) {
+            reset(outboxEventAppender);
+            when(orderMapper.selectOwnedForUpdate(9001L, 401L, 501L)).thenReturn(new CommerceOrderDO()
+                    .setId(9001L).setMerchantId(401L).setStoreId(501L)
+                    .setStatus(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus())
+                    .setRefundStatus(refundStatus));
+
+            ServiceException error = assertThrows(ServiceException.class,
+                    () -> service.shipOwnOrder(new MerchantOrderShipReqVO().setId(9001L)
+                            .setLogisticsCompany("SF Express").setTrackingNo("SF123")));
+
+            assertEquals(ORDER_SHIP_REFUND_CONFLICT.getCode(), error.getCode());
+            verify(orderMapper, never()).markShipped(anyLong(), anyLong(), anyLong(), anyString(), anyString(), any());
+            verify(outboxEventAppender, never()).append(any(), any(), any());
+        }
+    }
+
+    @Test
+    void confirmReceipt_rejectsActiveRefund() {
+        for (Integer refundStatus : List.of(RefundStatusEnum.REQUESTED.getStatus(),
+                RefundStatusEnum.APPROVED.getStatus(), RefundStatusEnum.SUCCESS.getStatus())) {
+            reset(outboxEventAppender);
+            when(orderMapper.selectOwnedForUpdate(101L, 9001L)).thenReturn(new CommerceOrderDO()
+                    .setId(9001L).setMemberUserId(101L)
+                    .setStatus(OrderStatusEnum.SHIPPED.getStatus()).setRefundStatus(refundStatus));
+
+            ServiceException error = assertThrows(ServiceException.class,
+                    () -> service.confirmReceipt(101L, 9001L));
+
+            assertEquals(ORDER_RECEIPT_REFUND_CONFLICT.getCode(), error.getCode());
+            verify(orderMapper, never()).markCompleted(anyLong(), anyLong(), any());
+            verify(outboxEventAppender, never()).append(any(), any(), any());
+        }
     }
 
     private static MerchantAccessContext accessContext(Long merchantId, Long storeId) {

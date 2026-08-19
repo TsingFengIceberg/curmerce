@@ -10,7 +10,9 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.payment.CommercePaymentMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
+import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxEventAppender;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +35,8 @@ class PaymentServiceImplTest {
     private CommerceOrderMapper orderMapper;
     @Mock
     private CommercePaymentMapper paymentMapper;
+    @Mock
+    private CommerceOutboxEventAppender outboxEventAppender;
     @InjectMocks
     private PaymentServiceImpl service;
 
@@ -126,6 +130,7 @@ class PaymentServiceImplTest {
         assertEquals("callback-001", response.getCallbackId());
         verify(paymentMapper).markSuccess(eq(9101L), eq("callback-001"), any());
         verify(orderMapper).markPaid(9001L);
+        verify(outboxEventAppender).append(eq(CommerceOutboxEventTypeEnum.ORDER_PAID), eq(9001L), any());
     }
 
     @Test
@@ -143,6 +148,7 @@ class PaymentServiceImplTest {
         assertEquals(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus(), response.getOrderStatus());
         verify(paymentMapper, never()).markSuccess(anyLong(), anyString(), any());
         verify(orderMapper, never()).markPaid(anyLong());
+        verify(outboxEventAppender, never()).append(any(), any(), any());
     }
 
     @Test

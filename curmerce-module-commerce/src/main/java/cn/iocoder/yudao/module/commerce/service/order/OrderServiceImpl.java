@@ -29,8 +29,11 @@ import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO
 import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
 import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
+import cn.iocoder.yudao.module.commerce.enums.refund.RefundStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
+import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxEventAppender;
 import cn.iocoder.yudao.module.member.api.address.MemberAddressApi;
 import cn.iocoder.yudao.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
@@ -66,6 +69,7 @@ public class OrderServiceImpl implements OrderService {
     @Resource private MerchantAccessService merchantAccessService;
     @Resource private CommercePaymentMapper paymentMapper;
     @Resource private CommerceRefundMapper refundMapper;
+    @Resource private CommerceOutboxEventAppender outboxEventAppender;
     @org.springframework.beans.factory.annotation.Value("${curmerce.order.payment-timeout-minutes:30}")
     private long paymentTimeoutMinutes = DEFAULT_PAYMENT_TIMEOUT_MINUTES;
 
@@ -193,9 +197,15 @@ public class OrderServiceImpl implements OrderService {
         if (!OrderStatusEnum.SHIPPED.getStatus().equals(order.getStatus())) {
             throw exception(ORDER_RECEIPT_STATE_INVALID);
         }
-        if (orderMapper.markCompleted(userId, id, LocalDateTime.now()) != 1) {
+        if (hasActiveRefund(order)) {
+            throw exception(ORDER_RECEIPT_REFUND_CONFLICT);
+        }
+        LocalDateTime completionTime = nowPersisted();
+        if (orderMapper.markCompleted(userId, id, completionTime) != 1) {
             throw exception(ORDER_RECEIPT_STATE_INVALID);
         }
+        outboxEventAppender.append(CommerceOutboxEventTypeEnum.ORDER_COMPLETED, order.getId(),
+                orderPayload(order));
     }
 
     @Override
@@ -221,6 +231,8 @@ public class OrderServiceImpl implements OrderService {
         if (orderMapper.markCanceled(userId, id) != 1) {
             throw exception(ORDER_CANCEL_STATE_INVALID);
         }
+        outboxEventAppender.append(CommerceOutboxEventTypeEnum.ORDER_CANCELED, order.getId(),
+                orderPayload(order));
     }
 
     @Override
@@ -241,6 +253,8 @@ public class OrderServiceImpl implements OrderService {
             if (orderMapper.markCanceled(order.getId()) != 1) {
                 throw exception(ORDER_CANCEL_STATE_INVALID);
             }
+            outboxEventAppender.append(CommerceOutboxEventTypeEnum.ORDER_CANCELED, order.getId(),
+                    orderPayload(order));
             closed++;
         }
         return closed;
@@ -276,15 +290,42 @@ public class OrderServiceImpl implements OrderService {
         if (!OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus().equals(order.getStatus())) {
             throw exception(ORDER_SHIP_STATE_INVALID);
         }
+        if (hasActiveRefund(order)) {
+            throw exception(ORDER_SHIP_REFUND_CONFLICT);
+        }
         String logisticsCompany = StrUtil.trim(reqVO.getLogisticsCompany());
         String trackingNo = StrUtil.trim(reqVO.getTrackingNo());
         if (StrUtil.isBlank(logisticsCompany) || StrUtil.isBlank(trackingNo)) {
             throw exception(ORDER_SHIPPING_INFO_INVALID);
         }
+        LocalDateTime shippingTime = nowPersisted();
         if (orderMapper.markShipped(order.getId(), context.merchant().getId(), context.store().getId(),
-                logisticsCompany, trackingNo, LocalDateTime.now()) != 1) {
+                logisticsCompany, trackingNo, shippingTime) != 1) {
             throw exception(ORDER_SHIP_STATE_INVALID);
         }
+        outboxEventAppender.append(CommerceOutboxEventTypeEnum.ORDER_SHIPPED, order.getId(),
+                orderPayload(order));
+    }
+
+    private boolean hasActiveRefund(CommerceOrderDO order) {
+        Integer refundStatus = order.getRefundStatus();
+        return refundStatus != null
+                && (RefundStatusEnum.REQUESTED.getStatus().equals(refundStatus)
+                || RefundStatusEnum.APPROVED.getStatus().equals(refundStatus)
+                || RefundStatusEnum.SUCCESS.getStatus().equals(refundStatus));
+    }
+
+    private LocalDateTime nowPersisted() {
+        return LocalDateTime.now().withNano(0);
+    }
+
+    private Map<String, Object> orderPayload(CommerceOrderDO order) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("orderId", order.getId());
+        payload.put("orderNo", order.getOrderNo());
+        payload.put("status", order.getStatus());
+        payload.put("refundStatus", order.getRefundStatus());
+        return payload;
     }
 
     private boolean isSellable(ProductDO product, ProductSkuDO sku) {

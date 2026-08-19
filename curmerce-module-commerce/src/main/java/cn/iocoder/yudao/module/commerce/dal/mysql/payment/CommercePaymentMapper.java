@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Mapper
 public interface CommercePaymentMapper extends BaseMapperX<CommercePaymentDO> {
@@ -43,5 +44,14 @@ public interface CommercePaymentMapper extends BaseMapperX<CommercePaymentDO> {
         return update(new CommercePaymentDO().setStatus(PaymentStatusEnum.CANCELED.getStatus()),
                 new LambdaUpdateWrapper<CommercePaymentDO>().eq(CommercePaymentDO::getId, id)
                         .eq(CommercePaymentDO::getStatus, PaymentStatusEnum.INITIATED.getStatus()));
+    }
+
+    /** 对账用：按创建顺序取一批已成功支付单。 */
+    default List<CommercePaymentDO> selectSuccessForAudit(int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 1000));
+        return selectList(new LambdaQueryWrapper<CommercePaymentDO>()
+                .eq(CommercePaymentDO::getStatus, PaymentStatusEnum.SUCCESS.getStatus())
+                .orderByAsc(CommercePaymentDO::getId)
+                .last("LIMIT " + safeLimit));
     }
 }

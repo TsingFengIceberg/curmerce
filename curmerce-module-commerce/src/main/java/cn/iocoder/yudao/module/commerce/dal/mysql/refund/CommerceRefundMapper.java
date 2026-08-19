@@ -9,6 +9,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
@@ -93,5 +94,15 @@ public interface CommerceRefundMapper extends BaseMapperX<CommerceRefundDO> {
                         .setProcessedTime(processedTime),
                 new LambdaUpdateWrapper<CommerceRefundDO>().eq(CommerceRefundDO::getId, id)
                         .eq(CommerceRefundDO::getStatus, RefundStatusEnum.APPROVED.getStatus()));
+    }
+
+    /** 对账用：取一批申请中、已通过或已成功的退款。 */
+    default List<CommerceRefundDO> selectActiveOrSuccessForAudit(int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 1000));
+        return selectList(new LambdaQueryWrapper<CommerceRefundDO>()
+                .in(CommerceRefundDO::getStatus, RefundStatusEnum.REQUESTED.getStatus(),
+                        RefundStatusEnum.APPROVED.getStatus(), RefundStatusEnum.SUCCESS.getStatus())
+                .orderByAsc(CommerceRefundDO::getId)
+                .last("LIMIT " + safeLimit));
     }
 }

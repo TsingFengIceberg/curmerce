@@ -11,13 +11,17 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.payment.CommercePaymentMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
+import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxEventAppender;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -37,6 +41,8 @@ public class PaymentServiceImpl implements PaymentService {
     private CommerceOrderMapper orderMapper;
     @Resource
     private CommercePaymentMapper paymentMapper;
+    @Resource
+    private CommerceOutboxEventAppender outboxEventAppender;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -113,17 +119,30 @@ public class PaymentServiceImpl implements PaymentService {
             throw exception(PAYMENT_ORDER_STATE_INVALID);
         }
 
-        LocalDateTime paidTime = LocalDateTime.now();
+        LocalDateTime paidTime = LocalDateTime.now().withNano(0);
         if (paymentMapper.markSuccess(payment.getId(), callbackId, paidTime) != 1) {
             throw exception(PAYMENT_CALLBACK_CONFLICT);
         }
         if (orderMapper.markPaid(order.getId()) != 1) {
             throw exception(PAYMENT_ORDER_STATE_INVALID);
         }
+        outboxEventAppender.append(CommerceOutboxEventTypeEnum.ORDER_PAID, order.getId(),
+                orderPaidPayload(order, payment));
         payment.setStatus(PaymentStatusEnum.SUCCESS.getStatus()).setCallbackId(callbackId)
                 .setPaidTime(paidTime);
         order.setStatus(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus());
         return toCallbackResponse(payment, order);
+    }
+
+    private Map<String, Object> orderPaidPayload(CommerceOrderDO order, CommercePaymentDO payment) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("orderId", order.getId());
+        payload.put("orderNo", order.getOrderNo());
+        payload.put("status", order.getStatus());
+        payload.put("paymentId", payment.getId());
+        payload.put("paymentNo", payment.getPaymentNo());
+        payload.put("paidAmount", payment.getAmount());
+        return payload;
     }
 
     private String normalizePaymentNo(String paymentNo) {

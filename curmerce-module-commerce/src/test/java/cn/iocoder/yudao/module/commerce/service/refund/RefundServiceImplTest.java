@@ -13,9 +13,11 @@ import cn.iocoder.yudao.module.commerce.dal.dataobject.store.StoreDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
 import cn.iocoder.yudao.module.commerce.enums.refund.RefundStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
+import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxEventAppender;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +39,7 @@ class RefundServiceImplTest {
     @Mock private CommerceOrderMapper orderMapper;
     @Mock private CommerceRefundMapper refundMapper;
     @Mock private MerchantAccessService merchantAccessService;
+    @Mock private CommerceOutboxEventAppender outboxEventAppender;
     @InjectMocks private RefundServiceImpl service;
 
     @Test
@@ -135,6 +138,23 @@ class RefundServiceImplTest {
                 .setRefundNo("R-1").setCallbackId("cb-1").setSuccess(true));
         assertEquals(RefundStatusEnum.SUCCESS.getStatus(), replay.getStatus());
         verify(refundMapper, times(1)).markCallback(eq(9201L), eq("cb-1"), eq(true), any());
+        verify(outboxEventAppender).append(eq(CommerceOutboxEventTypeEnum.REFUND_SUCCESS), eq(9201L), any());
+    }
+
+    @Test
+    void simulateCallback_failureAppendsRefundFailedEvent() {
+        CommerceRefundDO refund = refund(9201L, RefundStatusEnum.APPROVED.getStatus());
+        when(refundMapper.selectByRefundNoForUpdate("R-1")).thenReturn(refund);
+        when(refundMapper.markCallback(eq(9201L), eq("cb-2"), eq(false), any())).thenReturn(1);
+        when(orderMapper.markRefundStatus(9001L, RefundStatusEnum.FAILED.getStatus())).thenReturn(1);
+
+        var response = service.simulateCallback(new RefundCallbackReqVO()
+                .setRefundNo("R-1").setCallbackId("cb-2").setSuccess(false));
+
+        assertEquals(RefundStatusEnum.FAILED.getStatus(), response.getStatus());
+        verify(refundMapper).markCallback(eq(9201L), eq("cb-2"), eq(false), any());
+        verify(orderMapper).markRefundStatus(9001L, RefundStatusEnum.FAILED.getStatus());
+        verify(outboxEventAppender).append(eq(CommerceOutboxEventTypeEnum.REFUND_FAILED), eq(9201L), any());
     }
 
     @Test

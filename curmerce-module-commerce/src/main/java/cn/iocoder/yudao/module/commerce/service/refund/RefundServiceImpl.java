@@ -13,8 +13,10 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.refund.RefundStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
+import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxEventAppender;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -41,6 +45,8 @@ public class RefundServiceImpl implements RefundService {
     private CommerceRefundMapper refundMapper;
     @Resource
     private MerchantAccessService merchantAccessService;
+    @Resource
+    private CommerceOutboxEventAppender outboxEventAppender;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -152,6 +158,8 @@ public class RefundServiceImpl implements RefundService {
         if (orderMapper.markRefundStatus(refund.getOrderId(), finalStatus) != 1) {
             throw exception(REFUND_STATE_INVALID);
         }
+        outboxEventAppender.append(success ? CommerceOutboxEventTypeEnum.REFUND_SUCCESS
+                : CommerceOutboxEventTypeEnum.REFUND_FAILED, refund.getId(), refundPayload(refund));
         refund.setStatus(finalStatus).setCallbackId(callbackId).setCallbackSuccess(success)
                 .setProcessedTime(processedTime);
         return toResponse(refund);
@@ -199,7 +207,7 @@ public class RefundServiceImpl implements RefundService {
         if (!RefundStatusEnum.REQUESTED.getStatus().equals(refund.getStatus())) {
             throw exception(REFUND_STATE_INVALID);
         }
-        LocalDateTime reviewedTime = LocalDateTime.now();
+        LocalDateTime reviewedTime = nowPersisted();
         int updated = approve
                 ? refundMapper.markApproved(id, reviewerUserId, reviewedTime, normalizedRemark)
                 : refundMapper.markRejected(id, reviewerUserId, reviewedTime, normalizedRemark);
@@ -254,6 +262,16 @@ public class RefundServiceImpl implements RefundService {
 
     private LocalDateTime nowPersisted() {
         return LocalDateTime.now().withNano(0);
+    }
+
+    private Map<String, Object> refundPayload(CommerceRefundDO refund) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("refundId", refund.getId());
+        payload.put("refundNo", refund.getRefundNo());
+        payload.put("orderId", refund.getOrderId());
+        payload.put("orderNo", refund.getOrderNo());
+        payload.put("amount", refund.getAmount());
+        return payload;
     }
 
     private RefundRespVO toResponse(CommerceRefundDO refund) {

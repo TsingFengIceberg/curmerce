@@ -109,4 +109,14 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
                 .orderByAsc(CommerceOrderDO::getId)
                 .last("LIMIT " + safeBatchSize + " FOR UPDATE"));
     }
+
+    /** 对账用：取一批已支付、已发货或已完成的订单。 */
+    default List<CommerceOrderDO> selectPaidOrCompletedForAudit(int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 1000));
+        return selectList(new LambdaQueryWrapper<CommerceOrderDO>()
+                .in(CommerceOrderDO::getStatus, OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus(),
+                        OrderStatusEnum.SHIPPED.getStatus(), OrderStatusEnum.COMPLETED.getStatus())
+                .orderByAsc(CommerceOrderDO::getId)
+                .last("LIMIT " + safeLimit));
+    }
 }
