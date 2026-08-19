@@ -8,9 +8,12 @@ import cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundApplyReqV
 import cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundPageReqVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderItemDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.store.StoreDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderItemMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
@@ -37,6 +40,8 @@ class RefundServiceImplTest {
 
     @Mock private MemberUserApi memberUserApi;
     @Mock private CommerceOrderMapper orderMapper;
+    @Mock private CommerceOrderItemMapper orderItemMapper;
+    @Mock private ProductSkuMapper productSkuMapper;
     @Mock private CommerceRefundMapper refundMapper;
     @Mock private MerchantAccessService merchantAccessService;
     @Mock private CommerceOutboxEventAppender outboxEventAppender;
@@ -123,9 +128,14 @@ class RefundServiceImplTest {
     @Test
     void simulateCallback_supportsSuccessAndSameCallbackIsIdempotent() {
         CommerceRefundDO refund = refund(9201L, RefundStatusEnum.APPROVED.getStatus());
+        when(refundMapper.selectByRefundNo("R-1")).thenReturn(refund);
         when(refundMapper.selectByRefundNoForUpdate("R-1")).thenReturn(refund);
+        when(orderMapper.selectByIdForUpdate(9001L)).thenReturn(order(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()));
+        when(orderItemMapper.selectListByOrderId(9001L)).thenReturn(java.util.List.of(
+                new CommerceOrderItemDO().setSkuId(301L).setQuantity(2)));
         when(refundMapper.markCallback(eq(9201L), eq("cb-1"), eq(true), any())).thenReturn(1);
         when(orderMapper.markRefundStatus(9001L, RefundStatusEnum.SUCCESS.getStatus())).thenReturn(1);
+        when(productSkuMapper.restoreStock(301L, 2)).thenReturn(1);
 
         var response = service.simulateCallback(new RefundCallbackReqVO()
                 .setRefundNo("R-1").setCallbackId("cb-1").setSuccess(true));
@@ -133,12 +143,49 @@ class RefundServiceImplTest {
 
         CommerceRefundDO completed = refund(9201L, RefundStatusEnum.SUCCESS.getStatus())
                 .setRefundNo("R-1").setCallbackId("cb-1").setCallbackSuccess(true);
+        when(refundMapper.selectByRefundNo("R-1")).thenReturn(completed);
         when(refundMapper.selectByRefundNoForUpdate("R-1")).thenReturn(completed);
         var replay = service.simulateCallback(new RefundCallbackReqVO()
                 .setRefundNo("R-1").setCallbackId("cb-1").setSuccess(true));
         assertEquals(RefundStatusEnum.SUCCESS.getStatus(), replay.getStatus());
         verify(refundMapper, times(1)).markCallback(eq(9201L), eq("cb-1"), eq(true), any());
+        verify(productSkuMapper, times(1)).restoreStock(301L, 2);
         verify(outboxEventAppender).append(eq(CommerceOutboxEventTypeEnum.REFUND_SUCCESS), eq(9201L), any());
+    }
+
+    @Test
+    void simulateCallback_successAfterShipmentDoesNotRestoreStock() {
+        CommerceRefundDO refund = refund(9201L, RefundStatusEnum.APPROVED.getStatus());
+        when(refundMapper.selectByRefundNo("R-1")).thenReturn(refund);
+        when(refundMapper.selectByRefundNoForUpdate("R-1")).thenReturn(refund);
+        when(orderMapper.selectByIdForUpdate(9001L)).thenReturn(order(OrderStatusEnum.SHIPPED.getStatus()));
+        when(refundMapper.markCallback(eq(9201L), eq("cb-1"), eq(true), any())).thenReturn(1);
+        when(orderMapper.markRefundStatus(9001L, RefundStatusEnum.SUCCESS.getStatus())).thenReturn(1);
+
+        service.simulateCallback(new RefundCallbackReqVO()
+                .setRefundNo("R-1").setCallbackId("cb-1").setSuccess(true));
+
+        verifyNoInteractions(orderItemMapper, productSkuMapper);
+    }
+
+    @Test
+    void simulateCallback_stockRestoreFailureAbortsRefundCompletion() {
+        CommerceRefundDO refund = refund(9201L, RefundStatusEnum.APPROVED.getStatus());
+        when(refundMapper.selectByRefundNo("R-1")).thenReturn(refund);
+        when(refundMapper.selectByRefundNoForUpdate("R-1")).thenReturn(refund);
+        when(orderMapper.selectByIdForUpdate(9001L)).thenReturn(order(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()));
+        when(orderItemMapper.selectListByOrderId(9001L)).thenReturn(java.util.List.of(
+                new CommerceOrderItemDO().setSkuId(301L).setQuantity(2)));
+        when(refundMapper.markCallback(eq(9201L), eq("cb-1"), eq(true), any())).thenReturn(1);
+        when(orderMapper.markRefundStatus(9001L, RefundStatusEnum.SUCCESS.getStatus())).thenReturn(1);
+        when(productSkuMapper.restoreStock(301L, 2)).thenReturn(0);
+
+        ServiceException error = assertThrows(ServiceException.class, () -> service.simulateCallback(
+                new RefundCallbackReqVO().setRefundNo("R-1").setCallbackId("cb-1").setSuccess(true)));
+
+        assertEquals(ORDER_STOCK_RESTORE_FAILED.getCode(), error.getCode());
+        verify(productSkuMapper).restoreStock(301L, 2);
+        verify(outboxEventAppender, never()).append(eq(CommerceOutboxEventTypeEnum.REFUND_SUCCESS), anyLong(), any());
     }
 
     @Test
@@ -159,15 +206,21 @@ class RefundServiceImplTest {
 
     @Test
     void simulateCallback_rejectsNotApprovedAndConflictingReplay() {
+        CommerceRefundDO requested = refund(9201L, RefundStatusEnum.REQUESTED.getStatus());
+        when(refundMapper.selectByRefundNo("R-1")).thenReturn(requested);
         when(refundMapper.selectByRefundNoForUpdate("R-1"))
-                .thenReturn(refund(9201L, RefundStatusEnum.REQUESTED.getStatus()));
+                .thenReturn(requested);
+        when(orderMapper.selectByIdForUpdate(9001L)).thenReturn(order(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()));
         ServiceException notApproved = assertThrows(ServiceException.class, () -> service.simulateCallback(
                 new RefundCallbackReqVO().setRefundNo("R-1").setCallbackId("cb-1").setSuccess(true)));
         assertEquals(REFUND_STATE_INVALID.getCode(), notApproved.getCode());
 
+        CommerceRefundDO failed = refund(9202L, RefundStatusEnum.FAILED.getStatus()).setRefundNo("R-2")
+                .setCallbackId("cb-2").setCallbackSuccess(false);
+        when(refundMapper.selectByRefundNo("R-2")).thenReturn(failed);
         when(refundMapper.selectByRefundNoForUpdate("R-2"))
-                .thenReturn(refund(9202L, RefundStatusEnum.FAILED.getStatus()).setRefundNo("R-2")
-                        .setCallbackId("cb-2").setCallbackSuccess(false));
+                .thenReturn(failed);
+        when(orderMapper.selectByIdForUpdate(9001L)).thenReturn(order(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()));
         ServiceException conflict = assertThrows(ServiceException.class, () -> service.simulateCallback(
                 new RefundCallbackReqVO().setRefundNo("R-2").setCallbackId("cb-2").setSuccess(true)));
         assertEquals(REFUND_CALLBACK_CONFLICT.getCode(), conflict.getCode());

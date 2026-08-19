@@ -8,8 +8,11 @@ import cn.iocoder.yudao.module.commerce.controller.admin.refund.vo.RefundPageReq
 import cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundApplyReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundRespVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderItemDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderItemMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.refund.RefundStatusEnum;
@@ -43,6 +46,10 @@ public class RefundServiceImpl implements RefundService {
     private CommerceOrderMapper orderMapper;
     @Resource
     private CommerceRefundMapper refundMapper;
+    @Resource
+    private CommerceOrderItemMapper orderItemMapper;
+    @Resource
+    private ProductSkuMapper productSkuMapper;
     @Resource
     private MerchantAccessService merchantAccessService;
     @Resource
@@ -132,11 +139,28 @@ public class RefundServiceImpl implements RefundService {
     public RefundRespVO simulateCallback(RefundCallbackReqVO reqVO) {
         String refundNo = StrUtil.trim(reqVO.getRefundNo());
         String callbackId = normalizeCallbackId(reqVO.getCallbackId());
-        CommerceRefundDO refund = refundMapper.selectByRefundNoForUpdate(refundNo);
+        boolean success = Boolean.TRUE.equals(reqVO.getSuccess());
+        CommerceRefundDO refund;
+        CommerceOrderDO order = null;
+        if (success) {
+            // Order operations lock the order before the refund row. Read the
+            // refund number first, then acquire locks in that same order to
+            // avoid a refund-callback/order-update deadlock.
+            CommerceRefundDO peek = refundMapper.selectByRefundNo(refundNo);
+            if (peek == null) {
+                throw exception(REFUND_NOT_FOUND);
+            }
+            order = orderMapper.selectByIdForUpdate(peek.getOrderId());
+            if (order == null) {
+                throw exception(ORDER_NOT_FOUND);
+            }
+            refund = refundMapper.selectByRefundNoForUpdate(refundNo);
+        } else {
+            refund = refundMapper.selectByRefundNoForUpdate(refundNo);
+        }
         if (refund == null) {
             throw exception(REFUND_NOT_FOUND);
         }
-        boolean success = Boolean.TRUE.equals(reqVO.getSuccess());
         if (RefundStatusEnum.SUCCESS.getStatus().equals(refund.getStatus())
                 || RefundStatusEnum.FAILED.getStatus().equals(refund.getStatus())) {
             if (callbackId.equals(refund.getCallbackId()) && Boolean.valueOf(success).equals(refund.getCallbackSuccess())) {
@@ -147,6 +171,9 @@ public class RefundServiceImpl implements RefundService {
         if (!RefundStatusEnum.APPROVED.getStatus().equals(refund.getStatus())) {
             throw exception(REFUND_STATE_INVALID);
         }
+        // A successful refund for a paid-but-not-shipped order returns the reserved
+        // SKU stock. Lock the order before changing either side so the decision is
+        // based on one durable order state and the whole operation can roll back.
         // MySQL DATETIME has second precision in the current schema. Truncate
         // before writing so the first callback response and an idempotent replay
         // expose the same durable timestamp.
@@ -158,11 +185,22 @@ public class RefundServiceImpl implements RefundService {
         if (orderMapper.markRefundStatus(refund.getOrderId(), finalStatus) != 1) {
             throw exception(REFUND_STATE_INVALID);
         }
+        if (success && OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus().equals(order.getStatus())) {
+            restoreRefundStock(refund.getOrderId());
+        }
         outboxEventAppender.append(success ? CommerceOutboxEventTypeEnum.REFUND_SUCCESS
                 : CommerceOutboxEventTypeEnum.REFUND_FAILED, refund.getId(), refundPayload(refund));
         refund.setStatus(finalStatus).setCallbackId(callbackId).setCallbackSuccess(success)
                 .setProcessedTime(processedTime);
         return toResponse(refund);
+    }
+
+    private void restoreRefundStock(Long orderId) {
+        for (CommerceOrderItemDO item : orderItemMapper.selectListByOrderId(orderId)) {
+            if (productSkuMapper.restoreStock(item.getSkuId(), item.getQuantity()) != 1) {
+                throw exception(ORDER_STOCK_RESTORE_FAILED);
+            }
+        }
     }
 
     @Override

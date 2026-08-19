@@ -37,6 +37,11 @@ public interface CommerceRefundMapper extends BaseMapperX<CommerceRefundDO> {
                 .eq(CommerceRefundDO::getRefundNo, refundNo));
     }
 
+    default CommerceRefundDO selectByRefundNo(String refundNo) {
+        return selectOne(new LambdaQueryWrapper<CommerceRefundDO>()
+                .eq(CommerceRefundDO::getRefundNo, refundNo));
+    }
+
     default CommerceRefundDO selectOwned(Long userId, Long id) {
         return selectOne(new LambdaQueryWrapper<CommerceRefundDO>().eq(CommerceRefundDO::getId, id)
                 .eq(CommerceRefundDO::getMemberUserId, userId));

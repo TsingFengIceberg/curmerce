@@ -54,11 +54,12 @@ public interface ProductSkuMapper extends BaseMapperX<ProductSkuDO> {
     }
 
     @Update("UPDATE commerce_product_sku SET stock = stock - #{quantity}, update_time = CURRENT_TIMESTAMP "
-            + "WHERE id = #{id} AND deleted = 0 AND stock >= #{quantity}")
+            + "WHERE id = #{id} AND deleted = 0 AND #{quantity} > 0 AND stock >= #{quantity}")
     int deductStock(@Param("id") Long id, @Param("quantity") int quantity);
 
     @Update("UPDATE commerce_product_sku SET stock = stock + #{quantity}, update_time = CURRENT_TIMESTAMP "
-            + "WHERE id = #{id} AND deleted = 0 AND stock <= 2147483647 - #{quantity}")
+            + "WHERE id = #{id} AND deleted = 0 AND #{quantity} > 0 "
+            + "AND stock <= 2147483647 - #{quantity}")
     int restoreStock(@Param("id") Long id, @Param("quantity") int quantity);
 
     default List<ProductSkuDO> selectListByProductIdAndMerchantIdForUpdate(Long productId, Long merchantId) {
