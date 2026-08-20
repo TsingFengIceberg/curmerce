@@ -262,6 +262,22 @@ export interface StoreSummary {
   updateTime?: ApiDateValue;
 }
 
+export interface MerchantSummary {
+  id: number;
+  name: string;
+  code: string;
+  contactName: string;
+  contactMobile: string;
+  defaultStoreName: string;
+  defaultStoreCode: string;
+  status: number;
+  ownerUserId?: number | null;
+  reviewerUserId?: number | null;
+  reviewTime?: ApiDateValue;
+  rejectReason?: string | null;
+  createTime?: ApiDateValue;
+}
+
 export interface ProductSpecificationValueAdmin {
   name: string;
   value: string;

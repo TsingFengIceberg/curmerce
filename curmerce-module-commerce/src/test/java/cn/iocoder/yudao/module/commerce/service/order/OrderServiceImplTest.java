@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderRespVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderShipReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.CommerceOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderCreateRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderDetailRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderPageReqVO;
@@ -433,6 +434,36 @@ class OrderServiceImplTest {
         assertEquals("Snapshot tea", response.getItems().get(0).getProductName());
         verify(orderMapper).selectPagePendingShipment(request, 401L, 501L);
         verifyNoInteractions(productMapper, productSkuMapper, memberAddressApi);
+    }
+
+    @Test
+    void getAdminOrderPage_forwardsFiltersAndReturnsBuyerAndItemSnapshots() {
+        CommerceOrderPageReqVO request = new CommerceOrderPageReqVO();
+        request.setPageNo(1);
+        request.setPageSize(20);
+        request.setStatus(OrderStatusEnum.SHIPPED.getStatus());
+        request.setOrderNo("C-1");
+        request.setMerchantId(401L);
+        request.setMemberUserId(101L);
+        CommerceOrderDO order = new CommerceOrderDO().setId(9001L).setOrderNo("C-1")
+                .setMemberUserId(101L).setMerchantId(401L).setStoreId(501L)
+                .setStatus(OrderStatusEnum.SHIPPED.getStatus()).setItemCount(1)
+                .setPayableAmount(1250L).setReceiverName("Alice")
+                .setReceiverDetailAddress("Snapshot address");
+        CommerceOrderItemDO item = new CommerceOrderItemDO().setId(9101L).setOrderId(9001L)
+                .setProductName("Snapshot tea").setQuantity(1).setTotalAmount(1250L);
+        when(orderMapper.selectPageAdmin(request)).thenReturn(new PageResult<>(List.of(order), 1L));
+        when(orderItemMapper.selectListByOrderId(9001L)).thenReturn(List.of(item));
+        when(memberUserApi.getUser(101L)).thenReturn(new MemberUserRespDTO().setId(101L)
+                .setNickname("Alice buyer").setMobile("13900000000"));
+
+        PageResult<MerchantOrderRespVO> result = service.getAdminOrderPage(request);
+
+        assertEquals(1L, result.getTotal());
+        assertEquals("Alice buyer", result.getList().get(0).getBuyerNickname());
+        assertEquals("Snapshot tea", result.getList().get(0).getItems().get(0).getProductName());
+        verify(orderMapper).selectPageAdmin(request);
+        verifyNoInteractions(merchantAccessService, memberAddressApi, productMapper, productSkuMapper);
     }
 
     @Test

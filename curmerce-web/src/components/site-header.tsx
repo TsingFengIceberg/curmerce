@@ -34,7 +34,10 @@ export function SiteHeader() {
           {loggedIn ? <Link href="/refunds">退款中心</Link> : null}
           {adminLoggedIn ? (
             <>
+              <Link href="/admin/merchants">商家审核</Link>
+              <Link href="/admin/orders">平台订单</Link>
               <Link href="/merchant/orders">待发货订单</Link>
+              <Link href="/merchant/store">店铺资料</Link>
               <Link href="/merchant/products">商品管理</Link>
               <Link href="/merchant/refunds">退款审核</Link>
             </>

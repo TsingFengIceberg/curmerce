@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderRespVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderShipReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.CommerceOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.*;
 
 import java.time.LocalDateTime;
@@ -16,5 +17,6 @@ public interface OrderService {
     void cancelOrder(Long userId, Long id);
     int closeExpiredPendingPaymentOrders(LocalDateTime cutoffTime, int batchSize);
     PageResult<MerchantOrderRespVO> getOwnPendingShipmentPage(MerchantOrderPageReqVO reqVO);
+    PageResult<MerchantOrderRespVO> getAdminOrderPage(CommerceOrderPageReqVO reqVO);
     void shipOwnOrder(MerchantOrderShipReqVO reqVO);
 }

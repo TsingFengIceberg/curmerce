@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderRespVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderShipReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.CommerceOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.*;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.cart.CartItemDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
@@ -274,6 +275,13 @@ public class OrderServiceImpl implements OrderService {
         MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
         PageResult<CommerceOrderDO> page = orderMapper.selectPagePendingShipment(reqVO,
                 context.merchant().getId(), context.store().getId());
+        return new PageResult<>(page.getList().stream().map(this::toMerchantResponse).toList(), page.getTotal());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<MerchantOrderRespVO> getAdminOrderPage(CommerceOrderPageReqVO reqVO) {
+        PageResult<CommerceOrderDO> page = orderMapper.selectPageAdmin(reqVO);
         return new PageResult<>(page.getList().stream().map(this::toMerchantResponse).toList(), page.getTotal());
     }
 

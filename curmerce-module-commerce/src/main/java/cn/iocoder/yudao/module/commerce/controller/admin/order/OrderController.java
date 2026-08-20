@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderRespVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderShipReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.CommerceOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.service.order.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,6 +36,13 @@ public class OrderController {
     public CommonResult<PageResult<MerchantOrderRespVO>> pageOwnPendingShipment(
             @Valid MerchantOrderPageReqVO reqVO) {
         return success(orderService.getOwnPendingShipmentPage(reqVO));
+    }
+
+    @GetMapping("/page")
+    @Operation(summary = "查询平台订单")
+    @PreAuthorize("@ss.hasPermission('commerce:order:query')")
+    public CommonResult<PageResult<MerchantOrderRespVO>> page(@Valid CommerceOrderPageReqVO reqVO) {
+        return success(orderService.getAdminOrderPage(reqVO));
     }
 
     @PutMapping("/ship-own")

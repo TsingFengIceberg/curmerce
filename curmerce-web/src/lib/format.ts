@@ -33,6 +33,10 @@ export function formatOrderStatus(status?: number | null) {
   return status ? ORDER_STATUS_LABELS[status] ?? `状态 ${status}` : "未知状态";
 }
 
+export function formatMerchantStatus(status?: number | null) {
+  return ({ 0: "待审核", 1: "已通过", 2: "已拒绝" } as Record<number, string>)[status ?? -1] ?? `状态 ${status ?? "—"}`;
+}
+
 export function formatPaymentStatus(status?: number | null) {
   return status ? PAYMENT_STATUS_LABELS[status] ?? `状态 ${status}` : "未创建支付单";
 }

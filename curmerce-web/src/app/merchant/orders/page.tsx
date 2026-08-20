@@ -98,7 +98,7 @@ export default function MerchantOrdersPage() {
           <h1>待发货订单</h1>
           <p>当前商家上下文共 {total} 笔已支付、等待发货的订单。数据范围由后端权限和商家归属决定。</p>
         </div>
-        <div className="inline-actions"><Link className="button button--secondary" href="/merchant/products">商品管理</Link><Link className="button button--secondary" href="/merchant/refunds">退款审核</Link><button className="button button--secondary" type="button" onClick={() => void logout()}>退出后台</button><Link className="button button--secondary" href="/catalog">查看商城</Link></div>
+        <div className="inline-actions"><Link className="button button--secondary" href="/merchant/store">店铺资料</Link><Link className="button button--secondary" href="/merchant/products">商品管理</Link><Link className="button button--secondary" href="/merchant/refunds">退款审核</Link><button className="button button--secondary" type="button" onClick={() => void logout()}>退出后台</button><Link className="button button--secondary" href="/catalog">查看商城</Link></div>
       </div>
       {message ? <Notice tone="success">{message}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}

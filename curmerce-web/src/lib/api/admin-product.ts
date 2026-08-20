@@ -50,6 +50,10 @@ export const adminStoreApi = {
   own() {
     return adminApi<StoreSummary>("/commerce/store/get-own");
   },
+
+  updateOwn(input: { name: string; description: string; contactName: string; contactMobile: string }) {
+    return adminApi<boolean>("/commerce/store/update-own", { method: "PUT", body: jsonBody(input) });
+  },
 };
 
 export const adminProductApi = {

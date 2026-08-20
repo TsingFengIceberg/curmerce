@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderPageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.CommerceOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
@@ -65,6 +66,15 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
                 .eq(CommerceOrderDO::getMerchantId, merchantId)
                 .eq(CommerceOrderDO::getStoreId, storeId)
                 .eq(CommerceOrderDO::getStatus, OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus())
+                .orderByDesc(CommerceOrderDO::getId));
+    }
+
+    default PageResult<CommerceOrderDO> selectPageAdmin(CommerceOrderPageReqVO req) {
+        return selectPage(req, new LambdaQueryWrapperX<CommerceOrderDO>()
+                .eqIfPresent(CommerceOrderDO::getStatus, req.getStatus())
+                .eqIfPresent(CommerceOrderDO::getMerchantId, req.getMerchantId())
+                .eqIfPresent(CommerceOrderDO::getMemberUserId, req.getMemberUserId())
+                .likeIfPresent(CommerceOrderDO::getOrderNo, req.getOrderNo())
                 .orderByDesc(CommerceOrderDO::getId));
     }
 
