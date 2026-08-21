@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.community.service;
 
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.community.controller.app.interaction.vo.CommunityFollowReqVO;
 import cn.iocoder.yudao.module.community.controller.app.interaction.vo.CommunityReactionReqVO;
 import cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostCreateReqVO;
@@ -30,6 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+
+import java.util.Collections;
 
 @ExtendWith(MockitoExtension.class)
 class CommunityServiceImplTest {
@@ -91,6 +94,24 @@ class CommunityServiceImplTest {
         Long reportId = service.report(7L, new CommunityReportCreateReqVO().setPostId(10L).setReason("spam"));
         assertEquals(22L, reportId);
         verify(reportMapper, never()).insert(any(cn.iocoder.yudao.module.community.dal.dataobject.report.CommunityReportDO.class));
+    }
+
+    @Test
+    void readOnlyOwnerQueriesUseNonLockingUserValidation() {
+        when(postMapper.selectOwnerPage(eq(7L), any())).thenReturn(emptyPostPage());
+        when(postMapper.selectFavoritePage(eq(7L), any())).thenReturn(emptyPostPage());
+        when(postMapper.selectFollowingPage(eq(7L), any())).thenReturn(emptyPostPage());
+
+        service.getOwnerPosts(7L, new cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostOwnerPageReqVO());
+        service.getFavoritePosts(7L, new cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostOwnerPageReqVO());
+        service.getFollowingPosts(7L, new cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostOwnerPageReqVO());
+
+        verify(memberUserApi, times(3)).validateActiveUser(7L);
+        verify(memberUserApi, never()).validateActiveUserForUpdate(anyLong());
+    }
+
+    private PageResult<CommunityPostDO> emptyPostPage() {
+        return new PageResult<>(Collections.emptyList(), 0L);
     }
 
     private CommunityPostUpdateReqVO updateRequest(Long id) {

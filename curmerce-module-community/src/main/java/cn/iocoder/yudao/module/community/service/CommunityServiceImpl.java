@@ -130,7 +130,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<CommunityPostRespVO> getOwnerPosts(Long userId, CommunityPostOwnerPageReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(userId);
+        memberUserApi.validateActiveUser(userId);
         PageResult<CommunityPostDO> page = postMapper.selectOwnerPage(userId,
                 new CommunityPostPageReqVO().setKeyword(req.getKeyword()));
         return new PageResult<>(page.getList().stream().map(post -> toPostResponse(post, userId)).toList(), page.getTotal());
@@ -139,7 +139,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<CommunityPostRespVO> getFavoritePosts(Long userId, CommunityPostOwnerPageReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(userId);
+        memberUserApi.validateActiveUser(userId);
         PageResult<CommunityPostDO> page = postMapper.selectFavoritePage(userId, req);
         return new PageResult<>(page.getList().stream().map(post -> toPostResponse(post, userId)).toList(), page.getTotal());
     }
@@ -147,7 +147,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<CommunityPostRespVO> getFollowingPosts(Long userId, CommunityPostOwnerPageReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(userId);
+        memberUserApi.validateActiveUser(userId);
         PageResult<CommunityPostDO> page = postMapper.selectFollowingPage(userId, req);
         return new PageResult<>(page.getList().stream().map(post -> toPostResponse(post, userId)).toList(), page.getTotal());
     }
