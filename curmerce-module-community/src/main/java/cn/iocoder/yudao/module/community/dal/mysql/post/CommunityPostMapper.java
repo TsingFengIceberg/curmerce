@@ -24,6 +24,21 @@ public interface CommunityPostMapper extends BaseMapperX<CommunityPostDO> {
             wrapper.and(w -> w.like(CommunityPostDO::getTitle, req.getKeyword())
                     .or().like(CommunityPostDO::getContent, req.getKeyword()));
         }
+        if (StrUtil.isNotBlank(req.getTopicSlug())) {
+            wrapper.apply("EXISTS (SELECT 1 FROM community_post_topic cpt JOIN community_topic ct ON ct.id = cpt.topic_id " +
+                    "WHERE cpt.post_id = community_post.id AND cpt.deleted = 0 AND ct.deleted = 0 AND ct.status = 0 AND ct.slug = {0})",
+                    req.getTopicSlug().trim());
+        }
+        return selectPage(req, wrapper.orderByDesc(CommunityPostDO::getId));
+    }
+    default PageResult<CommunityPostDO> selectOwnerPage(Long userId, CommunityPostPageReqVO req) {
+        LambdaQueryWrapperX<CommunityPostDO> wrapper = new LambdaQueryWrapperX<CommunityPostDO>()
+                .eq(CommunityPostDO::getAuthorUserId, userId);
+        wrapper.in(CommunityPostDO::getStatus, CommunityPostStatusEnum.DRAFT.getStatus(), CommunityPostStatusEnum.HIDDEN.getStatus(), CommunityPostStatusEnum.PUBLISHED.getStatus());
+        if (StrUtil.isNotBlank(req.getKeyword())) {
+            wrapper.and(w -> w.like(CommunityPostDO::getTitle, req.getKeyword())
+                    .or().like(CommunityPostDO::getContent, req.getKeyword()));
+        }
         return selectPage(req, wrapper.orderByDesc(CommunityPostDO::getId));
     }
     default PageResult<CommunityPostDO> selectAdminPage(CommunityPostAdminPageReqVO req) {

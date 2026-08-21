@@ -34,4 +34,8 @@ public class CommunityPostController {
     public CommonResult<PageResult<CommunityPostRespVO>> page(@Valid CommunityPostPageReqVO req) { return success(communityService.getFeed(getLoginUserId(), req)); }
     @GetMapping("/get") @PermitAll @Operation(summary = "查询帖子详情")
     public CommonResult<CommunityPostRespVO> get(@RequestParam Long id) { return success(communityService.getPost(getLoginUserId(), id)); }
+    @GetMapping("/my-page") @Operation(summary = "查询我的社区帖子")
+    public CommonResult<PageResult<CommunityPostRespVO>> myPage(@Valid CommunityPostOwnerPageReqVO req) {
+        return success(communityService.getOwnerPosts(getLoginUserId(), req));
+    }
 }

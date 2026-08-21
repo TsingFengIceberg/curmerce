@@ -14,6 +14,7 @@ public interface CommunityService {
     void deletePost(Long userId, Long id);
     CommunityPostRespVO getPost(Long viewerId, Long id);
     PageResult<CommunityPostRespVO> getFeed(Long viewerId, CommunityPostPageReqVO req);
+    PageResult<CommunityPostRespVO> getOwnerPosts(Long userId, CommunityPostOwnerPageReqVO req);
     Long createComment(Long userId, CommunityCommentCreateReqVO req);
     PageResult<CommunityCommentRespVO> getComments(Long viewerId, CommunityCommentPageReqVO req);
     void setReaction(Long userId, CommunityReactionReqVO req);

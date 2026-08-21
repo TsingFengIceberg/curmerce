@@ -1,16 +1,20 @@
-import { adminApi, appApi, jsonBody } from "@/lib/api/client";
+import { adminApi, appApi, appMultipartApi, jsonBody } from "@/lib/api/client";
 import type { ApiPage, CommunityComment, CommunityPost, CommunityReport } from "@/lib/types/api";
 
-function pageQuery(input: { pageNo: number; pageSize: number; keyword?: string; status?: number }) {
+function pageQuery(input: { pageNo: number; pageSize: number; keyword?: string; status?: number; topicSlug?: string }) {
   const params = new URLSearchParams({ pageNo: String(input.pageNo), pageSize: String(input.pageSize) });
   if (input.keyword?.trim()) params.set("keyword", input.keyword.trim());
   if (input.status !== undefined) params.set("status", String(input.status));
+  if (input.topicSlug?.trim()) params.set("topicSlug", input.topicSlug.trim());
   return params.toString();
 }
 
 export const communityApi = {
-  page(input: { pageNo: number; pageSize: number; keyword?: string }) {
+  page(input: { pageNo: number; pageSize: number; keyword?: string; topicSlug?: string }) {
     return appApi<ApiPage<CommunityPost>>(`/community/post/page?${pageQuery(input)}`);
+  },
+  myPage(input: { pageNo: number; pageSize: number; keyword?: string }) {
+    return appApi<ApiPage<CommunityPost>>(`/community/post/my-page?${pageQuery(input)}`);
   },
   get(id: number) { return appApi<CommunityPost>(`/community/post/get?id=${id}`); },
   create(input: { title: string; content: string; mediaUrls: string[]; topics: string[]; productIds: number[] }) {
@@ -34,6 +38,12 @@ export const communityApi = {
   },
   report(input: { postId: number; reason: string }) {
     return appApi<number>("/community/report/create", { method: "POST", body: jsonBody(input) });
+  },
+  uploadMedia(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("directory", "community");
+    return appMultipartApi<string>("/infra/file/upload", form);
   },
 };
 

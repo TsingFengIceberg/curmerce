@@ -128,6 +128,15 @@ public class CommunityServiceImpl implements CommunityService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public PageResult<CommunityPostRespVO> getOwnerPosts(Long userId, CommunityPostOwnerPageReqVO req) {
+        memberUserApi.validateActiveUserForUpdate(userId);
+        PageResult<CommunityPostDO> page = postMapper.selectOwnerPage(userId,
+                new CommunityPostPageReqVO().setKeyword(req.getKeyword()));
+        return new PageResult<>(page.getList().stream().map(post -> toPostResponse(post, userId)).toList(), page.getTotal());
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createComment(Long userId, CommunityCommentCreateReqVO req) {
         memberUserApi.validateActiveUserForUpdate(userId);
