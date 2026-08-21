@@ -46,4 +46,20 @@ public interface CommerceAuctionSessionMapper extends BaseMapperX<CommerceAuctio
                 .le(CommerceAuctionSessionDO::getEndTime, now).orderByAsc(CommerceAuctionSessionDO::getId)
                 .last("LIMIT " + safeBatchSize + " FOR UPDATE"));
     }
+
+    default List<CommerceAuctionSessionDO> selectSettledEndedForUpdate(int batchSize) {
+        int safeBatchSize = Math.max(1, Math.min(batchSize, 1000));
+        return selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CommerceAuctionSessionDO>()
+                .eq(CommerceAuctionSessionDO::getStatus, AuctionStatusEnum.ENDED.getStatus())
+                .isNotNull(CommerceAuctionSessionDO::getSettlementOrderId)
+                .orderByAsc(CommerceAuctionSessionDO::getId)
+                .last("LIMIT " + safeBatchSize + " FOR UPDATE"));
+    }
+
+    default int markSettlementFailed(Long id, LocalDateTime failedTime, String reason) {
+        return update(new CommerceAuctionSessionDO().setStatus(AuctionStatusEnum.SETTLEMENT_FAILED.getStatus())
+                        .setSettlementFailedTime(failedTime).setSettlementFailureReason(reason),
+                new LambdaUpdateWrapper<CommerceAuctionSessionDO>().eq(CommerceAuctionSessionDO::getId, id)
+                        .eq(CommerceAuctionSessionDO::getStatus, AuctionStatusEnum.ENDED.getStatus()));
+    }
 }

@@ -7,6 +7,10 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.auction.CommerceAuctionBidMapp
 import cn.iocoder.yudao.module.commerce.dal.mysql.auction.CommerceAuctionSessionMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
+import cn.iocoder.yudao.module.commerce.enums.auction.AuctionStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
 import cn.iocoder.yudao.module.commerce.service.order.OrderService;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
@@ -33,6 +37,7 @@ class AuctionServiceImplTest {
     @Mock private MerchantAccessService merchantAccessService;
     @Mock private MemberUserApi memberUserApi;
     @Mock private OrderService orderService;
+    @Mock private CommerceOrderMapper orderMapper;
     @InjectMocks private AuctionServiceImpl service;
 
     @Test
@@ -58,6 +63,17 @@ class AuctionServiceImplTest {
                 () -> service.bid(7L, new AuctionBidReqVO().setSessionId(10L).setAmount(1250L).setIdempotencyKey("bid-0001")));
         assertEquals(AUCTION_BID_INVALID.getCode(), error.getCode());
         verify(bidMapper, never()).insert(any(CommerceAuctionBidDO.class));
+    }
+
+    @Test
+    void markUnpaidSettlementsFailed_marksCanceledWinnerOrderAndIsIdempotent() {
+        CommerceAuctionSessionDO session = runningSession().setStatus(AuctionStatusEnum.ENDED.getStatus()).setSettlementOrderId(30L);
+        when(sessionMapper.selectSettledEndedForUpdate(100)).thenReturn(java.util.List.of(session));
+        when(orderMapper.selectByIdForUpdate(30L)).thenReturn(new CommerceOrderDO().setStatus(OrderStatusEnum.CANCELED.getStatus()));
+        when(sessionMapper.markSettlementFailed(eq(10L), any(), eq("竞拍胜者订单支付超时"))).thenReturn(1);
+
+        assertEquals(1, service.markUnpaidSettlementsFailed(LocalDateTime.now(), 100));
+        verify(sessionMapper).markSettlementFailed(eq(10L), any(), eq("竞拍胜者订单支付超时"));
     }
 
     private CommerceAuctionSessionDO runningSession() {

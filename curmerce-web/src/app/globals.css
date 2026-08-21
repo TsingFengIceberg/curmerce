@@ -88,8 +88,8 @@ h2 { font-size: 23px; letter-spacing: -0.04em; line-height: 1.15; margin-bottom:
 .form-card__footer a { color: var(--accent-dark); font-weight: 700; }
 .field { display: grid; gap: 7px; margin-bottom: 17px; }
 .field > span { font-size: 13px; font-weight: 700; }
-.field input, .field textarea { background: #fbfbfa; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); outline: none; padding: 12px 13px; transition: border-color 160ms ease, box-shadow 160ms ease; width: 100%; }
-.field input:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(226, 89, 63, 0.1); }
+.field input, .field textarea, .field select { background: #fbfbfa; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); outline: none; padding: 12px 13px; transition: border-color 160ms ease, box-shadow 160ms ease; width: 100%; }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(226, 89, 63, 0.1); }
 .field-help { color: var(--muted); font-size: 12px; line-height: 1.5; margin: -4px 0 18px; }
 .checkbox-field { align-items: center; display: flex; font-size: 13px; gap: 9px; margin: 4px 0 20px; }
 .checkbox-field input { accent-color: var(--accent); height: 16px; width: 16px; }

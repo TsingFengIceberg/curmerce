@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CurmerceApiError } from "@/lib/api/client";
 import { memberApi } from "@/lib/api/member";
 import { clearToken, getAccessToken } from "@/lib/auth/storage";
-import type { MemberAddress, MemberAddressInput } from "@/lib/types/api";
+import type { AreaNode, MemberAddress, MemberAddressInput } from "@/lib/types/api";
 import { Notice } from "@/components/notice";
 
 const emptyForm: MemberAddressInput = {
@@ -25,14 +25,27 @@ export default function AddressesPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [areaTree, setAreaTree] = useState<AreaNode[]>([]);
+  const [areaLoading, setAreaLoading] = useState(true);
 
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace("/login");
       return;
     }
-    void loadAddresses();
+    void Promise.all([loadAddresses(), loadAreaTree()]);
   }, [router]);
+
+  async function loadAreaTree() {
+    setAreaLoading(true);
+    try {
+      setAreaTree(await memberApi.areaTree());
+    } catch (cause) {
+      setError(cause instanceof CurmerceApiError ? cause.message : "地区数据加载失败");
+    } finally {
+      setAreaLoading(false);
+    }
+  }
 
   async function loadAddresses() {
     setLoading(true);
@@ -73,15 +86,24 @@ export default function AddressesPage() {
     setForm(emptyForm);
   }
 
+  function areaOptions() {
+    const options: Array<{ id: number; name: string }> = [];
+    const visit = (nodes: AreaNode[], prefix: string) => nodes.forEach((node) => {
+      const label = prefix ? `${prefix} / ${node.name}` : node.name;
+      if (!node.children?.length) options.push({ id: node.id, name: label });
+      else visit(node.children, label);
+    });
+    visit(areaTree, "");
+    return options;
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setMessage(null);
     setError(null);
     try {
-      if (!form.areaId || form.areaId < 1) {
-        throw new Error("请填写有效的地区 ID。当前后端暂未提供地区选择树，第一版先使用地区 ID。");
-      }
+      if (!form.areaId || form.areaId < 1) throw new Error("请选择完整的省、市、区");
       if (editingId) {
         await memberApi.updateAddress({ ...form, id: editingId });
         setMessage("地址已更新");
@@ -160,8 +182,8 @@ export default function AddressesPage() {
           </div>
           <label className="field"><span>收件人</span><input required maxLength={30} value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="姓名" /></label>
           <label className="field"><span>手机号</span><input required inputMode="tel" value={form.mobile} onChange={(event) => update("mobile", event.target.value)} placeholder="手机号" /></label>
-          <label className="field"><span>地区 ID</span><input required min={1} type="number" value={form.areaId || ""} onChange={(event) => update("areaId", event.target.value)} placeholder="例如：310100" /></label>
-          <p className="field-help">当前后端地址模型要求 `areaId`，地区选择树将在后续基础资料能力中补齐。</p>
+          <label className="field"><span>收货地区</span><select required disabled={areaLoading || areaTree.length === 0} value={form.areaId || ""} onChange={(event) => update("areaId", event.target.value)}><option value="">{areaLoading ? "地区加载中…" : "请选择省、市、区"}</option>{areaOptions().map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+          <p className="field-help">地区编号由系统地区树提供，保存时由后端再次校验。</p>
           <label className="field"><span>详细地址</span><textarea required maxLength={255} rows={4} value={form.detailAddress} onChange={(event) => update("detailAddress", event.target.value)} placeholder="街道、楼栋、门牌号" /></label>
           <label className="checkbox-field"><input checked={form.defaultStatus} type="checkbox" onChange={(event) => update("defaultStatus", event.target.checked)} /><span>设为默认地址</span></label>
           <button className="button button--primary button--full" disabled={saving} type="submit">{saving ? "保存中…" : editingId ? "保存修改" : "添加地址"}</button>

@@ -19,4 +19,6 @@ public class AuctionRespVO {
     private Long currentBidderUserId;
     private Long winnerUserId;
     private Long winningBidId;
+    private LocalDateTime settlementFailedTime;
+    private String settlementFailureReason;
 }

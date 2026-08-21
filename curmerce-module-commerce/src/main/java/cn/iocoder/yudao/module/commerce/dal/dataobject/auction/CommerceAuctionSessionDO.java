@@ -28,4 +28,6 @@ public class CommerceAuctionSessionDO extends BaseDO {
     private Long winnerUserId;
     private Long winningBidId;
     private Long settlementOrderId;
+    private LocalDateTime settlementFailedTime;
+    private String settlementFailureReason;
 }

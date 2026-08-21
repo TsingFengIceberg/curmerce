@@ -34,6 +34,7 @@ export function SiteHeader() {
           <Link href="/community">社区</Link>
           <Link href="/cart">购物车</Link>
           {loggedIn ? <Link href="/orders">我的订单</Link> : null}
+          {loggedIn ? <Link href="/profile">个人资料</Link> : null}
           {loggedIn ? <Link href="/refunds">退款中心</Link> : null}
           {loggedIn ? <Link href="/personal/listings">我的闲置</Link> : null}
           {loggedIn ? <Link href="/community/following">关注 Feed</Link> : null}

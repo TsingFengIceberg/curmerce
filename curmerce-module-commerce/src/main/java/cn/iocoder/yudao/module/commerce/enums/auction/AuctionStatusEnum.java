@@ -10,7 +10,8 @@ public enum AuctionStatusEnum {
     SCHEDULED(10, "待开始"),
     RUNNING(20, "进行中"),
     ENDED(30, "已结束"),
-    CANCELED(40, "已取消");
+    CANCELED(40, "已取消"),
+    SETTLEMENT_FAILED(50, "结算失败");
 
     private final Integer status;
     private final String name;

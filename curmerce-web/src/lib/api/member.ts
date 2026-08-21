@@ -3,6 +3,7 @@ import type {
   MemberAddress,
   MemberAddressInput,
   MemberAddressUpdateInput,
+  AreaNode,
   MemberProfile,
   MemberToken,
 } from "@/lib/types/api";
@@ -41,6 +42,10 @@ export const memberApi = {
       method: "PUT",
       body: jsonBody(input),
     });
+  },
+
+  areaTree() {
+    return appApi<AreaNode[]>("/system/area/tree");
   },
 
   listAddresses() {

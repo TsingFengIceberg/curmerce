@@ -13,6 +13,8 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.auction.CommerceAuctionBidMapp
 import cn.iocoder.yudao.module.commerce.dal.mysql.auction.CommerceAuctionSessionMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
+import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.auction.AuctionStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
@@ -37,6 +39,7 @@ public class AuctionServiceImpl implements AuctionService {
     @Resource private MerchantAccessService merchantAccessService;
     @Resource private MemberUserApi memberUserApi;
     @Resource private OrderService orderService;
+    @Resource private CommerceOrderMapper orderMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -170,6 +173,18 @@ public class AuctionServiceImpl implements AuctionService {
         return changed;
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int markUnpaidSettlementsFailed(LocalDateTime now, int batchSize) {
+        int changed = 0;
+        for (CommerceAuctionSessionDO session : sessionMapper.selectSettledEndedForUpdate(batchSize)) {
+            var order = orderMapper.selectByIdForUpdate(session.getSettlementOrderId());
+            if (order == null || !OrderStatusEnum.CANCELED.getStatus().equals(order.getStatus())) continue;
+            if (sessionMapper.markSettlementFailed(session.getId(), now, "竞拍胜者订单支付超时") == 1) changed++;
+        }
+        return changed;
+    }
+
     private CommerceAuctionSessionDO requireOwned(Long id, MerchantAccessContext context) {
         CommerceAuctionSessionDO session = sessionMapper.selectById(id);
         if (session == null || !context.merchant().getId().equals(session.getMerchantId()) || !context.store().getId().equals(session.getStoreId())) throw exception(AUCTION_NOT_FOUND);
@@ -189,6 +204,7 @@ public class AuctionServiceImpl implements AuctionService {
                 .setStatus(session.getStatus()).setStartingPrice(session.getStartingPrice()).setMinIncrement(session.getMinIncrement())
                 .setStartTime(session.getStartTime()).setEndTime(session.getEndTime()).setCurrentAmount(highest == null ? null : highest.getAmount())
                 .setCurrentBidderUserId(highest == null ? null : highest.getBidderUserId()).setWinnerUserId(session.getWinnerUserId())
-                .setWinningBidId(session.getWinningBidId());
+                .setWinningBidId(session.getWinningBidId()).setSettlementFailedTime(session.getSettlementFailedTime())
+                .setSettlementFailureReason(session.getSettlementFailureReason());
     }
 }

@@ -18,4 +18,5 @@ public interface AuctionService {
     Long settle(Long userId, Long sessionId, Long addressId);
     PageResult<AuctionRespVO> getPublicPage(cn.iocoder.yudao.module.commerce.controller.app.auction.vo.AuctionPageReqVO reqVO);
     int advanceStatuses(LocalDateTime now, int batchSize);
+    int markUnpaidSettlementsFailed(LocalDateTime now, int batchSize);
 }

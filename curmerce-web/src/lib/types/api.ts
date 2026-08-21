@@ -237,6 +237,12 @@ export interface MemberProfile {
   sex?: number | null;
 }
 
+export interface AreaNode {
+  id: number;
+  name: string;
+  children?: AreaNode[];
+}
+
 export interface MemberAddress {
   id: number;
   name: string;
@@ -311,6 +317,8 @@ export interface AuctionSession {
   currentBidderUserId?: number | null;
   winnerUserId?: number | null;
   winningBidId?: number | null;
+  settlementFailedTime?: ApiDateValue | null;
+  settlementFailureReason?: string | null;
 }
 
 export interface AuctionCreateInput {
