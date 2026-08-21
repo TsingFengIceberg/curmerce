@@ -5,6 +5,7 @@ import cn.iocoder.yudao.module.community.controller.app.interaction.vo.Community
 import cn.iocoder.yudao.module.community.controller.app.interaction.vo.CommunityReactionReqVO;
 import cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostCreateReqVO;
 import cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostUpdateReqVO;
+import cn.iocoder.yudao.module.community.controller.app.report.vo.CommunityReportCreateReqVO;
 import cn.iocoder.yudao.module.community.dal.dataobject.post.CommunityPostDO;
 import cn.iocoder.yudao.module.community.dal.mysql.comment.CommunityCommentMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.interaction.CommunityFollowMapper;
@@ -81,6 +82,15 @@ class CommunityServiceImplTest {
         ServiceException error = assertThrows(ServiceException.class, () -> service.setFollow(7L, new CommunityFollowReqVO().setUserId(7L).setActive(true)));
         assertEquals(FOLLOW_SELF_INVALID.getCode(), error.getCode());
         verify(followMapper, never()).insert(any(cn.iocoder.yudao.module.community.dal.dataobject.interaction.CommunityFollowDO.class));
+    }
+
+    @Test
+    void report_repeatedPendingSubmissionIsIdempotent() {
+        when(postMapper.selectById(10L)).thenReturn(new CommunityPostDO().setId(10L).setStatus(1));
+        when(reportMapper.selectPending(10L, 7L)).thenReturn(new cn.iocoder.yudao.module.community.dal.dataobject.report.CommunityReportDO().setId(22L));
+        Long reportId = service.report(7L, new CommunityReportCreateReqVO().setPostId(10L).setReason("spam"));
+        assertEquals(22L, reportId);
+        verify(reportMapper, never()).insert(any(cn.iocoder.yudao.module.community.dal.dataobject.report.CommunityReportDO.class));
     }
 
     private CommunityPostUpdateReqVO updateRequest(Long id) {

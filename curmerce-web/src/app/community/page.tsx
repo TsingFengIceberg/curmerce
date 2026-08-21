@@ -11,7 +11,7 @@ import type { CommunityPost } from "@/lib/types/api";
 export default function CommunityPage() {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [keyword, setKeyword] = useState("");
-  const [topicSlug, setTopicSlug] = useState("");
+  const [topicSlug, setTopicSlug] = useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("topicSlug") ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   async function load() {

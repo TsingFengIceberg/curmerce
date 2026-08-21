@@ -42,6 +42,8 @@ request "$buyer_token" GET "/app-api/community/post/get?id=$post_id" >/dev/null
 request "$buyer_token" POST /app-api/community/comment/create "$(jq -nc --argjson postId "$post_id" '{postId:$postId,content:"Acceptance comment"}')" >/dev/null
 request "$buyer_token" PUT /app-api/community/post/reaction "$(jq -nc --argjson postId "$post_id" '{postId:$postId,type:1,active:true}')" >/dev/null
 request "$buyer_token" PUT /app-api/community/post/reaction "$(jq -nc --argjson postId "$post_id" '{postId:$postId,type:1,active:true}')" >/dev/null
+request "$buyer_token" GET "/app-api/community/post/favorites?pageNo=1&pageSize=10" >/dev/null
+request "$buyer_token" GET "/app-api/community/post/following?pageNo=1&pageSize=10" >/dev/null
 report="$(request "$buyer_token" POST /app-api/community/report/create "$(jq -nc --argjson postId "$post_id" '{postId:$postId,reason:"Automated acceptance report"}')")"
 report_id="$(jq -r '.data' <<<"$report")"
 request "$admin_token" PUT /admin-api/community/report/review "$(jq -nc --argjson id "$report_id" '{id:$id,status:2,remark:"Acceptance report rejected"}')" >/dev/null

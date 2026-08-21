@@ -38,4 +38,12 @@ public class CommunityPostController {
     public CommonResult<PageResult<CommunityPostRespVO>> myPage(@Valid CommunityPostOwnerPageReqVO req) {
         return success(communityService.getOwnerPosts(getLoginUserId(), req));
     }
+    @GetMapping("/favorites") @Operation(summary = "查询我的收藏帖子")
+    public CommonResult<PageResult<CommunityPostRespVO>> favorites(@Valid CommunityPostOwnerPageReqVO req) {
+        return success(communityService.getFavoritePosts(getLoginUserId(), req));
+    }
+    @GetMapping("/following") @Operation(summary = "查询关注用户的帖子")
+    public CommonResult<PageResult<CommunityPostRespVO>> following(@Valid CommunityPostOwnerPageReqVO req) {
+        return success(communityService.getFollowingPosts(getLoginUserId(), req));
+    }
 }

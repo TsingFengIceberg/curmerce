@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.community.controller.admin.vo.CommunityPostAdminPageReqVO;
 import cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostPageReqVO;
+import cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostOwnerPageReqVO;
 import cn.iocoder.yudao.module.community.dal.dataobject.post.CommunityPostDO;
 import cn.iocoder.yudao.module.community.enums.CommunityPostStatusEnum;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -35,6 +36,28 @@ public interface CommunityPostMapper extends BaseMapperX<CommunityPostDO> {
         LambdaQueryWrapperX<CommunityPostDO> wrapper = new LambdaQueryWrapperX<CommunityPostDO>()
                 .eq(CommunityPostDO::getAuthorUserId, userId);
         wrapper.in(CommunityPostDO::getStatus, CommunityPostStatusEnum.DRAFT.getStatus(), CommunityPostStatusEnum.HIDDEN.getStatus(), CommunityPostStatusEnum.PUBLISHED.getStatus());
+        if (StrUtil.isNotBlank(req.getKeyword())) {
+            wrapper.and(w -> w.like(CommunityPostDO::getTitle, req.getKeyword())
+                    .or().like(CommunityPostDO::getContent, req.getKeyword()));
+        }
+        return selectPage(req, wrapper.orderByDesc(CommunityPostDO::getId));
+    }
+    default PageResult<CommunityPostDO> selectFavoritePage(Long userId, CommunityPostOwnerPageReqVO req) {
+        LambdaQueryWrapperX<CommunityPostDO> wrapper = new LambdaQueryWrapperX<CommunityPostDO>()
+                .eq(CommunityPostDO::getStatus, CommunityPostStatusEnum.PUBLISHED.getStatus());
+        wrapper.apply("EXISTS (SELECT 1 FROM community_post_reaction cpr WHERE cpr.post_id = community_post.id " +
+                "AND cpr.user_id = {0} AND cpr.type = 2 AND cpr.deleted = 0)", userId);
+        if (StrUtil.isNotBlank(req.getKeyword())) {
+            wrapper.and(w -> w.like(CommunityPostDO::getTitle, req.getKeyword())
+                    .or().like(CommunityPostDO::getContent, req.getKeyword()));
+        }
+        return selectPage(req, wrapper.orderByDesc(CommunityPostDO::getId));
+    }
+    default PageResult<CommunityPostDO> selectFollowingPage(Long userId, CommunityPostOwnerPageReqVO req) {
+        LambdaQueryWrapperX<CommunityPostDO> wrapper = new LambdaQueryWrapperX<CommunityPostDO>()
+                .eq(CommunityPostDO::getStatus, CommunityPostStatusEnum.PUBLISHED.getStatus());
+        wrapper.apply("EXISTS (SELECT 1 FROM community_follow cf WHERE cf.followed_user_id = community_post.author_user_id " +
+                "AND cf.follower_user_id = {0} AND cf.deleted = 0)", userId);
         if (StrUtil.isNotBlank(req.getKeyword())) {
             wrapper.and(w -> w.like(CommunityPostDO::getTitle, req.getKeyword())
                     .or().like(CommunityPostDO::getContent, req.getKeyword()));

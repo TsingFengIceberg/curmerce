@@ -137,6 +137,22 @@ public class CommunityServiceImpl implements CommunityService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public PageResult<CommunityPostRespVO> getFavoritePosts(Long userId, CommunityPostOwnerPageReqVO req) {
+        memberUserApi.validateActiveUserForUpdate(userId);
+        PageResult<CommunityPostDO> page = postMapper.selectFavoritePage(userId, req);
+        return new PageResult<>(page.getList().stream().map(post -> toPostResponse(post, userId)).toList(), page.getTotal());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<CommunityPostRespVO> getFollowingPosts(Long userId, CommunityPostOwnerPageReqVO req) {
+        memberUserApi.validateActiveUserForUpdate(userId);
+        PageResult<CommunityPostDO> page = postMapper.selectFollowingPage(userId, req);
+        return new PageResult<>(page.getList().stream().map(post -> toPostResponse(post, userId)).toList(), page.getTotal());
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createComment(Long userId, CommunityCommentCreateReqVO req) {
         memberUserApi.validateActiveUserForUpdate(userId);
@@ -211,6 +227,8 @@ public class CommunityServiceImpl implements CommunityService {
         CommunityPostDO post = requirePublished(req.getPostId());
         String reason = StrUtil.trim(req.getReason());
         if (StrUtil.isBlank(reason)) throw exception(REPORT_INVALID);
+        CommunityReportDO pending = reportMapper.selectPending(post.getId(), userId);
+        if (pending != null) return pending.getId();
         CommunityReportDO report = new CommunityReportDO().setPostId(post.getId()).setReporterUserId(userId)
                 .setReason(reason).setStatus(CommunityReportStatusEnum.PENDING.getStatus());
         reportMapper.insert(report);

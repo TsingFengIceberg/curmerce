@@ -9,6 +9,12 @@ import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
 public interface CommunityReportMapper extends BaseMapperX<CommunityReportDO> {
+    default CommunityReportDO selectPending(Long postId, Long reporterUserId) {
+        return selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CommunityReportDO>()
+                .eq(CommunityReportDO::getPostId, postId)
+                .eq(CommunityReportDO::getReporterUserId, reporterUserId)
+                .eq(CommunityReportDO::getStatus, 0));
+    }
     default PageResult<CommunityReportDO> selectAdminPage(CommunityReportPageReqVO req) {
         return selectPage(req, new LambdaQueryWrapperX<CommunityReportDO>()
                 .eqIfPresent(CommunityReportDO::getStatus, req.getStatus())

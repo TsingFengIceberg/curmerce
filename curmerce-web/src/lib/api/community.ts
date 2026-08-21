@@ -16,6 +16,12 @@ export const communityApi = {
   myPage(input: { pageNo: number; pageSize: number; keyword?: string }) {
     return appApi<ApiPage<CommunityPost>>(`/community/post/my-page?${pageQuery(input)}`);
   },
+  favorites(input: { pageNo: number; pageSize: number; keyword?: string }) {
+    return appApi<ApiPage<CommunityPost>>(`/community/post/favorites?${pageQuery(input)}`);
+  },
+  following(input: { pageNo: number; pageSize: number; keyword?: string }) {
+    return appApi<ApiPage<CommunityPost>>(`/community/post/following?${pageQuery(input)}`);
+  },
   get(id: number) { return appApi<CommunityPost>(`/community/post/get?id=${id}`); },
   create(input: { title: string; content: string; mediaUrls: string[]; topics: string[]; productIds: number[] }) {
     return appApi<number>("/community/post/create", { method: "POST", body: jsonBody(input) });
