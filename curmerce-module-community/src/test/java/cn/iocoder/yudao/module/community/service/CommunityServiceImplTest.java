@@ -17,6 +17,7 @@ import cn.iocoder.yudao.module.community.dal.mysql.report.CommunityReportMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.topic.CommunityPostTopicMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.topic.CommunityTopicMapper;
 import cn.iocoder.yudao.module.community.enums.CommunityPostStatusEnum;
+import cn.iocoder.yudao.module.commerce.controller.app.catalog.vo.PublicProductSummaryRespVO;
 import cn.iocoder.yudao.module.commerce.service.catalog.PublicCatalogService;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import org.junit.jupiter.api.Test;
@@ -58,6 +59,33 @@ class CommunityServiceImplTest {
                 && post.getTitle().equals("Title")));
         verify(postProductMapper).deleteByPostId(10L);
         verify(postTopicMapper).deleteByPostId(10L);
+    }
+
+    @Test
+    void createPost_validatesAndPersistsVisibleProductAssociations() {
+        doAnswer(invocation -> { ((CommunityPostDO) invocation.getArgument(0)).setId(11L); return 1; }).when(postMapper).insert(any(CommunityPostDO.class));
+        PublicProductSummaryRespVO product = new PublicProductSummaryRespVO();
+        product.setId(201L);
+        when(catalogService.getVisibleSummary(201L, null)).thenReturn(product);
+
+        service.createPost(7L, new CommunityPostCreateReqVO().setTitle("Tea review").setContent("Body")
+                .setProductIds(java.util.List.of(201L)));
+
+        verify(catalogService).getVisibleSummary(201L, null);
+        verify(postProductMapper).insert(argThat((cn.iocoder.yudao.module.community.dal.dataobject.post.CommunityPostProductDO relation) ->
+                relation.getPostId().equals(11L) && relation.getProductId().equals(201L) && relation.getSort().equals(0)));
+    }
+
+    @Test
+    void createPost_rejectsHiddenOrMissingProductAssociation() {
+        when(catalogService.getVisibleSummary(201L, null)).thenReturn(null);
+
+        assertThrows(ServiceException.class, () -> service.createPost(7L,
+                new CommunityPostCreateReqVO().setTitle("Tea review").setContent("Body")
+                        .setProductIds(java.util.List.of(201L))));
+
+        verify(postMapper, never()).insert(any(CommunityPostDO.class));
+        verify(postProductMapper, never()).insert(any(cn.iocoder.yudao.module.community.dal.dataobject.post.CommunityPostProductDO.class));
     }
 
     @Test

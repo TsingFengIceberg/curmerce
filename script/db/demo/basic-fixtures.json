@@ -1,0 +1,48 @@
+{
+  "description": "Curmerce basic acceptance request templates. Replace every placeholder before use; no credential is stored here.",
+  "roles": ["admin", "merchant", "buyer", "secondBuyer"],
+  "merchantCreate": {
+    "name": "Demo merchant",
+    "code": "demo_merchant_<runId>",
+    "contactName": "Demo owner",
+    "contactMobile": "13800138000",
+    "defaultStoreName": "Demo store",
+    "defaultStoreCode": "demo_store_<runId>"
+  },
+  "productCreate": {
+    "name": "Demo product",
+    "code": "demo_product_<runId>",
+    "categoryId": "<categoryId>",
+    "mainImageUrl": "/demo/product.png",
+    "description": "A disposable local acceptance product.",
+    "skus": [{
+      "code": "demo_sku_<runId>",
+      "price": 19900,
+      "marketPrice": 24900,
+      "stock": 20,
+      "specificationValues": ["default"]
+    }]
+  },
+  "checkout": {
+    "addressId": "<buyerAddressId>",
+    "idempotencyKey": "checkout-<runId>"
+  },
+  "releasePurchase": {
+    "itemId": "<releaseItemId>",
+    "quantity": 1,
+    "addressId": "<buyerAddressId>",
+    "idempotencyKey": "release-<runId>"
+  },
+  "auctionBid": {
+    "sessionId": "<auctionSessionId>",
+    "amount": 19900,
+    "idempotencyKey": "bid-<runId>"
+  },
+  "communityPost": {
+    "title": "Demo product experience",
+    "content": "A disposable local post that links to the demo product.",
+    "mediaUrls": [],
+    "topics": ["demo"],
+    "productIds": ["<productId>"]
+  }
+}

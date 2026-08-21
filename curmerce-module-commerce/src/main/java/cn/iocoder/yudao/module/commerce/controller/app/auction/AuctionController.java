@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.commerce.service.auction.AuctionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -20,9 +21,9 @@ import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUti
 @Validated
 public class AuctionController {
     @Resource private AuctionService auctionService;
-    @GetMapping("/page") @Operation(summary = "查询公开拍卖场次")
+    @GetMapping("/page") @PermitAll @Operation(summary = "查询公开拍卖场次")
     public CommonResult<PageResult<AuctionRespVO>> page(@Valid AuctionPageReqVO reqVO) { return success(auctionService.getPublicPage(reqVO)); }
-    @GetMapping("/get") @Operation(summary = "查询拍卖详情")
+    @GetMapping("/get") @PermitAll @Operation(summary = "查询拍卖详情")
     public CommonResult<AuctionRespVO> get(@RequestParam Long id) { return success(auctionService.get(id, true)); }
     @PostMapping("/bid") @Operation(summary = "提交拍卖出价")
     public CommonResult<Long> bid(@Valid @RequestBody AuctionBidReqVO reqVO) { return success(auctionService.bid(getLoginUserId(), reqVO)); }

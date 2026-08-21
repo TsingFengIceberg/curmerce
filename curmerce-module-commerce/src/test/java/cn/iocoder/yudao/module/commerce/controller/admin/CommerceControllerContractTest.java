@@ -16,6 +16,9 @@ import cn.iocoder.yudao.module.commerce.controller.admin.refund.RefundController
 import cn.iocoder.yudao.module.commerce.controller.admin.refund.vo.RefundAuditReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.refund.vo.RefundCallbackReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.refund.vo.RefundPageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.app.auction.AuctionController;
+import cn.iocoder.yudao.module.commerce.controller.app.release.ReleaseController;
+import jakarta.annotation.security.PermitAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -97,6 +100,29 @@ class CommerceControllerContractTest {
         assertNoField(RefundAuditReqVO.class, "reviewerUserId", "merchantId", "storeId");
         assertNoField(RefundCallbackReqVO.class, "merchantId", "storeId", "reviewerUserId",
                 "processedTime", "callbackSuccess");
+    }
+
+    @Test
+    void releaseAndAuctionBrowseEndpointsArePublicButWriteEndpointsRemainAuthenticated() throws Exception {
+        assertPermitAll(ReleaseController.class, "page");
+        assertPermitAll(ReleaseController.class, "get");
+        assertNotPermitAll(ReleaseController.class, "purchase");
+        assertPermitAll(AuctionController.class, "page");
+        assertPermitAll(AuctionController.class, "get");
+        assertNotPermitAll(AuctionController.class, "bid");
+        assertNotPermitAll(AuctionController.class, "settle");
+    }
+
+    private static void assertPermitAll(Class<?> controller, String methodName) {
+        Method method = Arrays.stream(controller.getDeclaredMethods())
+                .filter(candidate -> candidate.getName().equals(methodName)).findFirst().orElseThrow();
+        assertNotNull(method.getAnnotation(PermitAll.class));
+    }
+
+    private static void assertNotPermitAll(Class<?> controller, String methodName) {
+        Method method = Arrays.stream(controller.getDeclaredMethods())
+                .filter(candidate -> candidate.getName().equals(methodName)).findFirst().orElseThrow();
+        assertNull(method.getAnnotation(PermitAll.class));
     }
 
     private static void assertNoField(Class<?> type, String... names) {
