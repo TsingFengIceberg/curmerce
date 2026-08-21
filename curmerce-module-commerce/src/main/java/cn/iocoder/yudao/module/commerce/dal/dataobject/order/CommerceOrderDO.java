@@ -19,6 +19,8 @@ public class CommerceOrderDO extends BaseDO {
     private Long memberUserId;
     private Long merchantId;
     private Long storeId;
+    private Integer sellerType;
+    private Long sellerUserId;
     private String idempotencyKey;
     private Integer status;
     /** 售后退款状态，与订单主交易状态独立。 */

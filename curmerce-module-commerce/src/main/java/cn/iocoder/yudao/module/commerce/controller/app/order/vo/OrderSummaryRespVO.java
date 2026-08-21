@@ -9,6 +9,8 @@ public class OrderSummaryRespVO {
     private String orderNo;
     private Long merchantId;
     private Long storeId;
+    private Integer sellerType;
+    private Long sellerUserId;
     private Integer status;
     private Integer refundStatus;
     private Integer itemCount;

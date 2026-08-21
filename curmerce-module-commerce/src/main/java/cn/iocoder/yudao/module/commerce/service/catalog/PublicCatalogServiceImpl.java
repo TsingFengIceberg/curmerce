@@ -11,6 +11,9 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.merchant.MerchantMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.*;
 import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
 import cn.iocoder.yudao.module.commerce.enums.merchant.MerchantAuditStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
+import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
+import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +32,7 @@ public class PublicCatalogServiceImpl implements PublicCatalogService {
     @Resource private ProductSkuMapper skuMapper;
     @Resource private StoreMapper storeMapper;
     @Resource private MerchantMapper merchantMapper;
+    @Resource private MemberUserApi memberUserApi;
 
     @Override
     @Transactional(readOnly = true)
@@ -90,7 +94,9 @@ public class PublicCatalogServiceImpl implements PublicCatalogService {
         if (summary == null) throw exception(PRODUCT_NOT_EXISTS_OR_ACCESS_DENIED);
         PublicProductDetailRespVO detail = new PublicProductDetailRespVO();
         detail.setId(summary.getId()); detail.setCategoryId(summary.getCategoryId()); detail.setStoreId(summary.getStoreId());
-        detail.setStoreName(summary.getStoreName()); detail.setName(summary.getName()); detail.setSubtitle(summary.getSubtitle());
+        detail.setStoreName(summary.getStoreName()); detail.setSellerType(summary.getSellerType());
+        detail.setSellerUserId(summary.getSellerUserId()); detail.setSellerName(summary.getSellerName());
+        detail.setName(summary.getName()); detail.setCondition(summary.getCondition()); detail.setSubtitle(summary.getSubtitle());
         detail.setMainImageUrl(summary.getMainImageUrl()); detail.setMinPrice(summary.getMinPrice());
         detail.setMinMarketPrice(summary.getMinMarketPrice()); detail.setTotalStock(summary.getTotalStock()); detail.setAvailable(summary.getAvailable());
         detail.setImageUrls(product.getImageUrls()); detail.setDescription(product.getDescription());
@@ -119,19 +125,29 @@ public class PublicCatalogServiceImpl implements PublicCatalogService {
         if (!Objects.equals(product.getAuditStatus(), 2) || !Objects.equals(product.getSaleStatus(), 1)) return null;
         ProductCategoryDO category = categories.get(product.getCategoryId());
         if (category == null || !ancestorsEnabled(category, categories)) return null;
-        MerchantDO merchant = merchantMapper.selectById(product.getMerchantId());
-        StoreDO store = storeMapper.selectById(product.getStoreId());
-        if (merchant == null || !Objects.equals(merchant.getStatus(), MerchantAuditStatusEnum.APPROVED.getStatus())
-                || store == null || !Objects.equals(store.getMerchantId(), merchant.getId())
-                || !Objects.equals(store.getStatus(), CommonStatusEnum.ENABLE.getStatus())) return null;
+        MerchantDO merchant = product.getMerchantId() == null ? null : merchantMapper.selectById(product.getMerchantId());
+        StoreDO store = product.getStoreId() == null ? null : storeMapper.selectById(product.getStoreId());
+        String sellerName;
+        if (Objects.equals(product.getSellerType(), ProductSellerTypeEnum.PERSONAL.getType())) {
+            MemberUserRespDTO seller = product.getSellerUserId() == null ? null : memberUserApi.getUser(product.getSellerUserId());
+            if (seller == null) return null;
+            sellerName = StrUtil.blankToDefault(seller.getNickname(), "个人卖家");
+        } else {
+            if (merchant == null || !Objects.equals(merchant.getStatus(), MerchantAuditStatusEnum.APPROVED.getStatus())
+                    || store == null || !Objects.equals(store.getMerchantId(), merchant.getId())
+                    || !Objects.equals(store.getStatus(), CommonStatusEnum.ENABLE.getStatus())) return null;
+            sellerName = store.getName();
+        }
         List<ProductSkuDO> skus = skuMapper.selectPublicListByProductId(product.getId());
         if (skus.isEmpty()) return null;
         long minPrice = skus.stream().map(ProductSkuDO::getPrice).min(Long::compareTo).orElse(0L);
         Long minMarket = skus.stream().map(ProductSkuDO::getMarketPrice).filter(Objects::nonNull).min(Long::compareTo).orElse(null);
         int stock = skus.stream().mapToInt(s -> s.getStock() == null ? 0 : s.getStock()).sum();
         PublicProductSummaryRespVO response = new PublicProductSummaryRespVO();
-        response.setId(product.getId()); response.setCategoryId(product.getCategoryId()); response.setStoreId(store.getId());
-        response.setStoreName(store.getName()); response.setName(product.getName()); response.setSubtitle(product.getSubtitle());
+        response.setId(product.getId()); response.setCategoryId(product.getCategoryId()); response.setStoreId(store == null ? null : store.getId());
+        response.setStoreName(store == null ? "个人卖家" : store.getName()); response.setSellerType(product.getSellerType());
+        response.setSellerUserId(product.getSellerUserId()); response.setSellerName(sellerName);
+        response.setName(product.getName()); response.setCondition(product.getCondition()); response.setSubtitle(product.getSubtitle());
         response.setMainImageUrl(product.getMainImageUrl()); response.setMinPrice(minPrice); response.setMinMarketPrice(minMarket);
         response.setTotalStock(stock); response.setAvailable(stock > 0);
         return response;

@@ -17,8 +17,9 @@ final class ProductRespAssembler {
     static ProductRespVO toResponse(ProductAggregate aggregate) {
         ProductDO product = aggregate.product();
         ProductRespVO response = new ProductRespVO().setId(product.getId()).setMerchantId(product.getMerchantId())
-                .setStoreId(product.getStoreId()).setCategoryId(product.getCategoryId()).setCode(product.getCode())
-                .setName(product.getName()).setSubtitle(product.getSubtitle()).setMainImageUrl(product.getMainImageUrl())
+                .setStoreId(product.getStoreId()).setSellerType(product.getSellerType()).setSellerUserId(product.getSellerUserId())
+                .setCategoryId(product.getCategoryId()).setCode(product.getCode())
+                .setName(product.getName()).setCondition(product.getCondition()).setSubtitle(product.getSubtitle()).setMainImageUrl(product.getMainImageUrl())
                 .setImageUrls(product.getImageUrls()).setDescription(product.getDescription())
                 .setAuditStatus(product.getAuditStatus()).setSaleStatus(product.getSaleStatus())
                 .setReviewerUserId(product.getReviewerUserId()).setReviewTime(product.getReviewTime())

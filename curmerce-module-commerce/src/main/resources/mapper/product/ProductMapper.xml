@@ -7,11 +7,11 @@
     <select id="selectPublicPage" resultType="cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO">
         SELECT p.*
         FROM commerce_product p
-        INNER JOIN commerce_merchant m
+        LEFT JOIN commerce_merchant m
             ON m.id = p.merchant_id
             AND m.deleted = 0
             AND m.status = 1
-        INNER JOIN commerce_store s
+        LEFT JOIN commerce_store s
             ON s.id = p.store_id
             AND s.merchant_id = p.merchant_id
             AND s.deleted = 0
@@ -19,6 +19,8 @@
         WHERE p.deleted = 0
           AND p.audit_status = 2
           AND p.sale_status = 1
+          AND ((p.seller_type = 1 AND m.id IS NOT NULL AND s.id IS NOT NULL)
+               OR (p.seller_type = 2 AND p.seller_user_id IS NOT NULL))
           AND p.category_id IN
           <foreach collection="categoryIds" item="categoryId" open="(" separator="," close=")">
               #{categoryId}
@@ -27,7 +29,7 @@
               SELECT 1
               FROM commerce_product_sku sku
               WHERE sku.product_id = p.id
-                AND sku.merchant_id = p.merchant_id
+                AND (sku.merchant_id = p.merchant_id OR (sku.merchant_id IS NULL AND p.merchant_id IS NULL))
                 AND sku.deleted = 0
                 AND sku.status = 0
           )

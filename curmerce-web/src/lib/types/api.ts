@@ -25,8 +25,11 @@ export interface ProductSpecificationValue {
 export interface PublicProductSummary {
   id: number;
   categoryId: number;
-  storeId: number;
+  storeId: number | null;
   storeName: string;
+  sellerType?: number;
+  sellerUserId?: number | null;
+  sellerName?: string | null;
   name: string;
   subtitle?: string | null;
   mainImageUrl?: string | null;
@@ -50,6 +53,56 @@ export interface PublicProductDetail extends PublicProductSummary {
   imageUrls: string[];
   description?: string | null;
   skus: PublicProductSku[];
+}
+
+export interface PersonalListing {
+  id: number;
+  categoryId: number;
+  name: string;
+  condition: string;
+  mainImageUrl?: string | null;
+  imageUrls?: string[] | null;
+  description?: string | null;
+  price?: number | null;
+  auditStatus: number;
+  saleStatus: number;
+  stock: number;
+  rejectReason?: string | null;
+  createTime?: ApiDateValue;
+  updateTime?: ApiDateValue;
+}
+
+export interface PersonalListingInput {
+  categoryId: number;
+  name: string;
+  condition: string;
+  mainImageUrl: string;
+  imageUrls: string[];
+  description: string;
+  price: number;
+}
+
+export interface PersonalSellerOrder {
+  id: number;
+  orderNo: string;
+  buyerUserId: number;
+  buyerMobile?: string | null;
+  buyerNickname?: string | null;
+  buyerEmail?: string | null;
+  sellerUserId?: number | null;
+  status: number;
+  itemCount: number;
+  totalAmount: number;
+  payableAmount: number;
+  receiverName?: string | null;
+  receiverMobile?: string | null;
+  receiverAreaName?: string | null;
+  receiverDetailAddress?: string | null;
+  shippingTime?: ApiDateValue;
+  logisticsCompany?: string | null;
+  trackingNo?: string | null;
+  createTime?: ApiDateValue;
+  items: OrderItem[];
 }
 
 export interface CartItem {
@@ -80,6 +133,8 @@ export interface OrderSummary {
   orderNo: string;
   merchantId?: number | null;
   storeId?: number | null;
+  sellerType?: number | null;
+  sellerUserId?: number | null;
   status: number;
   refundStatus?: number | null;
   itemCount: number;
@@ -211,8 +266,10 @@ export interface MerchantOrder {
   buyerMobile?: string | null;
   buyerNickname?: string | null;
   buyerEmail?: string | null;
-  merchantId: number;
-  storeId: number;
+  merchantId?: number | null;
+  storeId?: number | null;
+  sellerType?: number | null;
+  sellerUserId?: number | null;
   status: number;
   itemCount: number;
   totalAmount: number;

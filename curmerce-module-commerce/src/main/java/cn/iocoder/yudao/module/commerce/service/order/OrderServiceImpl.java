@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderR
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderShipReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.CommerceOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.*;
+import cn.iocoder.yudao.module.commerce.controller.app.personal.vo.PersonalSellerOrderRespVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.cart.CartItemDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
@@ -30,6 +31,7 @@ import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO
 import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
 import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
 import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
 import cn.iocoder.yudao.module.commerce.enums.refund.RefundStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
@@ -100,6 +102,8 @@ public class OrderServiceImpl implements OrderService {
         List<CheckoutLine> lines = new ArrayList<>();
         Long merchantId = null;
         Long storeId = null;
+        Integer sellerType = null;
+        Long sellerUserId = null;
         long totalAmount = 0L;
         int itemCount = 0;
         for (CartItemDO cartItem : cartItems) {
@@ -109,19 +113,32 @@ public class OrderServiceImpl implements OrderService {
             ProductDO product = productMapper.selectByIdForUpdate(cartItem.getProductId());
             ProductSkuDO sku = productSkuMapper.selectByIdAndProductIdForUpdate(cartItem.getSkuId(), cartItem.getProductId());
             if (!isSellable(product, sku)) throw exception(ORDER_ITEM_NOT_AVAILABLE);
-            MerchantDO merchant = merchantMapper.selectById(product.getMerchantId());
-            StoreDO store = storeMapper.selectById(product.getStoreId());
             ProductCategoryDO category = productCategoryMapper.selectById(product.getCategoryId());
-            if (merchant == null || !Objects.equals(merchant.getStatus(), 1)
-                    || store == null || !Objects.equals(store.getMerchantId(), product.getMerchantId())
-                    || !CommonStatusEnum.isEnable(store.getStatus()) || !categoryTreeEnabled(category)
-                    || !Objects.equals(sku.getMerchantId(), product.getMerchantId())) {
+            if (!categoryTreeEnabled(category)) {
                 throw exception(ORDER_ITEM_NOT_AVAILABLE);
             }
-            if (merchantId == null) {
+            int currentSellerType = Objects.equals(product.getSellerType(), ProductSellerTypeEnum.PERSONAL.getType())
+                    ? ProductSellerTypeEnum.PERSONAL.getType() : ProductSellerTypeEnum.MERCHANT.getType();
+            if (currentSellerType == ProductSellerTypeEnum.PERSONAL.getType()) {
+                if (product.getSellerUserId() == null || product.getMerchantId() != null || product.getStoreId() != null
+                        || sku.getMerchantId() != null) throw exception(ORDER_ITEM_NOT_AVAILABLE);
+                if (Objects.equals(product.getSellerUserId(), userId)) throw exception(PERSONAL_LISTING_SELF_PURCHASE);
+            } else {
+                MerchantDO merchant = merchantMapper.selectById(product.getMerchantId());
+                StoreDO store = storeMapper.selectById(product.getStoreId());
+                if (merchant == null || !Objects.equals(merchant.getStatus(), 1)
+                        || store == null || !Objects.equals(store.getMerchantId(), product.getMerchantId())
+                        || !CommonStatusEnum.isEnable(store.getStatus())
+                        || !Objects.equals(sku.getMerchantId(), product.getMerchantId())) throw exception(ORDER_ITEM_NOT_AVAILABLE);
+            }
+            if (sellerType == null) {
+                sellerType = currentSellerType;
+                sellerUserId = product.getSellerUserId();
                 merchantId = product.getMerchantId();
                 storeId = product.getStoreId();
-            } else if (!Objects.equals(merchantId, product.getMerchantId()) || !Objects.equals(storeId, product.getStoreId())) {
+            } else if (!Objects.equals(sellerType, currentSellerType)
+                    || !Objects.equals(sellerUserId, product.getSellerUserId())
+                    || !Objects.equals(merchantId, product.getMerchantId()) || !Objects.equals(storeId, product.getStoreId())) {
                 throw exception(ORDER_CHECKOUT_MULTI_STORE);
             }
             long lineTotal = multiplyAmount(sku.getPrice(), cartItem.getQuantity());
@@ -132,6 +149,7 @@ public class OrderServiceImpl implements OrderService {
 
         CommerceOrderDO order = new CommerceOrderDO().setOrderNo(generateOrderNo())
                 .setMemberUserId(userId).setMerchantId(merchantId).setStoreId(storeId)
+                .setSellerType(sellerType).setSellerUserId(sellerUserId)
                 .setIdempotencyKey(key).setStatus(OrderStatusEnum.PENDING_PAYMENT.getStatus())
                 .setPaymentDeadline(LocalDateTime.now().plusMinutes(Math.max(1L, paymentTimeoutMinutes)))
                 .setItemCount(itemCount).setTotalAmount(totalAmount).setPayableAmount(totalAmount)
@@ -280,6 +298,15 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
+    public PageResult<PersonalSellerOrderRespVO> getOwnPersonalPendingShipmentPage(Long sellerUserId,
+                                                                                     MerchantOrderPageReqVO reqVO) {
+        memberUserApi.validateActiveUser(sellerUserId);
+        PageResult<CommerceOrderDO> page = orderMapper.selectPagePersonalPendingShipment(reqVO, sellerUserId);
+        return new PageResult<>(page.getList().stream().map(this::toPersonalSellerResponse).toList(), page.getTotal());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PageResult<MerchantOrderRespVO> getAdminOrderPage(CommerceOrderPageReqVO reqVO) {
         PageResult<CommerceOrderDO> page = orderMapper.selectPageAdmin(reqVO);
         return new PageResult<>(page.getList().stream().map(this::toMerchantResponse).toList(), page.getTotal());
@@ -313,6 +340,28 @@ public class OrderServiceImpl implements OrderService {
         }
         outboxEventAppender.append(CommerceOutboxEventTypeEnum.ORDER_SHIPPED, order.getId(),
                 orderPayload(order));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void shipPersonalOrder(Long sellerUserId, MerchantOrderShipReqVO reqVO) {
+        memberUserApi.validateActiveUserForUpdate(sellerUserId);
+        CommerceOrderDO order = orderMapper.selectPersonalSellerForUpdate(reqVO.getId(), sellerUserId);
+        if (order == null) throw exception(ORDER_NOT_FOUND);
+        if (!OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus().equals(order.getStatus())) {
+            throw exception(ORDER_SHIP_STATE_INVALID);
+        }
+        if (hasActiveRefund(order)) throw exception(ORDER_SHIP_REFUND_CONFLICT);
+        String logisticsCompany = StrUtil.trim(reqVO.getLogisticsCompany());
+        String trackingNo = StrUtil.trim(reqVO.getTrackingNo());
+        if (StrUtil.isBlank(logisticsCompany) || StrUtil.isBlank(trackingNo)) {
+            throw exception(ORDER_SHIPPING_INFO_INVALID);
+        }
+        LocalDateTime shippingTime = nowPersisted();
+        if (orderMapper.markPersonalShipped(order.getId(), sellerUserId, logisticsCompany, trackingNo, shippingTime) != 1) {
+            throw exception(ORDER_SHIP_STATE_INVALID);
+        }
+        outboxEventAppender.append(CommerceOutboxEventTypeEnum.ORDER_SHIPPED, order.getId(), orderPayload(order));
     }
 
     private boolean hasActiveRefund(CommerceOrderDO order) {
@@ -402,6 +451,7 @@ public class OrderServiceImpl implements OrderService {
         MerchantOrderRespVO response = new MerchantOrderRespVO().setId(order.getId())
                 .setOrderNo(order.getOrderNo()).setMemberUserId(order.getMemberUserId())
                 .setMerchantId(order.getMerchantId()).setStoreId(order.getStoreId()).setStatus(order.getStatus())
+                .setSellerType(order.getSellerType()).setSellerUserId(order.getSellerUserId())
                 .setItemCount(order.getItemCount()).setTotalAmount(order.getTotalAmount())
                 .setPayableAmount(order.getPayableAmount()).setReceiverName(order.getReceiverName())
                 .setReceiverMobile(order.getReceiverMobile()).setReceiverAreaId(order.getReceiverAreaId())
@@ -419,9 +469,30 @@ public class OrderServiceImpl implements OrderService {
         return response;
     }
 
+    private PersonalSellerOrderRespVO toPersonalSellerResponse(CommerceOrderDO order) {
+        PersonalSellerOrderRespVO response = new PersonalSellerOrderRespVO().setId(order.getId())
+                .setOrderNo(order.getOrderNo()).setBuyerUserId(order.getMemberUserId())
+                .setSellerUserId(order.getSellerUserId()).setStatus(order.getStatus())
+                .setItemCount(order.getItemCount()).setTotalAmount(order.getTotalAmount())
+                .setPayableAmount(order.getPayableAmount()).setReceiverName(order.getReceiverName())
+                .setReceiverMobile(order.getReceiverMobile()).setReceiverAreaId(order.getReceiverAreaId())
+                .setReceiverAreaName(order.getReceiverAreaName()).setReceiverDetailAddress(order.getReceiverDetailAddress())
+                .setShippingTime(order.getShippingTime()).setLogisticsCompany(order.getLogisticsCompany())
+                .setTrackingNo(order.getTrackingNo()).setCompletionTime(order.getCompletionTime())
+                .setCreateTime(order.getCreateTime())
+                .setItems(orderItemMapper.selectListByOrderId(order.getId()).stream().map(this::toItem).toList());
+        MemberUserRespDTO buyer = memberUserApi.getUser(order.getMemberUserId());
+        if (buyer != null) {
+            response.setBuyerMobile(buyer.getMobile()).setBuyerNickname(buyer.getNickname())
+                    .setBuyerEmail(buyer.getEmail());
+        }
+        return response;
+    }
+
     private void copySummary(CommerceOrderDO order, OrderSummaryRespVO response) {
         response.setId(order.getId()).setOrderNo(order.getOrderNo()).setMerchantId(order.getMerchantId())
-                .setStoreId(order.getStoreId()).setStatus(order.getStatus()).setItemCount(order.getItemCount())
+                .setStoreId(order.getStoreId()).setSellerType(order.getSellerType()).setSellerUserId(order.getSellerUserId())
+                .setStatus(order.getStatus()).setItemCount(order.getItemCount())
                 .setTotalAmount(order.getTotalAmount()).setPayableAmount(order.getPayableAmount())
                 .setRefundStatus(order.getRefundStatus() == null ? 0 : order.getRefundStatus())
                 .setCreateTime(order.getCreateTime()).setCompletionTime(order.getCompletionTime());

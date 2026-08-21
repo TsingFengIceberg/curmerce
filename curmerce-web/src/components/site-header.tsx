@@ -32,6 +32,8 @@ export function SiteHeader() {
           <Link href="/cart">购物车</Link>
           {loggedIn ? <Link href="/orders">我的订单</Link> : null}
           {loggedIn ? <Link href="/refunds">退款中心</Link> : null}
+          {loggedIn ? <Link href="/personal/listings">我的闲置</Link> : null}
+          {loggedIn ? <Link href="/personal/orders">卖家发货</Link> : null}
           {adminLoggedIn ? (
             <>
               <Link href="/admin/merchants">商家审核</Link>

@@ -8,7 +8,11 @@ public class PublicProductSummaryRespVO {
     private Long categoryId;
     private Long storeId;
     private String storeName;
+    private Integer sellerType;
+    private Long sellerUserId;
+    private String sellerName;
     private String name;
+    private String condition;
     private String subtitle;
     private String mainImageUrl;
     private Long minPrice;

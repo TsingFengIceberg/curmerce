@@ -94,4 +94,10 @@ public interface ProductSkuMapper extends BaseMapperX<ProductSkuDO> {
                 .eq(ProductSkuDO::getMerchantId, update.getMerchantId());
         return update(update, wrapper);
     }
+
+    default int updatePersonalPrice(Long id, Long productId, Long price) {
+        return update(new ProductSkuDO().setPrice(price), new LambdaUpdateWrapper<ProductSkuDO>()
+                .eq(ProductSkuDO::getId, id).eq(ProductSkuDO::getProductId, productId)
+                .isNull(ProductSkuDO::getMerchantId));
+    }
 }

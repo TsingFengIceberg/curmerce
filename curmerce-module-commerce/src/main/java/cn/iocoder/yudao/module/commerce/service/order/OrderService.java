@@ -6,6 +6,7 @@ import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderR
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.MerchantOrderShipReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.order.vo.CommerceOrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.*;
+import cn.iocoder.yudao.module.commerce.controller.app.personal.vo.PersonalSellerOrderRespVO;
 
 import java.time.LocalDateTime;
 
@@ -19,4 +20,6 @@ public interface OrderService {
     PageResult<MerchantOrderRespVO> getOwnPendingShipmentPage(MerchantOrderPageReqVO reqVO);
     PageResult<MerchantOrderRespVO> getAdminOrderPage(CommerceOrderPageReqVO reqVO);
     void shipOwnOrder(MerchantOrderShipReqVO reqVO);
+    PageResult<PersonalSellerOrderRespVO> getOwnPersonalPendingShipmentPage(Long sellerUserId, MerchantOrderPageReqVO reqVO);
+    void shipPersonalOrder(Long sellerUserId, MerchantOrderShipReqVO reqVO);
 }

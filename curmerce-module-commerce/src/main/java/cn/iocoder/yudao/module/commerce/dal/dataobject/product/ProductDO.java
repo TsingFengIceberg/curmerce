@@ -28,9 +28,13 @@ public class ProductDO extends BaseDO {
     private Long id;
     private Long merchantId;
     private Long storeId;
+    private Integer sellerType;
+    private Long sellerUserId;
     private Long categoryId;
     private String code;
     private String name;
+    @TableField("item_condition")
+    private String condition;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String subtitle;
     private String mainImageUrl;

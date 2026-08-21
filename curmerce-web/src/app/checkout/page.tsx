@@ -16,7 +16,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartList>({ validList: [], invalidList: [] });
   const [addresses, setAddresses] = useState<MemberAddress[]>([]);
-  const [storeId, setStoreId] = useState<number | null>(null);
+  const [groupKey, setGroupKey] = useState<string | null>(null);
   const [addressId, setAddressId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -35,14 +35,13 @@ export default function CheckoutPage() {
     setLoading(true);
     setError(null);
     try {
-      const requestedStoreId = Number(new URLSearchParams(window.location.search).get("storeId"));
-      const requested = Number.isInteger(requestedStoreId) && requestedStoreId > 0 ? requestedStoreId : null;
+      const requested = new URLSearchParams(window.location.search).get("group");
       const [cartResponse, addressResponse] = await Promise.all([cartApi.list(), memberApi.listAddresses()]);
       let nextCart: CartList = { validList: cartResponse?.validList ?? [], invalidList: cartResponse?.invalidList ?? [] };
-      const selectedItems = nextCart.validList.filter((item) => item.selected && item.product?.storeId);
-      const targetStoreId = requested ?? selectedItems[0]?.product?.storeId ?? nextCart.validList[0]?.product?.storeId ?? null;
-      if (targetStoreId) {
-        const otherSelectedIds = selectedItems.filter((item) => item.product?.storeId !== targetStoreId).map((item) => item.id);
+      const selectedItems = nextCart.validList.filter((item) => item.selected && sellerKey(item.product));
+      const targetGroup = requested || sellerKey(selectedItems[0]?.product) || sellerKey(nextCart.validList[0]?.product);
+      if (targetGroup) {
+        const otherSelectedIds = selectedItems.filter((item) => sellerKey(item.product) !== targetGroup).map((item) => item.id);
         if (otherSelectedIds.length > 0) {
           await cartApi.updateSelected({ ids: otherSelectedIds, selected: false });
           const refreshed = await cartApi.list();
@@ -50,7 +49,7 @@ export default function CheckoutPage() {
         }
       }
       setCart(nextCart);
-      setStoreId(targetStoreId);
+      setGroupKey(targetGroup ?? null);
       setAddresses(addressResponse ?? []);
       const defaultAddress = addressResponse?.find((address) => address.defaultStatus) ?? addressResponse?.[0];
       setAddressId(defaultAddress?.id ?? null);
@@ -67,8 +66,8 @@ export default function CheckoutPage() {
   }
 
   const items = useMemo(
-    () => cart.validList.filter((item) => item.selected && item.product?.storeId === storeId),
-    [cart.validList, storeId],
+    () => cart.validList.filter((item) => item.selected && sellerKey(item.product) === groupKey),
+    [cart.validList, groupKey],
   );
   const total = items.reduce((sum, item) => sum + (item.sku?.price ?? 0) * item.quantity, 0);
   const storeName = items[0]?.product?.storeName ?? "当前店铺";
@@ -144,6 +143,13 @@ export default function CheckoutPage() {
       ) : null}
     </section>
   );
+}
+
+function sellerKey(product: CartItem["product"]): string | null {
+  if (!product) return null;
+  if (product.sellerType === 2 && product.sellerUserId) return `personal:${product.sellerUserId}`;
+  if (product.sellerType === 1 && product.storeId) return `store:${product.storeId}`;
+  return null;
 }
 
 function AddressChoice({ address, checked, onSelect }: { address: MemberAddress; checked: boolean; onSelect: () => void }) {

@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.mybatis.core.util.MyBatisUtils;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductPageOwnReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductReviewPageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.app.personal.vo.PersonalListingPageReqVO;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -75,6 +76,37 @@ public interface ProductMapper extends BaseMapperX<ProductDO> {
     default ProductDO selectByIdAndMerchantIdForUpdate(Long id, Long merchantId) {
         return selectOneForUpdate(new LambdaQueryWrapper<ProductDO>()
                 .eq(ProductDO::getId, id).eq(ProductDO::getMerchantId, merchantId));
+    }
+
+    default ProductDO selectPersonalById(Long id, Long sellerUserId) {
+        return selectOne(new LambdaQueryWrapper<ProductDO>().eq(ProductDO::getId, id)
+                .eq(ProductDO::getSellerType, 2).eq(ProductDO::getSellerUserId, sellerUserId));
+    }
+
+    default ProductDO selectPersonalByIdForUpdate(Long id, Long sellerUserId) {
+        return selectOneForUpdate(new LambdaQueryWrapper<ProductDO>().eq(ProductDO::getId, id)
+                .eq(ProductDO::getSellerType, 2).eq(ProductDO::getSellerUserId, sellerUserId));
+    }
+
+    default PageResult<ProductDO> selectPagePersonal(PersonalListingPageReqVO req, Long sellerUserId) {
+        return selectPage(req, new LambdaQueryWrapperX<ProductDO>()
+                .eq(ProductDO::getSellerType, 2).eq(ProductDO::getSellerUserId, sellerUserId)
+                .eqIfPresent(ProductDO::getAuditStatus, req.getAuditStatus())
+                .eqIfPresent(ProductDO::getSaleStatus, req.getSaleStatus())
+                .orderByDesc(ProductDO::getId));
+    }
+
+    default int updatePersonalFields(ProductDO update, Long sellerUserId) {
+        return update(update, new LambdaUpdateWrapper<ProductDO>().eq(ProductDO::getId, update.getId())
+                .eq(ProductDO::getSellerType, 2).eq(ProductDO::getSellerUserId, sellerUserId)
+                .eq(ProductDO::getSaleStatus, 0));
+    }
+
+    default int updatePersonalSaleExpected(Long id, Long sellerUserId, Integer expectedStatus, Integer targetStatus) {
+        return update(new ProductDO().setSaleStatus(targetStatus),
+                new LambdaUpdateWrapper<ProductDO>().eq(ProductDO::getId, id)
+                        .eq(ProductDO::getSellerType, 2).eq(ProductDO::getSellerUserId, sellerUserId)
+                        .eq(ProductDO::getAuditStatus, 2).eq(ProductDO::getSaleStatus, expectedStatus));
     }
 
     default PageResult<ProductDO> selectPageOwn(ProductPageOwnReqVO reqVO, Long merchantId) {

@@ -16,6 +16,7 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductAuditStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,7 @@ class ProductServiceImplTest {
         verify(productMapper).insert((ProductDO) argThat((ProductDO product) ->
                 product.getMerchantId().equals(7L)
                         && product.getStoreId().equals(8L)
+                        && product.getSellerType().equals(ProductSellerTypeEnum.MERCHANT.getType())
                         && product.getAuditStatus().equals(ProductAuditStatusEnum.DRAFT.getStatus())
                         && product.getSaleStatus().equals(ProductSaleStatusEnum.OFF_SHELF.getStatus())));
         verify(skuMapper).insert((ProductSkuDO) argThat((ProductSkuDO sku) ->

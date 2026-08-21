@@ -46,6 +46,10 @@ public interface ErrorCodeConstants {
     ErrorCode PRODUCT_SALE_STATE_INVALID = new ErrorCode(1_023_003_014, "当前商品销售状态不允许该操作");
     ErrorCode PRODUCT_NO_SELLABLE_SKU = new ErrorCode(1_023_003_015, "商品没有可售 SKU 或库存");
     ErrorCode PRODUCT_STATE_CONFLICT = new ErrorCode(1_023_003_016, "商品状态已被其他请求改变");
+    ErrorCode PERSONAL_LISTING_NOT_FOUND = new ErrorCode(1_023_003_020, "个人商品不存在或无权访问");
+    ErrorCode PERSONAL_LISTING_STATE_INVALID = new ErrorCode(1_023_003_021, "当前个人商品状态不允许该操作");
+    ErrorCode PERSONAL_LISTING_PRICE_INVALID = new ErrorCode(1_023_003_022, "个人商品价格无效");
+    ErrorCode PERSONAL_LISTING_SELF_PURCHASE = new ErrorCode(1_023_003_023, "不能购买自己发布的个人商品");
     ErrorCode CART_SKU_NOT_AVAILABLE = new ErrorCode(1_023_004_100, "商品规格当前不可购买");
     ErrorCode CART_QUANTITY_INVALID = new ErrorCode(1_023_004_101, "购物车数量超出当前库存或上限");
     ErrorCode CART_ITEM_NOT_EXISTS = new ErrorCode(1_023_004_102, "购物车项不存在");

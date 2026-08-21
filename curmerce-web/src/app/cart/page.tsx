@@ -11,7 +11,8 @@ import { clearToken, getAccessToken } from "@/lib/auth/storage";
 import type { CartItem, CartList } from "@/lib/types/api";
 
 interface StoreGroup {
-  storeId: number;
+  key: string;
+  storeId: number | null;
   storeName: string;
   items: CartItem[];
 }
@@ -51,13 +52,15 @@ export default function CartPage() {
   }
 
   const groups = useMemo<StoreGroup[]>(() => {
-    const map = new Map<number, StoreGroup>();
+    const map = new Map<string, StoreGroup>();
     for (const item of cart.validList) {
-      const storeId = item.product?.storeId;
-      if (!storeId) continue;
-      const current = map.get(storeId) ?? { storeId, storeName: item.product?.storeName || "未命名店铺", items: [] };
+      const product = item.product;
+      const key = sellerKey(product);
+      if (!key) continue;
+      const storeId = product?.storeId ?? null;
+      const current = map.get(key) ?? { key, storeId, storeName: product?.storeName || "个人卖家", items: [] };
       current.items.push(item);
-      map.set(storeId, current);
+      map.set(key, current);
     }
     return Array.from(map.values());
   }, [cart.validList]);
@@ -112,7 +115,7 @@ export default function CartPage() {
       return;
     }
     const otherStoreIds = cart.validList
-      .filter((item) => item.selected && item.product?.storeId !== group.storeId)
+      .filter((item) => item.selected && sellerKey(item.product) !== group.key)
       .map((item) => item.id);
     setError(null);
     setMessage(null);
@@ -120,7 +123,7 @@ export default function CartPage() {
       if (otherStoreIds.length > 0) {
         await cartApi.updateSelected({ ids: otherStoreIds, selected: false });
       }
-      router.push(`/checkout?storeId=${group.storeId}`);
+      router.push(`/checkout?group=${encodeURIComponent(group.key)}`);
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "准备结算失败");
     }
@@ -148,7 +151,7 @@ export default function CartPage() {
               const total = selected.reduce((sum, item) => sum + (item.sku?.price ?? 0) * item.quantity, 0);
               const allSelected = group.items.length > 0 && group.items.every((item) => item.selected);
               return (
-                <section className="cart-store" key={group.storeId}>
+                <section className="cart-store" key={group.key}>
                   <div className="cart-store__heading">
                     <div><p className="eyebrow">STORE</p><h2>{group.storeName}</h2></div>
                     <button className="text-button" type="button" onClick={() => void setSelected(group.items.map((item) => item.id), !allSelected)}>{allSelected ? "取消全选" : "全选本店"}</button>
@@ -176,6 +179,13 @@ export default function CartPage() {
       ) : null}
     </section>
   );
+}
+
+function sellerKey(product: CartItem["product"]): string | null {
+  if (!product) return null;
+  if (product.sellerType === 2 && product.sellerUserId) return `personal:${product.sellerUserId}`;
+  if (product.sellerType === 1 && product.storeId) return `store:${product.storeId}`;
+  return null;
 }
 
 function CartItemRow({

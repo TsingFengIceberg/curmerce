@@ -11,6 +11,7 @@ import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderCreateRespV
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderDetailRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderPageReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderSummaryRespVO;
+import cn.iocoder.yudao.module.commerce.controller.app.personal.vo.PersonalSellerOrderRespVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.cart.CartItemDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
@@ -158,6 +159,7 @@ class OrderServiceImplTest {
         when(productMapper.selectByIdForUpdate(202L)).thenReturn(secondProduct);
         when(productSkuMapper.selectByIdAndProductIdForUpdate(302L, 202L))
                 .thenReturn(sku(302L, 202L, 401L, "cup", 1200L, 1));
+        when(merchantMapper.selectById(401L)).thenReturn(merchant(401L));
         when(storeMapper.selectById(502L)).thenReturn(store(502L, 401L));
         when(productCategoryMapper.selectById(601L)).thenReturn(category(601L));
 
@@ -168,6 +170,27 @@ class OrderServiceImplTest {
         verify(productSkuMapper, never()).deductStock(anyLong(), anyInt());
         verify(orderMapper, never()).insert((CommerceOrderDO) any());
         verify(cartItemMapper, never()).deleteOwned(anyLong(), anyCollection());
+    }
+
+    @Test
+    void createOrder_rejectsPersonalSellerBuyingOwnListing() {
+        CartItemDO cart = cartItem(11L, 101L, 201L, 301L, 1, true);
+        ProductDO product = new ProductDO().setId(201L).setSellerType(2).setSellerUserId(101L)
+                .setCategoryId(601L).setAuditStatus(2).setSaleStatus(1).setName("旧相机");
+        ProductSkuDO sku = new ProductSkuDO().setId(301L).setProductId(201L).setMerchantId(null)
+                .setPrice(1000L).setStock(1).setStatus(CommonStatusEnum.ENABLE.getStatus());
+        when(memberAddressApi.getOwnedAddressForUpdate(101L, 701L)).thenReturn(address(701L, 101L));
+        when(cartItemMapper.selectSelectedListByUserIdForUpdate(101L)).thenReturn(List.of(cart));
+        when(productMapper.selectByIdForUpdate(201L)).thenReturn(product);
+        when(productSkuMapper.selectByIdAndProductIdForUpdate(301L, 201L)).thenReturn(sku);
+        when(productCategoryMapper.selectById(601L)).thenReturn(category(601L));
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.createOrder(101L, 701L, "checkout-personal"));
+
+        assertEquals(PERSONAL_LISTING_SELF_PURCHASE.getCode(), error.getCode());
+        verify(productSkuMapper, never()).deductStock(anyLong(), anyInt());
+        verify(orderMapper, never()).insert((CommerceOrderDO) any());
     }
 
     @Test
@@ -530,6 +553,57 @@ class OrderServiceImplTest {
             verify(orderMapper, never()).markShipped(anyLong(), anyLong(), anyLong(), anyString(), anyString(), any());
             verify(outboxEventAppender, never()).append(any(), any(), any());
         }
+    }
+
+    @Test
+    void getOwnPersonalPendingShipmentPage_scopesBySellerAndReturnsBuyerAndSnapshot() {
+        CommerceOrderDO order = new CommerceOrderDO().setId(9002L).setOrderNo("C-personal")
+                .setMemberUserId(202L).setSellerType(2).setSellerUserId(101L)
+                .setStatus(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()).setItemCount(1)
+                .setTotalAmount(800L).setPayableAmount(800L).setReceiverName("Buyer")
+                .setReceiverDetailAddress("Personal snapshot");
+        when(orderMapper.selectPagePersonalPendingShipment(any(MerchantOrderPageReqVO.class), eq(101L)))
+                .thenReturn(new PageResult<>(List.of(order), 1L));
+        when(orderItemMapper.selectListByOrderId(9002L)).thenReturn(List.of());
+        when(memberUserApi.getUser(202L)).thenReturn(new MemberUserRespDTO().setId(202L)
+                .setNickname("Buyer").setMobile("13800000000"));
+
+        PageResult<PersonalSellerOrderRespVO> result = service.getOwnPersonalPendingShipmentPage(101L,
+                new MerchantOrderPageReqVO());
+
+        assertEquals(1L, result.getTotal());
+        assertEquals(202L, result.getList().get(0).getBuyerUserId());
+        assertEquals("Personal snapshot", result.getList().get(0).getReceiverDetailAddress());
+        assertEquals("Buyer", result.getList().get(0).getBuyerNickname());
+        verify(orderMapper).selectPagePersonalPendingShipment(any(MerchantOrderPageReqVO.class), eq(101L));
+    }
+
+    @Test
+    void shipPersonalOrder_scopesBySellerAndMovesOnlyPendingOrder() {
+        CommerceOrderDO order = new CommerceOrderDO().setId(9002L).setSellerType(2).setSellerUserId(101L)
+                .setStatus(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus());
+        when(orderMapper.selectPersonalSellerForUpdate(9002L, 101L)).thenReturn(order);
+        when(orderMapper.markPersonalShipped(eq(9002L), eq(101L), eq("SF Express"), eq("SF123"), any()))
+                .thenReturn(1);
+
+        service.shipPersonalOrder(101L, new MerchantOrderShipReqVO().setId(9002L)
+                .setLogisticsCompany(" SF Express ").setTrackingNo(" SF123 "));
+
+        verify(orderMapper).selectPersonalSellerForUpdate(9002L, 101L);
+        verify(orderMapper).markPersonalShipped(eq(9002L), eq(101L), eq("SF Express"), eq("SF123"), any());
+        verify(outboxEventAppender).append(eq(CommerceOutboxEventTypeEnum.ORDER_SHIPPED), eq(9002L), any());
+    }
+
+    @Test
+    void shipPersonalOrder_rejectsForeignSellerOrder() {
+        when(orderMapper.selectPersonalSellerForUpdate(9002L, 101L)).thenReturn(null);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.shipPersonalOrder(101L, new MerchantOrderShipReqVO().setId(9002L)
+                        .setLogisticsCompany("SF Express").setTrackingNo("SF123")));
+
+        assertEquals(ORDER_NOT_FOUND.getCode(), error.getCode());
+        verify(orderMapper, never()).markPersonalShipped(anyLong(), anyLong(), anyString(), anyString(), any());
     }
 
     @Test

@@ -37,6 +37,13 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
         return selectOneForUpdate(new LambdaQueryWrapper<CommerceOrderDO>().eq(CommerceOrderDO::getId, id)
                 .eq(CommerceOrderDO::getMerchantId, merchantId).eq(CommerceOrderDO::getStoreId, storeId));
     }
+    default CommerceOrderDO selectPersonalSellerForUpdate(Long id, Long sellerUserId) {
+        return selectOneForUpdate(new LambdaQueryWrapper<CommerceOrderDO>().eq(CommerceOrderDO::getId, id)
+                .eq(CommerceOrderDO::getSellerType, 2)
+                .eq(CommerceOrderDO::getSellerUserId, sellerUserId)
+                .isNull(CommerceOrderDO::getMerchantId)
+                .isNull(CommerceOrderDO::getStoreId));
+    }
     default int markPaid(Long id) {
         return update(new CommerceOrderDO().setStatus(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()),
                 new LambdaUpdateWrapper<CommerceOrderDO>().eq(CommerceOrderDO::getId, id)
@@ -69,6 +76,17 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
                 .orderByDesc(CommerceOrderDO::getId));
     }
 
+    default PageResult<CommerceOrderDO> selectPagePersonalPendingShipment(MerchantOrderPageReqVO req,
+                                                                            Long sellerUserId) {
+        return selectPage(req, new LambdaQueryWrapperX<CommerceOrderDO>()
+                .eq(CommerceOrderDO::getSellerType, 2)
+                .eq(CommerceOrderDO::getSellerUserId, sellerUserId)
+                .isNull(CommerceOrderDO::getMerchantId)
+                .isNull(CommerceOrderDO::getStoreId)
+                .eq(CommerceOrderDO::getStatus, OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus())
+                .orderByDesc(CommerceOrderDO::getId));
+    }
+
     default PageResult<CommerceOrderDO> selectPageAdmin(CommerceOrderPageReqVO req) {
         return selectPage(req, new LambdaQueryWrapperX<CommerceOrderDO>()
                 .eqIfPresent(CommerceOrderDO::getStatus, req.getStatus())
@@ -86,6 +104,19 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
                 new LambdaUpdateWrapper<CommerceOrderDO>().eq(CommerceOrderDO::getId, id)
                         .eq(CommerceOrderDO::getMerchantId, merchantId)
                         .eq(CommerceOrderDO::getStoreId, storeId)
+                        .eq(CommerceOrderDO::getStatus, OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()));
+    }
+
+    default int markPersonalShipped(Long id, Long sellerUserId, String logisticsCompany,
+                                    String trackingNo, LocalDateTime shippingTime) {
+        return update(new CommerceOrderDO().setStatus(OrderStatusEnum.SHIPPED.getStatus())
+                        .setShippingTime(shippingTime).setLogisticsCompany(logisticsCompany)
+                        .setTrackingNo(trackingNo),
+                new LambdaUpdateWrapper<CommerceOrderDO>().eq(CommerceOrderDO::getId, id)
+                        .eq(CommerceOrderDO::getSellerType, 2)
+                        .eq(CommerceOrderDO::getSellerUserId, sellerUserId)
+                        .isNull(CommerceOrderDO::getMerchantId)
+                        .isNull(CommerceOrderDO::getStoreId)
                         .eq(CommerceOrderDO::getStatus, OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus()));
     }
 

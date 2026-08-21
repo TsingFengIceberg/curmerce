@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.commerce.controller.admin.order.vo;
+package cn.iocoder.yudao.module.commerce.controller.app.personal.vo;
 
 import cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderItemRespVO;
 import lombok.Data;
@@ -7,16 +7,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
-public class MerchantOrderRespVO {
+public class PersonalSellerOrderRespVO {
     private Long id;
     private String orderNo;
-    private Long memberUserId;
+    private Long buyerUserId;
     private String buyerMobile;
     private String buyerNickname;
     private String buyerEmail;
-    private Long merchantId;
-    private Long storeId;
-    private Integer sellerType;
     private Long sellerUserId;
     private Integer status;
     private Integer itemCount;

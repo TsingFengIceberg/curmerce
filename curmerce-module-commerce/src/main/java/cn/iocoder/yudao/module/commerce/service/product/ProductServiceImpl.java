@@ -19,6 +19,7 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductAuditStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
 import jakarta.annotation.Resource;
@@ -58,7 +59,8 @@ public class ProductServiceImpl implements ProductService {
             throw exception(PRODUCT_CODE_DUPLICATE);
         }
         ProductDO product = new ProductDO().setMerchantId(context.merchant().getId())
-                .setStoreId(context.store().getId()).setCategoryId(reqVO.getCategoryId()).setCode(code)
+                .setStoreId(context.store().getId()).setSellerType(ProductSellerTypeEnum.MERCHANT.getType())
+                .setSellerUserId(null).setCategoryId(reqVO.getCategoryId()).setCode(code)
                 .setName(trimRequired(reqVO.getName())).setSubtitle(StrUtil.trim(reqVO.getSubtitle()))
                 .setMainImageUrl(trimRequired(reqVO.getMainImageUrl()))
                 .setImageUrls(normalizeImageUrls(reqVO.getImageUrls()))
