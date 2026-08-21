@@ -5,7 +5,6 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { memberApi } from "@/lib/api/member";
 import { CurmerceApiError } from "@/lib/api/client";
-import { saveToken } from "@/lib/auth/storage";
 import { Notice } from "@/components/notice";
 
 export default function RegisterPage() {
@@ -23,10 +22,8 @@ export default function RegisterPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const token = await memberApi.register(form);
-      saveToken(token);
-      router.push("/addresses");
-      router.refresh();
+      await memberApi.register(form);
+      router.push("/login?registered=1");
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "注册失败，请稍后重试");
     } finally {

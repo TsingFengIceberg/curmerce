@@ -4,6 +4,8 @@ import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.module.member.dal.dataobject.address.MemberAddressDO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Update;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
@@ -46,13 +48,7 @@ public interface MemberAddressMapper extends BaseMapperX<MemberAddressDO> {
         return update(update, new LambdaUpdateWrapper<MemberAddressDO>().eq(MemberAddressDO::getId, update.getId())
                 .eq(MemberAddressDO::getUserId, userId));
     }
-    default int deleteOwned(Long id, Long userId) {
-        MemberAddressDO update = new MemberAddressDO();
-        update.setDeleted(true);
-        update.setDefaultStatus(false);
-        update.setDefaultMarker(null);
-        return update(update,
-                new LambdaUpdateWrapper<MemberAddressDO>().eq(MemberAddressDO::getId, id)
-                        .eq(MemberAddressDO::getUserId, userId));
-    }
+    @Update("UPDATE member_address SET deleted = 1, default_status = 0, default_marker = NULL "
+            + "WHERE id = #{id} AND user_id = #{userId} AND deleted = 0")
+    int deleteOwned(@Param("id") Long id, @Param("userId") Long userId);
 }

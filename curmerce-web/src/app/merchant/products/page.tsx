@@ -6,10 +6,11 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Notice } from "@/components/notice";
 import { adminProductApi, adminStoreApi } from "@/lib/api/admin-product";
 import { CurmerceApiError } from "@/lib/api/client";
-import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
+import { clearAdminToken } from "@/lib/auth/storage";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import type { ProductAdmin, ProductSaveInput, ProductSkuInput, PublicCategoryNode, StoreSummary } from "@/lib/types/api";
 import { catalogApi } from "@/lib/api/catalog";
+import { ensureMerchantOwner } from "@/lib/auth/guards";
 
 interface SkuForm {
   id?: number;
@@ -88,11 +89,9 @@ export default function MerchantProductsPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!getAdminAccessToken()) {
-      router.replace("/merchant/login");
-      return;
-    }
-    void Promise.all([loadProducts(), loadStore(), loadCategories()]);
+    void ensureMerchantOwner(router).then((allowed) => {
+      if (allowed) void Promise.all([loadProducts(), loadStore(), loadCategories()]);
+    });
   }, [router, auditStatus, saleStatus]);
 
   async function loadProducts() {

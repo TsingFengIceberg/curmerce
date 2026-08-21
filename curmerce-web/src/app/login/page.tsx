@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { memberApi } from "@/lib/api/member";
 import { CurmerceApiError } from "@/lib/api/client";
@@ -10,10 +10,15 @@ import { Notice } from "@/components/notice";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [registered, setRegistered] = useState(false);
   const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setRegistered(new URLSearchParams(window.location.search).get("registered") === "1");
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,6 +51,7 @@ export default function LoginPage() {
           </div>
           <span className="form-card__badge">APP</span>
         </div>
+        {registered ? <Notice tone="success">注册成功，请使用刚创建的账号登录。</Notice> : null}
         {error ? <Notice>{error}</Notice> : null}
         <label className="field">
           <span>手机号</span>

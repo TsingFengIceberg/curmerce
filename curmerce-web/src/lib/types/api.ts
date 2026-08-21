@@ -243,6 +243,12 @@ export interface AreaNode {
   children?: AreaNode[];
 }
 
+export interface AdminPermissionInfo {
+  user: { id: number; username: string; nickname: string };
+  roles: string[];
+  permissions: string[];
+}
+
 export interface MemberAddress {
   id: number;
   name: string;

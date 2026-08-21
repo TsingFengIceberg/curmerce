@@ -9,6 +9,7 @@ import { adminRefundApi } from "@/lib/api/admin-refund";
 import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
 import { formatDateTime, formatMoney, formatRefundStatus } from "@/lib/format";
 import type { RefundDetail } from "@/lib/types/api";
+import { ensureMerchantOwner } from "@/lib/auth/guards";
 
 type RefundScope = "admin" | "merchant";
 
@@ -39,6 +40,12 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (own) {
+      void ensureMerchantOwner(router).then((allowed) => {
+        if (allowed) void loadRefunds(status, queryOrderNo);
+      });
+      return;
+    }
     if (!getAdminAccessToken()) {
       router.replace("/merchant/login");
       return;

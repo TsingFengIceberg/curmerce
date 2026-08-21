@@ -5,17 +5,18 @@ import { useEffect, useState } from "react";
 import { Notice } from "@/components/notice";
 import { adminReleaseApi } from "@/lib/api/release";
 import { CurmerceApiError } from "@/lib/api/client";
-import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
+import { clearAdminToken } from "@/lib/auth/storage";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import type { ReleaseCampaign, ReleaseCreateInput } from "@/lib/types/api";
 import { useRouter } from "next/navigation";
+import { ensureMerchantOwner } from "@/lib/auth/guards";
 
 const empty: ReleaseCreateInput = { name: "", startTime: "", endTime: "", perUserLimit: 1, items: [{ productId: 0, skuId: 0, campaignPrice: 0, stock: 1 }] };
 const labels: Record<number, string> = { 0: "草稿", 10: "待开始", 20: "进行中", 30: "已结束", 40: "已取消" };
 
 export default function MerchantReleasesPage() {
   const router = useRouter(); const [form, setForm] = useState<ReleaseCreateInput>({ ...empty, items: [{ ...empty.items[0] }] }); const [items, setItems] = useState<ReleaseCampaign[]>([]); const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [message, setMessage] = useState<string | null>(null);
-  useEffect(() => { if (!getAdminAccessToken()) { router.replace("/merchant/login"); return; } void load(); }, [router]);
+  useEffect(() => { void ensureMerchantOwner(router).then((allowed) => { if (allowed) void load(); }); }, [router]);
   async function load() { setLoading(true); try { setItems((await adminReleaseApi.page({ pageNo: 1, pageSize: 50 })).list ?? []); } catch (cause) { handle(cause, "限时发售活动加载失败"); } finally { setLoading(false); } }
   function handle(cause: unknown, fallback: string) { if (cause instanceof CurmerceApiError && cause.status === 401) { clearAdminToken(); router.replace("/merchant/login"); return; } setError(cause instanceof CurmerceApiError ? cause.message : fallback); }
   function update<K extends keyof ReleaseCreateInput>(key: K, value: ReleaseCreateInput[K]) { setForm((current) => ({ ...current, [key]: value })); }

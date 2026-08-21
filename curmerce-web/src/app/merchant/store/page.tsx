@@ -1,21 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Notice } from "@/components/notice";
 import { CurmerceApiError } from "@/lib/api/client";
 import { adminAuthApi } from "@/lib/api/admin-auth";
 import { adminStoreApi } from "@/lib/api/admin-product";
-import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
+import { clearAdminToken } from "@/lib/auth/storage";
 import type { StoreSummary } from "@/lib/types/api";
+import { ensureMerchantOwner } from "@/lib/auth/guards";
 
 export default function MerchantStorePage() {
+  const router = useRouter();
   const [store, setStore] = useState<StoreSummary | null>(null);
   const [form, setForm] = useState({ name: "", description: "", contactName: "", contactMobile: "" });
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (!getAdminAccessToken()) { window.location.href = "/merchant/login"; return; } void load(); }, []);
+  useEffect(() => { void ensureMerchantOwner(router).then((allowed) => { if (allowed) void load(); }); }, [router]);
   async function load() { try { const current = await adminStoreApi.own(); setStore(current); setForm({ name: current.name, description: current.description ?? "", contactName: current.contactName ?? "", contactMobile: current.contactMobile ?? "" }); } catch (cause) { handleError(cause, "店铺信息加载失败"); } }
   function handleError(cause: unknown, fallback: string) { if (cause instanceof CurmerceApiError && cause.status === 401) { clearAdminToken(); window.location.href = "/merchant/login"; return; } setError(cause instanceof CurmerceApiError ? cause.message : fallback); }
   async function save(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); setError(null); setMessage(null); try { await adminStoreApi.updateOwn(form); setMessage("店铺资料已保存"); await load(); } catch (cause) { handleError(cause, "店铺资料保存失败"); } finally { setBusy(false); } }

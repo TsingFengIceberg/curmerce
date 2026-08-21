@@ -1,6 +1,6 @@
 import { adminApi, jsonBody } from "@/lib/api/client";
 import { clearAdminToken, saveAdminToken } from "@/lib/auth/storage";
-import type { MemberToken } from "@/lib/types/api";
+import type { AdminPermissionInfo, MemberToken } from "@/lib/types/api";
 
 export const adminAuthApi = {
   async login(input: { username: string; password: string }) {
@@ -18,5 +18,9 @@ export const adminAuthApi = {
     } finally {
       clearAdminToken();
     }
+  },
+
+  getPermissionInfo() {
+    return adminApi<AdminPermissionInfo>("/system/auth/get-permission-info");
   },
 };

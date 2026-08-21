@@ -7,9 +7,10 @@ import { Notice } from "@/components/notice";
 import { CurmerceApiError, assetUrl } from "@/lib/api/client";
 import { adminAuthApi } from "@/lib/api/admin-auth";
 import { adminOrderApi } from "@/lib/api/admin-order";
-import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
+import { clearAdminToken } from "@/lib/auth/storage";
 import { formatDateTime, formatMoney, formatOrderStatus } from "@/lib/format";
 import type { MerchantOrder } from "@/lib/types/api";
+import { ensureMerchantOwner } from "@/lib/auth/guards";
 
 export default function MerchantOrdersPage() {
   const router = useRouter();
@@ -24,11 +25,9 @@ export default function MerchantOrdersPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!getAdminAccessToken()) {
-      router.replace("/merchant/login");
-      return;
-    }
-    void loadOrders();
+    void ensureMerchantOwner(router).then((allowed) => {
+      if (allowed) void loadOrders();
+    });
   }, [router]);
 
   async function loadOrders() {

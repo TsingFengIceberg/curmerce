@@ -91,6 +91,11 @@ h2 { font-size: 23px; letter-spacing: -0.04em; line-height: 1.15; margin-bottom:
 .field input, .field textarea, .field select { background: #fbfbfa; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); outline: none; padding: 12px 13px; transition: border-color 160ms ease, box-shadow 160ms ease; width: 100%; }
 .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(226, 89, 63, 0.1); }
 .field-help { color: var(--muted); font-size: 12px; line-height: 1.5; margin: -4px 0 18px; }
+.field-group { border: 0; margin: 0 0 17px; padding: 0; }
+.field-group legend { font-size: 13px; font-weight: 700; margin-bottom: 7px; }
+.form-grid--three { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.form-grid--three select { background: #fbfbfa; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); min-height: 46px; outline: none; padding: 0 10px; width: 100%; }
+.form-grid--three select:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(226, 89, 63, 0.1); }
 .checkbox-field { align-items: center; display: flex; font-size: 13px; gap: 9px; margin: 4px 0 20px; }
 .checkbox-field input { accent-color: var(--accent); height: 16px; width: 16px; }
 .notice { border-radius: 12px; font-size: 13px; margin-bottom: 18px; padding: 11px 13px; }
@@ -371,6 +376,7 @@ h2 { font-size: 23px; letter-spacing: -0.04em; line-height: 1.15; margin-bottom:
   .form-card, .address-list { padding: 22px; }
   .address-card__topline { align-items: start; flex-direction: column; gap: 9px; }
   .address-card__topline div { flex-wrap: wrap; gap: 7px; }
+  .form-grid--three { grid-template-columns: 1fr; }
   .catalog-results, .cart-store, .cart-invalid, .checkout-panel, .checkout-summary { padding: 17px; }
   .orders-panel { padding: 17px; }
   .catalog-search { align-items: stretch; flex-direction: column; }

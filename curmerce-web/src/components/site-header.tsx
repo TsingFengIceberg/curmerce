@@ -2,19 +2,49 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { clearToken, getAccessToken, getAdminAccessToken } from "@/lib/auth/storage";
+import { useEffect, useState } from "react";
+import { clearAdminToken, clearToken, getAccessToken, getAdminAccessToken } from "@/lib/auth/storage";
 import { memberApi } from "@/lib/api/member";
+import { adminAuthApi } from "@/lib/api/admin-auth";
+
+interface HeaderSession {
+  hydrated: boolean;
+  buyerLoggedIn: boolean;
+  adminLoggedIn: boolean;
+  roles: string[];
+}
 
 export function SiteHeader() {
   const router = useRouter();
-  const loggedIn = Boolean(getAccessToken());
-  const adminLoggedIn = Boolean(getAdminAccessToken());
+  const [session, setSession] = useState<HeaderSession>({ hydrated: false, buyerLoggedIn: false, adminLoggedIn: false, roles: [] });
+
+  useEffect(() => {
+    const buyerLoggedIn = Boolean(getAccessToken());
+    const adminLoggedIn = Boolean(getAdminAccessToken());
+    if (!adminLoggedIn) {
+      setSession({ hydrated: true, buyerLoggedIn, adminLoggedIn: false, roles: [] });
+      return;
+    }
+    void adminAuthApi.getPermissionInfo().then((permission) => {
+      setSession({ hydrated: true, buyerLoggedIn, adminLoggedIn: true, roles: permission.roles ?? [] });
+    }).catch(() => {
+      clearAdminToken();
+      setSession({ hydrated: true, buyerLoggedIn, adminLoggedIn: false, roles: [] });
+    });
+  }, []);
+
+  const loggedIn = session.hydrated && session.buyerLoggedIn;
+  const adminLoggedIn = session.hydrated && session.adminLoggedIn;
+  const platformAdmin = adminLoggedIn && session.roles.includes("super_admin");
+  const merchantOwner = adminLoggedIn && session.roles.includes("merchant_owner");
 
   async function logout() {
     try {
       if (loggedIn) await memberApi.logout();
+      if (adminLoggedIn) await adminAuthApi.logout();
     } finally {
       clearToken();
+      clearAdminToken();
       router.push("/login");
       router.refresh();
     }
@@ -40,19 +70,24 @@ export function SiteHeader() {
           {loggedIn ? <Link href="/community/following">关注 Feed</Link> : null}
           {loggedIn ? <Link href="/community/favorites">我的收藏</Link> : null}
           {loggedIn ? <Link href="/personal/orders">卖家发货</Link> : null}
-          {adminLoggedIn ? (
+          {platformAdmin ? (
             <>
               <Link href="/admin/merchants">商家审核</Link>
               <Link href="/admin/orders">平台订单</Link>
+              <Link href="/admin/community">社区审核</Link>
+            </>
+          ) : null}
+          {merchantOwner ? (
+            <>
               <Link href="/merchant/orders">待发货订单</Link>
               <Link href="/merchant/store">店铺资料</Link>
               <Link href="/merchant/products">商品管理</Link>
               <Link href="/merchant/releases">限时发售</Link>
               <Link href="/merchant/auctions">拍卖管理</Link>
-              <Link href="/merchant/refunds">退款审核</Link>
-              <Link href="/admin/community">社区审核</Link>
+              <Link href="/merchant/refunds">退款处理</Link>
             </>
-          ) : <Link href="/merchant/login">商家后台</Link>}
+          ) : null}
+          {!adminLoggedIn ? <Link href="/merchant/login">后台登录</Link> : null}
           <Link href="/addresses">收货地址</Link>
           {loggedIn ? (
             <button className="link-button" type="button" onClick={logout}>
