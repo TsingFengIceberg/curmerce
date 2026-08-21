@@ -89,4 +89,21 @@ public interface ErrorCodeConstants {
     ErrorCode PAYMENT_AMOUNT_MISMATCH = new ErrorCode(1_023_006_007, "支付金额与订单应付金额不一致");
     ErrorCode PAYMENT_CALLBACK_CONFLICT = new ErrorCode(1_023_006_008, "支付回调重复或内容冲突");
     ErrorCode PAYMENT_ORDER_STATE_INVALID = new ErrorCode(1_023_006_009, "支付单与订单状态不一致");
+
+    ErrorCode RELEASE_NOT_FOUND = new ErrorCode(1_023_008_000, "限时发售活动不存在");
+    ErrorCode RELEASE_STATE_INVALID = new ErrorCode(1_023_008_001, "限时发售活动状态不允许该操作");
+    ErrorCode RELEASE_TIME_INVALID = new ErrorCode(1_023_008_002, "限时发售活动时间无效");
+    ErrorCode RELEASE_ITEM_INVALID = new ErrorCode(1_023_008_003, "限时发售商品或规格无效");
+    ErrorCode RELEASE_STOCK_INSUFFICIENT = new ErrorCode(1_023_008_004, "限时发售库存不足");
+    ErrorCode RELEASE_PURCHASE_LIMIT = new ErrorCode(1_023_008_005, "已达到该活动的个人限购数量");
+    ErrorCode RELEASE_PURCHASE_DUPLICATE = new ErrorCode(1_023_008_006, "限时发售购买记录已存在");
+    ErrorCode RELEASE_STOCK_RESTORE_FAILED = new ErrorCode(1_023_008_007, "限时发售库存恢复失败");
+
+    ErrorCode AUCTION_NOT_FOUND = new ErrorCode(1_023_009_000, "拍卖场次不存在");
+    ErrorCode AUCTION_STATE_INVALID = new ErrorCode(1_023_009_001, "拍卖场次状态不允许该操作");
+    ErrorCode AUCTION_TIME_INVALID = new ErrorCode(1_023_009_002, "拍卖场次时间无效");
+    ErrorCode AUCTION_ITEM_INVALID = new ErrorCode(1_023_009_003, "拍卖商品或规格无效");
+    ErrorCode AUCTION_BID_INVALID = new ErrorCode(1_023_009_004, "出价金额不符合规则");
+    ErrorCode AUCTION_BID_DUPLICATE = new ErrorCode(1_023_009_005, "出价幂等键已使用");
+    ErrorCode AUCTION_WINNER_NOT_FOUND = new ErrorCode(1_023_009_006, "拍卖没有有效竞拍者");
 }

@@ -259,6 +259,70 @@ export interface MemberAddressUpdateInput extends MemberAddressInput {
   id: number;
 }
 
+export interface ReleaseItem {
+  id: number;
+  productId: number;
+  skuId: number;
+  campaignPrice: number;
+  stock: number;
+  soldCount: number;
+}
+
+export interface ReleaseCampaign {
+  id: number;
+  name: string;
+  status: number;
+  startTime: ApiDateValue;
+  endTime: ApiDateValue;
+  perUserLimit: number;
+  items: ReleaseItem[];
+}
+
+export interface ReleaseCreateInput {
+  name: string;
+  startTime: string;
+  endTime: string;
+  perUserLimit: number;
+  items: Array<{ productId: number; skuId: number; campaignPrice: number; stock: number }>;
+}
+
+export interface ReleasePurchaseResult {
+  purchaseId: number;
+  campaignId: number;
+  itemId: number;
+  quantity: number;
+  unitPrice: number;
+  orderId?: number;
+  orderNo?: string | null;
+  orderStatus?: number;
+}
+
+export interface AuctionSession {
+  id: number;
+  name: string;
+  productId: number;
+  skuId: number;
+  status: number;
+  startingPrice: number;
+  minIncrement: number;
+  startTime: ApiDateValue;
+  endTime: ApiDateValue;
+  currentAmount?: number | null;
+  currentBidderUserId?: number | null;
+  winnerUserId?: number | null;
+  winningBidId?: number | null;
+}
+
+export interface AuctionCreateInput {
+  name: string;
+  productId: number;
+  skuId: number;
+  startingPrice: number;
+  minIncrement: number;
+  startTime: string;
+  endTime: string;
+}
+
 export interface MerchantOrder {
   id: number;
   orderNo: string;

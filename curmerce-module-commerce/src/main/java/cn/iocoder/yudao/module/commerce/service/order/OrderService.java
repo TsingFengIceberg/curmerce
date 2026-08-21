@@ -12,6 +12,9 @@ import java.time.LocalDateTime;
 
 public interface OrderService {
     OrderCreateRespVO createOrder(Long userId, Long addressId, String idempotencyKey);
+    OrderCreateRespVO createReleaseOrder(Long userId, Long addressId, Long productId, Long skuId,
+                                          Long amount, Integer quantity, String idempotencyKey);
+    OrderCreateRespVO createAuctionOrder(Long userId, Long addressId, Long productId, Long skuId, Long amount, String idempotencyKey);
     PageResult<OrderSummaryRespVO> getOrderPage(Long userId, OrderPageReqVO reqVO);
     OrderDetailRespVO getOrder(Long userId, Long id);
     void confirmReceipt(Long userId, Long id);

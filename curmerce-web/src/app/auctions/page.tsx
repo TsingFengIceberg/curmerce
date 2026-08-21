@@ -1,0 +1,24 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { Notice } from "@/components/notice";
+import { auctionApi } from "@/lib/api/auction";
+import { CurmerceApiError } from "@/lib/api/client";
+import { getAccessToken } from "@/lib/auth/storage";
+import { memberApi } from "@/lib/api/member";
+import { formatDateTime, formatMoney } from "@/lib/format";
+import type { AuctionSession, MemberAddress } from "@/lib/types/api";
+
+const labels: Record<number, string> = { 10: "待开始", 20: "进行中", 30: "已结束", 40: "已取消" };
+function isOpen(session: AuctionSession) { const now = Date.now(); return (session.status === 10 || session.status === 20) && new Date(String(session.startTime)).getTime() <= now && now < new Date(String(session.endTime)).getTime(); }
+
+export default function AuctionsPage() {
+  const [items, setItems] = useState<AuctionSession[]>([]); const [addresses, setAddresses] = useState<MemberAddress[]>([]);
+  const [amounts, setAmounts] = useState<Record<number, string>>({}); const [error, setError] = useState<string | null>(null); const [message, setMessage] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [busyId, setBusyId] = useState<number | null>(null);
+  async function load() { setLoading(true); try { setItems((await auctionApi.page({ pageNo: 1, pageSize: 30 })).list ?? []); } catch (cause) { setError(cause instanceof CurmerceApiError ? cause.message : "拍卖加载失败"); } finally { setLoading(false); } }
+  useEffect(() => { void load(); }, []);
+  async function bid(session: AuctionSession) { if (!getAccessToken()) { setError("请先登录后出价"); return; } const amount = Number(amounts[session.id]); const minimum = (session.currentAmount ?? session.startingPrice) + (session.currentAmount == null ? 0 : session.minIncrement); if (!Number.isInteger(amount) || amount < minimum) { setError(`出价至少为 ${formatMoney(minimum)}`); return; } setBusyId(session.id); setError(null); try { await auctionApi.bid({ sessionId: session.id, amount, idempotencyKey: `web-${session.id}-${Date.now()}` }); setMessage("出价成功"); setAmounts((current) => ({ ...current, [session.id]: "" })); await load(); } catch (cause) { setError(cause instanceof CurmerceApiError ? cause.message : "出价失败"); } finally { setBusyId(null); } }
+  async function settle(session: AuctionSession) { if (!getAccessToken()) { setError("请先登录后结算"); return; } setBusyId(session.id); setError(null); try { const list = addresses.length ? addresses : await memberApi.listAddresses(); setAddresses(list); const address = list.find((entry) => entry.defaultStatus) ?? list[0]; if (!address) { setError("请先维护收货地址"); return; } const orderId = await auctionApi.settle({ sessionId: session.id, addressId: address.id }); setMessage(`拍卖已结算，待支付订单 #${orderId}`); await load(); } catch (cause) { setError(cause instanceof CurmerceApiError ? cause.message : "结算失败"); } finally { setBusyId(null); } }
+  return <section className="content-section commerce-event-page"><div className="section-heading"><div><p className="eyebrow">COMMERCE · AUCTION</p><h1>基础拍卖</h1><p>按起拍价和最低加价出价，结束后最高出价者使用收货地址创建待支付订单。</p></div><Link className="button button--secondary" href="/releases">去看限时发售 →</Link></div>{message ? <Notice tone="success">{message}</Notice> : null}{error ? <Notice>{error}</Notice> : null}{loading ? <p className="empty-state">拍卖加载中…</p> : null}<div className="event-grid">{items.map((session) => { const minimum = (session.currentAmount ?? session.startingPrice) + (session.currentAmount == null ? 0 : session.minIncrement); const open = isOpen(session); return <article className="event-card" key={session.id}><div className="event-card__top"><span className="tag">{labels[session.status] ?? `状态 ${session.status}`}</span><span className="event-card__date">{formatDateTime(session.startTime)} - {formatDateTime(session.endTime)}</span></div><h2>{session.name}</h2><p>起拍价 {formatMoney(session.startingPrice)} · 最低加价 {formatMoney(session.minIncrement)}</p><div className="event-card__price"><strong>{session.currentAmount == null ? "暂无出价" : formatMoney(session.currentAmount)}</strong><span>{session.currentAmount == null ? `首次至少 ${formatMoney(minimum)}` : `下一口至少 ${formatMoney(minimum)}`}</span></div>{open ? <div className="event-card__bid"><input aria-label={`拍卖 ${session.name} 出价`} min={minimum} type="number" placeholder={String(minimum)} value={amounts[session.id] ?? ""} onChange={(event) => setAmounts((current) => ({ ...current, [session.id]: event.target.value }))} /><button className="button button--primary" disabled={busyId === session.id} type="button" onClick={() => void bid(session)}>出价</button></div> : null}{session.status === 30 && session.winnerUserId ? <button className="button button--secondary button--full" disabled={busyId === session.id} type="button" onClick={() => void settle(session)}>胜者结算</button> : null}</article>; })}</div></section>;
+}

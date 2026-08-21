@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.payment.CommercePaymentMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleasePurchaseMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
@@ -35,6 +36,8 @@ class PaymentServiceImplTest {
     private CommerceOrderMapper orderMapper;
     @Mock
     private CommercePaymentMapper paymentMapper;
+    @Mock
+    private CommerceReleasePurchaseMapper releasePurchaseMapper;
     @Mock
     private CommerceOutboxEventAppender outboxEventAppender;
     @InjectMocks

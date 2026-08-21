@@ -9,6 +9,7 @@ import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.payment.CommercePaymentMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleasePurchaseMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
@@ -41,6 +42,8 @@ public class PaymentServiceImpl implements PaymentService {
     private CommerceOrderMapper orderMapper;
     @Resource
     private CommercePaymentMapper paymentMapper;
+    @Resource
+    private CommerceReleasePurchaseMapper releasePurchaseMapper;
     @Resource
     private CommerceOutboxEventAppender outboxEventAppender;
 
@@ -126,6 +129,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (orderMapper.markPaid(order.getId()) != 1) {
             throw exception(PAYMENT_ORDER_STATE_INVALID);
         }
+        releasePurchaseMapper.markPaidByOrderId(order.getId());
         outboxEventAppender.append(CommerceOutboxEventTypeEnum.ORDER_PAID, order.getId(),
                 orderPaidPayload(order, payment));
         payment.setStatus(PaymentStatusEnum.SUCCESS.getStatus()).setCallbackId(callbackId)

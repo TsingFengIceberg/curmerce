@@ -25,6 +25,10 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductCategoryMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleasePurchaseDO;
+import cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleaseItemMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleasePurchaseMapper;
+import cn.iocoder.yudao.module.commerce.enums.release.ReleasePurchaseStatusEnum;
 import cn.iocoder.yudao.module.commerce.dal.mysql.payment.CommercePaymentMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO;
@@ -72,6 +76,8 @@ public class OrderServiceImpl implements OrderService {
     @Resource private MerchantAccessService merchantAccessService;
     @Resource private CommercePaymentMapper paymentMapper;
     @Resource private CommerceRefundMapper refundMapper;
+    @Resource private CommerceReleaseItemMapper releaseItemMapper;
+    @Resource private CommerceReleasePurchaseMapper releasePurchaseMapper;
     @Resource private CommerceOutboxEventAppender outboxEventAppender;
     @org.springframework.beans.factory.annotation.Value("${curmerce.order.payment-timeout-minutes:30}")
     private long paymentTimeoutMinutes = DEFAULT_PAYMENT_TIMEOUT_MINUTES;
@@ -174,6 +180,60 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OrderCreateRespVO createAuctionOrder(Long userId, Long addressId, Long productId, Long skuId,
+                                                 Long amount, String idempotencyKey) {
+        return createDirectOrder(userId, addressId, productId, skuId, amount, 1, idempotencyKey);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OrderCreateRespVO createReleaseOrder(Long userId, Long addressId, Long productId, Long skuId,
+                                                 Long amount, Integer quantity, String idempotencyKey) {
+        return createDirectOrder(userId, addressId, productId, skuId, amount, quantity, idempotencyKey);
+    }
+
+    private OrderCreateRespVO createDirectOrder(Long userId, Long addressId, Long productId, Long skuId,
+                                                Long amount, Integer quantity, String idempotencyKey) {
+        String key = normalizeIdempotencyKey(idempotencyKey);
+        memberUserApi.validateActiveUserForUpdate(userId);
+        CommerceOrderDO existing = orderMapper.selectByUserAndIdempotencyKey(userId, key);
+        if (existing != null) return toCreateResponse(existing);
+        MemberAddressRespDTO address = memberAddressApi.getOwnedAddressForUpdate(userId, addressId);
+        if (address == null) throw exception(ORDER_ADDRESS_NOT_AVAILABLE);
+        ProductDO product = productMapper.selectByIdForUpdate(productId);
+        ProductSkuDO sku = productSkuMapper.selectByIdAndProductIdForUpdate(skuId, productId);
+        if (!isSellable(product, sku) || product.getMerchantId() == null || product.getStoreId() == null
+                || Objects.equals(product.getSellerUserId(), userId)) throw exception(ORDER_ITEM_NOT_AVAILABLE);
+        MerchantDO merchant = merchantMapper.selectById(product.getMerchantId());
+        StoreDO store = storeMapper.selectById(product.getStoreId());
+        ProductCategoryDO category = productCategoryMapper.selectById(product.getCategoryId());
+        if (merchant == null || !Objects.equals(merchant.getStatus(), 1) || store == null
+                || !CommonStatusEnum.isEnable(store.getStatus()) || !categoryTreeEnabled(category)) {
+            throw exception(ORDER_ITEM_NOT_AVAILABLE);
+        }
+        if (amount == null || amount < 0 || quantity == null || quantity < 1 || quantity > 99) {
+            throw exception(ORDER_AMOUNT_OVERFLOW);
+        }
+        CommerceOrderDO order = new CommerceOrderDO().setOrderNo(generateOrderNo())
+                .setMemberUserId(userId).setMerchantId(product.getMerchantId()).setStoreId(product.getStoreId())
+                .setSellerType(ProductSellerTypeEnum.MERCHANT.getType()).setIdempotencyKey(key)
+                .setStatus(OrderStatusEnum.PENDING_PAYMENT.getStatus())
+                .setPaymentDeadline(LocalDateTime.now().plusMinutes(Math.max(1L, paymentTimeoutMinutes)))
+                .setItemCount(quantity).setTotalAmount(multiplyAmount(amount, quantity)).setPayableAmount(multiplyAmount(amount, quantity))
+                .setReceiverName(address.getName()).setReceiverMobile(address.getMobile())
+                .setReceiverAreaId(address.getAreaId()).setReceiverAreaName(address.getAreaName())
+                .setReceiverDetailAddress(address.getDetailAddress());
+        orderMapper.insert(order);
+        if (productSkuMapper.deductStock(skuId, quantity) != 1) throw exception(ORDER_STOCK_INSUFFICIENT);
+        orderItemMapper.insert(new CommerceOrderItemDO().setOrderId(order.getId()).setProductId(productId).setSkuId(skuId)
+                .setProductName(product.getName()).setProductImageUrl(product.getMainImageUrl()).setSkuCode(sku.getCode())
+                .setSpecificationValues(sku.getSpecificationValues()).setSkuImageUrl(sku.getImageUrl())
+                .setPrice(amount).setQuantity(quantity).setTotalAmount(multiplyAmount(amount, quantity)));
+        return toCreateResponse(order);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public PageResult<OrderSummaryRespVO> getOrderPage(Long userId, OrderPageReqVO reqVO) {
         memberUserApi.validateActiveUser(userId);
@@ -247,6 +307,7 @@ public class OrderServiceImpl implements OrderService {
                 && paymentMapper.markCanceled(payment.getId()) != 1) {
             throw exception(ORDER_CANCEL_STATE_INVALID);
         }
+        cancelPendingReleasePurchase(order.getId());
         if (orderMapper.markCanceled(userId, id) != 1) {
             throw exception(ORDER_CANCEL_STATE_INVALID);
         }
@@ -269,6 +330,7 @@ public class OrderServiceImpl implements OrderService {
                     && paymentMapper.markCanceled(payment.getId()) != 1) {
                 throw exception(ORDER_CANCEL_STATE_INVALID);
             }
+            cancelPendingReleasePurchase(order.getId());
             if (orderMapper.markCanceled(order.getId()) != 1) {
                 throw exception(ORDER_CANCEL_STATE_INVALID);
             }
@@ -284,6 +346,17 @@ public class OrderServiceImpl implements OrderService {
             if (productSkuMapper.restoreStock(item.getSkuId(), item.getQuantity()) != 1) {
                 throw exception(ORDER_STOCK_RESTORE_FAILED);
             }
+        }
+    }
+
+    private void cancelPendingReleasePurchase(Long orderId) {
+        CommerceReleasePurchaseDO purchase = releasePurchaseMapper.selectByOrderIdForUpdate(orderId);
+        if (purchase == null || !ReleasePurchaseStatusEnum.PENDING.getStatus().equals(purchase.getStatus())) {
+            return;
+        }
+        if (releasePurchaseMapper.markCanceled(purchase.getId()) != 1
+                || releaseItemMapper.restoreInventory(purchase.getItemId(), purchase.getQuantity()) != 1) {
+            throw exception(RELEASE_STOCK_RESTORE_FAILED);
         }
     }
 

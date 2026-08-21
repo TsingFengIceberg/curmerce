@@ -30,6 +30,8 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.payment.CommercePaymentMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleaseItemMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleasePurchaseMapper;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
@@ -74,6 +76,8 @@ class OrderServiceImplTest {
     @Mock private MerchantAccessService merchantAccessService;
     @Mock private CommercePaymentMapper paymentMapper;
     @Mock private CommerceRefundMapper refundMapper;
+    @Mock private CommerceReleaseItemMapper releaseItemMapper;
+    @Mock private CommerceReleasePurchaseMapper releasePurchaseMapper;
     @Mock private CommerceOutboxEventAppender outboxEventAppender;
     @InjectMocks private OrderServiceImpl service;
 
