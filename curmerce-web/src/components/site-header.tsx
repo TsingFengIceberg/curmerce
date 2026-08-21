@@ -29,6 +29,7 @@ export function SiteHeader() {
         </Link>
         <nav className="site-nav" aria-label="主导航">
           <Link href="/catalog">商城首页</Link>
+          <Link href="/community">社区</Link>
           <Link href="/cart">购物车</Link>
           {loggedIn ? <Link href="/orders">我的订单</Link> : null}
           {loggedIn ? <Link href="/refunds">退款中心</Link> : null}
@@ -42,6 +43,7 @@ export function SiteHeader() {
               <Link href="/merchant/store">店铺资料</Link>
               <Link href="/merchant/products">商品管理</Link>
               <Link href="/merchant/refunds">退款审核</Link>
+              <Link href="/admin/community">社区审核</Link>
             </>
           ) : <Link href="/merchant/login">商家后台</Link>}
           <Link href="/addresses">收货地址</Link>

@@ -17,6 +17,7 @@
         <module>yudao-module-infra</module>
         <module>curmerce-module-commerce</module>
         <module>curmerce-module-member</module>
+        <module>curmerce-module-community</module>
 <!--        <module>yudao-module-bpm</module>-->
 <!--        <module>yudao-module-report</module>-->
 <!--        <module>yudao-module-mp</module>-->

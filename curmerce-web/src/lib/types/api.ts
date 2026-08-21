@@ -410,3 +410,55 @@ export interface ProductSaveInput {
   sort: number;
   skus: ProductSkuInput[];
 }
+
+export interface CommunityTopic {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+export interface CommunityProductLink extends PublicProductSummary {}
+
+export interface CommunityPost {
+  id: number;
+  authorUserId: number;
+  authorNickname?: string | null;
+  authorAvatar?: string | null;
+  title: string;
+  content: string;
+  mediaUrls?: string[] | null;
+  status: number;
+  likeCount: number;
+  favoriteCount: number;
+  commentCount: number;
+  liked?: boolean;
+  favorited?: boolean;
+  followingAuthor?: boolean;
+  topics: CommunityTopic[];
+  products: CommunityProductLink[];
+  createTime?: ApiDateValue;
+  updateTime?: ApiDateValue;
+}
+
+export interface CommunityComment {
+  id: number;
+  postId: number;
+  parentId?: number | null;
+  authorUserId: number;
+  authorNickname?: string | null;
+  content: string;
+  status: number;
+  createTime?: ApiDateValue;
+}
+
+export interface CommunityReport {
+  id: number;
+  postId: number;
+  reporterUserId: number;
+  reason: string;
+  status: number;
+  reviewerUserId?: number | null;
+  reviewRemark?: string | null;
+  reviewTime?: ApiDateValue;
+  createTime?: ApiDateValue;
+}
