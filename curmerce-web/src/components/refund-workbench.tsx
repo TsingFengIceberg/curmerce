@@ -213,7 +213,9 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
                   <div className="inline-actions"><button className="button button--primary" disabled={busy} type="button" onClick={() => void review("approve")}>审核通过</button><button className="button button--danger" disabled={busy} type="button" onClick={() => void review("reject")}>驳回退款</button></div>
                 </div>
               ) : null}
-              {selected.status === 20 ? (
+              {selected.status === 20 ? own ? (
+                <p className="field-help">退款审核通过后，由平台退款后台接收或模拟渠道回调；商家不能直接伪造回调结果。</p>
+              ) : (
                 <div className="admin-action-box">
                   <label className="field"><span>回调幂等编号</span><input maxLength={64} onChange={(event) => setCallbackId(event.target.value)} value={callbackId} /></label>
                   <label className="field"><span>回调结果</span><select onChange={(event) => setCallbackSuccess(event.target.value === "success")} value={callbackSuccess ? "success" : "failure"}><option value="success">成功</option><option value="failure">失败</option></select></label>

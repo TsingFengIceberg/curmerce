@@ -55,6 +55,7 @@ class CommerceControllerContractTest {
         assertPermission(ProductReviewController.class, "approve", "commerce:product:audit");
         assertPermission(ProductReviewController.class, "reject", "commerce:product:audit");
         assertPermission(OrderController.class, "pageOwnPendingShipment", "commerce:order:self-query");
+        assertPermission(OrderController.class, "pageOwn", "commerce:order:self-query");
         assertPermission(OrderController.class, "page", "commerce:order:query");
         assertPermission(OrderController.class, "shipOwn", "commerce:order:self-ship");
         assertPermission(RefundController.class, "page", "commerce:refund:query");

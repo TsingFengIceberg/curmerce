@@ -27,8 +27,7 @@ export default function LoginPage() {
     try {
       const token = await memberApi.login({ mobile, password });
       saveToken(token);
-      router.push("/addresses");
-      router.refresh();
+      router.replace("/catalog");
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "登录失败，请稍后重试");
     } finally {

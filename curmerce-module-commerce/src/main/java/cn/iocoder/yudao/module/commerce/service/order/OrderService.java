@@ -21,6 +21,7 @@ public interface OrderService {
     void cancelOrder(Long userId, Long id);
     int closeExpiredPendingPaymentOrders(LocalDateTime cutoffTime, int batchSize);
     PageResult<MerchantOrderRespVO> getOwnPendingShipmentPage(MerchantOrderPageReqVO reqVO);
+    PageResult<MerchantOrderRespVO> getOwnOrderPage(MerchantOrderPageReqVO reqVO);
     PageResult<MerchantOrderRespVO> getAdminOrderPage(CommerceOrderPageReqVO reqVO);
     void shipOwnOrder(MerchantOrderShipReqVO reqVO);
     PageResult<PersonalSellerOrderRespVO> getOwnPersonalPendingShipmentPage(Long sellerUserId, MerchantOrderPageReqVO reqVO);

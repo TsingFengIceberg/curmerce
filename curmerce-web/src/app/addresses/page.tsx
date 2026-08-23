@@ -105,14 +105,18 @@ export default function AddressesPage() {
   const districtNodes = cityNodes.find((node) => node.id === cityId)?.children ?? [];
 
   function selectProvince(value: string) {
-    setProvinceId(Number(value));
+    const nextProvinceId = Number(value);
+    const province = provinceNodes.find((node) => node.id === nextProvinceId);
+    setProvinceId(nextProvinceId);
     setCityId(0);
-    setForm((current) => ({ ...current, areaId: 0 }));
+    setForm((current) => ({ ...current, areaId: province && (province.children?.length ?? 0) === 0 ? province.id : 0 }));
   }
 
   function selectCity(value: string) {
-    setCityId(Number(value));
-    setForm((current) => ({ ...current, areaId: 0 }));
+    const nextCityId = Number(value);
+    const city = cityNodes.find((node) => node.id === nextCityId);
+    setCityId(nextCityId);
+    setForm((current) => ({ ...current, areaId: city && (city.children?.length ?? 0) === 0 ? city.id : 0 }));
   }
 
   function selectDistrict(value: string) {
@@ -125,7 +129,7 @@ export default function AddressesPage() {
     setMessage(null);
     setError(null);
     try {
-      if (!form.areaId || form.areaId < 1) throw new Error("请选择完整的省、市、区");
+      if (!form.areaId || form.areaId < 1) throw new Error("请选择有效的收货地区");
       if (editingId) {
         await memberApi.updateAddress({ ...form, id: editingId });
         setMessage("地址已更新");
@@ -229,8 +233,8 @@ export default function AddressesPage() {
           </div>
           <label className="field"><span>收件人</span><input required maxLength={30} value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="姓名" /></label>
           <label className="field"><span>手机号</span><input required inputMode="tel" value={form.mobile} onChange={(event) => update("mobile", event.target.value)} placeholder="手机号" /></label>
-          <fieldset className="field-group"><legend>收货地区</legend><div className="form-grid form-grid--three"><select aria-label="省" required disabled={areaLoading || provinceNodes.length === 0} value={provinceId || ""} onChange={(event) => selectProvince(event.target.value)}><option value="">{areaLoading ? "地区加载中…" : "选择省"}</option>{provinceNodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select><select aria-label="市" required disabled={!provinceId || cityNodes.length === 0} value={cityId || ""} onChange={(event) => selectCity(event.target.value)}><option value="">选择市</option>{cityNodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select><select aria-label="区" required disabled={!cityId || districtNodes.length === 0} value={form.areaId || ""} onChange={(event) => selectDistrict(event.target.value)}><option value="">选择区</option>{districtNodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select></div></fieldset>
-          <p className="field-help">地区编号由系统地区树提供，保存时由后端再次校验。</p>
+          <fieldset className="field-group"><legend>收货地区</legend><div className="form-grid form-grid--three"><select aria-label="省" required disabled={areaLoading || provinceNodes.length === 0} value={provinceId || ""} onChange={(event) => selectProvince(event.target.value)}><option value="">{areaLoading ? "地区加载中…" : "选择省"}</option>{provinceNodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select><select aria-label="市" required disabled={!provinceId || cityNodes.length === 0} value={cityId || ""} onChange={(event) => selectCity(event.target.value)}><option value="">{provinceId && cityNodes.length === 0 ? "无需选择市" : "选择市"}</option>{cityNodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select><select aria-label="区" required disabled={!cityId || districtNodes.length === 0} value={form.areaId || ""} onChange={(event) => selectDistrict(event.target.value)}><option value="">{cityId && districtNodes.length === 0 ? "无需选择区" : "选择区"}</option>{districtNodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select></div></fieldset>
+          <p className="field-help">普通省市请选择到区县；香港、澳门等地区树叶子节点选中后可直接保存。</p>
           <label className="field"><span>详细地址</span><textarea required maxLength={255} rows={4} value={form.detailAddress} onChange={(event) => update("detailAddress", event.target.value)} placeholder="街道、楼栋、门牌号" /></label>
           <label className="checkbox-field"><input checked={form.defaultStatus} type="checkbox" onChange={(event) => update("defaultStatus", event.target.checked)} /><span>设为默认地址</span></label>
           <button className="button button--primary button--full" disabled={saving} type="submit">{saving ? "保存中…" : editingId ? "保存修改" : "添加地址"}</button>

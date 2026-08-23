@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { clearAdminToken, clearToken, getAccessToken, getAdminAccessToken } from "@/lib/auth/storage";
+import {
+  AUTH_SESSION_CHANGED_EVENT,
+  clearAdminToken,
+  clearToken,
+  getAccessToken,
+  getAdminAccessToken,
+} from "@/lib/auth/storage";
 import { memberApi } from "@/lib/api/member";
 import { adminAuthApi } from "@/lib/api/admin-auth";
 
@@ -19,18 +25,36 @@ export function SiteHeader() {
   const [session, setSession] = useState<HeaderSession>({ hydrated: false, buyerLoggedIn: false, adminLoggedIn: false, roles: [] });
 
   useEffect(() => {
-    const buyerLoggedIn = Boolean(getAccessToken());
-    const adminLoggedIn = Boolean(getAdminAccessToken());
-    if (!adminLoggedIn) {
-      setSession({ hydrated: true, buyerLoggedIn, adminLoggedIn: false, roles: [] });
-      return;
+    let requestVersion = 0;
+
+    async function refreshSession() {
+      const currentVersion = ++requestVersion;
+      const buyerLoggedIn = Boolean(getAccessToken());
+      const adminLoggedIn = Boolean(getAdminAccessToken());
+      if (!adminLoggedIn) {
+        setSession({ hydrated: true, buyerLoggedIn, adminLoggedIn: false, roles: [] });
+        return;
+      }
+      try {
+        const permission = await adminAuthApi.getPermissionInfo();
+        if (currentVersion !== requestVersion) return;
+        setSession({ hydrated: true, buyerLoggedIn, adminLoggedIn: true, roles: permission.roles ?? [] });
+      } catch {
+        if (currentVersion !== requestVersion) return;
+        clearAdminToken();
+        setSession({ hydrated: true, buyerLoggedIn, adminLoggedIn: false, roles: [] });
+      }
     }
-    void adminAuthApi.getPermissionInfo().then((permission) => {
-      setSession({ hydrated: true, buyerLoggedIn, adminLoggedIn: true, roles: permission.roles ?? [] });
-    }).catch(() => {
-      clearAdminToken();
-      setSession({ hydrated: true, buyerLoggedIn, adminLoggedIn: false, roles: [] });
-    });
+
+    const handleSessionChanged = () => void refreshSession();
+    handleSessionChanged();
+    window.addEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChanged);
+    window.addEventListener("storage", handleSessionChanged);
+    return () => {
+      requestVersion += 1;
+      window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChanged);
+      window.removeEventListener("storage", handleSessionChanged);
+    };
   }, []);
 
   const loggedIn = session.hydrated && session.buyerLoggedIn;
@@ -74,12 +98,13 @@ export function SiteHeader() {
             <>
               <Link href="/admin/merchants">商家审核</Link>
               <Link href="/admin/orders">平台订单</Link>
+              <Link href="/admin/refunds">平台退款</Link>
               <Link href="/admin/community">社区审核</Link>
             </>
           ) : null}
           {merchantOwner ? (
             <>
-              <Link href="/merchant/orders">待发货订单</Link>
+              <Link href="/merchant/orders">订单管理</Link>
               <Link href="/merchant/store">店铺资料</Link>
               <Link href="/merchant/products">商品管理</Link>
               <Link href="/merchant/releases">限时发售</Link>
@@ -87,15 +112,17 @@ export function SiteHeader() {
               <Link href="/merchant/refunds">退款处理</Link>
             </>
           ) : null}
-          {!adminLoggedIn ? <Link href="/merchant/login">后台登录</Link> : null}
-          <Link href="/addresses">收货地址</Link>
-          {loggedIn ? (
-            <button className="link-button" type="button" onClick={logout}>
-              退出登录
-            </button>
-          ) : (
-            <Link href="/login">登录</Link>
-          )}
+          {session.hydrated && !adminLoggedIn ? <Link href="/merchant/login">后台登录</Link> : null}
+          {loggedIn ? <Link href="/addresses">收货地址</Link> : null}
+          {session.hydrated ? (
+            loggedIn ? (
+              <button className="link-button" type="button" onClick={logout}>
+                退出登录
+              </button>
+            ) : (
+              <Link href="/login">登录</Link>
+            )
+          ) : null}
         </nav>
       </div>
     </header>

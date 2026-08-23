@@ -18,6 +18,13 @@ export const adminOrderApi = {
     return adminApi<ApiPage<MerchantOrder>>(`/commerce/order/page-own-pending-shipment?${params.toString()}`);
   },
 
+  pageOwn(input: { pageNo: number; pageSize: number; status?: number; orderNo?: string }) {
+    const params = new URLSearchParams({ pageNo: String(input.pageNo), pageSize: String(input.pageSize) });
+    if (input.status !== undefined) params.set("status", String(input.status));
+    if (input.orderNo?.trim()) params.set("orderNo", input.orderNo.trim());
+    return adminApi<ApiPage<MerchantOrder>>(`/commerce/order/page-own?${params.toString()}`);
+  },
+
   shipOwn(input: { id: number; logisticsCompany: string; trackingNo: string }) {
     return adminApi<boolean>("/commerce/order/ship-own", {
       method: "PUT",

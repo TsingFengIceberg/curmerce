@@ -2,11 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Notice } from "@/components/notice";
 import { CurmerceApiError } from "@/lib/api/client";
 import { adminAuthApi } from "@/lib/api/admin-auth";
-import { getAdminAccessToken } from "@/lib/auth/storage";
+import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
+
+function destinationForRoles(roles: string[] | undefined) {
+  if (roles?.includes("super_admin")) return "/admin/merchants";
+  if (roles?.includes("merchant_owner")) return "/merchant/orders";
+  return null;
+}
 
 export default function MerchantLoginPage() {
   const router = useRouter();
@@ -14,6 +20,40 @@ export default function MerchantLoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    async function resumeExistingSession() {
+      if (!getAdminAccessToken()) {
+        if (active) setCheckingSession(false);
+        return;
+      }
+      try {
+        const permission = await adminAuthApi.getPermissionInfo();
+        if (!active) return;
+        const destination = destinationForRoles(permission.roles);
+        if (destination) {
+          router.replace(destination);
+          return;
+        }
+        await adminAuthApi.logout();
+        if (active) {
+          setError("该账号未配置平台管理员或商家店主角色，请使用已审核商家的店主账号。");
+          setCheckingSession(false);
+        }
+      } catch {
+        clearAdminToken();
+        if (active) setCheckingSession(false);
+      }
+    }
+
+    void resumeExistingSession();
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -22,10 +62,9 @@ export default function MerchantLoginPage() {
     try {
       await adminAuthApi.login({ username: username.trim(), password });
       const permission = await adminAuthApi.getPermissionInfo();
-      if (permission.roles?.includes("super_admin")) {
-        router.replace("/admin/merchants");
-      } else if (permission.roles?.includes("merchant_owner")) {
-        router.replace("/merchant/orders");
+      const destination = destinationForRoles(permission.roles);
+      if (destination) {
+        router.replace(destination);
       } else {
         await adminAuthApi.logout();
         setError("该账号未配置平台管理员或商家店主角色，请使用已审核商家的店主账号。");
@@ -37,10 +76,7 @@ export default function MerchantLoginPage() {
     }
   }
 
-  if (getAdminAccessToken()) {
-    router.replace("/merchant/orders");
-    return <p className="empty-state">正在进入商家后台…</p>;
-  }
+  if (checkingSession) return <p className="empty-state">正在验证后台登录状态…</p>;
 
   return (
     <section className="auth-layout merchant-login-page">
@@ -53,7 +89,7 @@ export default function MerchantLoginPage() {
       <form className="form-card" onSubmit={submit}>
         <div className="form-card__heading"><div><p className="eyebrow">ADMIN · MERCHANT SIGN IN</p><h2>登录后台</h2></div><span className="form-card__badge">角色分流</span></div>
         {error ? <Notice>{error}</Notice> : null}
-        <label className="field"><span>管理员账号</span><input autoComplete="username" minLength={4} onChange={(event) => setUsername(event.target.value)} required value={username} /></label>
+        <label className="field"><span>后台用户名</span><input autoComplete="username" minLength={4} onChange={(event) => setUsername(event.target.value)} required value={username} /></label>
         <label className="field"><span>密码</span><input autoComplete="current-password" minLength={4} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} /></label>
         <button className="button button--primary button--full" disabled={busy} type="submit">{busy ? "登录中…" : "登录后台"}</button>
       </form>

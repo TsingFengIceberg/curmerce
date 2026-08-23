@@ -38,6 +38,13 @@ public class OrderController {
         return success(orderService.getOwnPendingShipmentPage(reqVO));
     }
 
+    @GetMapping("/page-own")
+    @Operation(summary = "查询自己的全部订单")
+    @PreAuthorize("@ss.hasPermission('commerce:order:self-query')")
+    public CommonResult<PageResult<MerchantOrderRespVO>> pageOwn(@Valid MerchantOrderPageReqVO reqVO) {
+        return success(orderService.getOwnOrderPage(reqVO));
+    }
+
     @GetMapping("/page")
     @Operation(summary = "查询平台订单")
     @PreAuthorize("@ss.hasPermission('commerce:order:query')")
