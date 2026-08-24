@@ -12,7 +12,7 @@ import java.util.List;
 public class PersonalListingCreateReqVO {
     @NotNull private Long categoryId;
     @NotBlank @Size(min = 2, max = 128) private String name;
-    @NotBlank @Size(min = 2, max = 32) private String condition;
+    @NotBlank @Size(min = 2, max = 32, message = "成色长度必须为 2-32 个字符") private String condition;
     @NotBlank @Size(max = 1024) private String mainImageUrl;
     @Size(max = 20) private List<@Size(max = 1024) String> imageUrls;
     @NotBlank @Size(min = 2, max = 100000) private String description;

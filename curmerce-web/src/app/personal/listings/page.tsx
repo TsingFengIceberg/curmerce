@@ -160,7 +160,7 @@ export default function PersonalListingsPage() {
         <div className="panel-heading"><h2>{editing ? "编辑个人商品草稿" : "发布个人商品"}</h2>{editing ? <button className="text-button" type="button" onClick={startCreate}>取消编辑</button> : null}</div>
         <div className="admin-form-grid">
           <label className="field"><span>商品名称</span><input maxLength={128} required value={form.name} onChange={(event) => update("name", event.target.value)} /></label>
-          <label className="field"><span>成色</span><input maxLength={32} required placeholder="例如：九成新" value={form.condition} onChange={(event) => update("condition", event.target.value)} /></label>
+          <label className="field"><span>成色</span><input maxLength={32} minLength={2} required placeholder="例如：九成新" value={form.condition} onChange={(event) => update("condition", event.target.value)} /></label>
           <label className="field"><span>分类</span><select required value={form.categoryId || ""} onChange={(event) => update("categoryId", Number(event.target.value))}><option value="">请选择分类</option>{categories.map(({ node, depth }) => <option key={node.id} value={node.id}>{"　".repeat(depth)}{node.name}</option>)}</select></label>
           <label className="field"><span>价格（分）</span><input min="0" required type="number" value={form.price} onChange={(event) => update("price", Number(event.target.value))} /></label>
           <label className="field"><span>主图地址</span><input maxLength={1024} required value={form.mainImageUrl} onChange={(event) => update("mainImageUrl", event.target.value)} /></label>
