@@ -583,6 +583,29 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void getOwnPersonalOrderPage_returnsCompletedSoldOrderWithBuyerSnapshot() {
+        CommerceOrderDO order = new CommerceOrderDO().setId(9003L).setOrderNo("C-personal-completed")
+                .setMemberUserId(202L).setSellerType(2).setSellerUserId(101L)
+                .setStatus(OrderStatusEnum.COMPLETED.getStatus()).setItemCount(1)
+                .setPayableAmount(1250L).setReceiverName("Buyer")
+                .setReceiverDetailAddress("Completed snapshot");
+        when(orderMapper.selectPagePersonalOwned(any(MerchantOrderPageReqVO.class), eq(101L)))
+                .thenReturn(new PageResult<>(List.of(order), 1L));
+        when(orderItemMapper.selectListByOrderId(9003L)).thenReturn(List.of());
+        when(memberUserApi.getUser(202L)).thenReturn(new MemberUserRespDTO().setId(202L)
+                .setNickname("Buyer").setMobile("13800000000"));
+
+        PageResult<PersonalSellerOrderRespVO> result = service.getOwnPersonalOrderPage(101L,
+                new MerchantOrderPageReqVO().setStatus(OrderStatusEnum.COMPLETED.getStatus()));
+
+        assertEquals(1L, result.getTotal());
+        assertEquals(OrderStatusEnum.COMPLETED.getStatus(), result.getList().get(0).getStatus());
+        assertEquals("Buyer", result.getList().get(0).getBuyerNickname());
+        assertEquals("Completed snapshot", result.getList().get(0).getReceiverDetailAddress());
+        verify(orderMapper).selectPagePersonalOwned(any(MerchantOrderPageReqVO.class), eq(101L));
+    }
+
+    @Test
     void shipPersonalOrder_scopesBySellerAndMovesOnlyPendingOrder() {
         CommerceOrderDO order = new CommerceOrderDO().setId(9002L).setSellerType(2).setSellerUserId(101L)
                 .setStatus(OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus());

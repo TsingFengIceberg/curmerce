@@ -24,6 +24,7 @@ public interface OrderService {
     PageResult<MerchantOrderRespVO> getOwnOrderPage(MerchantOrderPageReqVO reqVO);
     PageResult<MerchantOrderRespVO> getAdminOrderPage(CommerceOrderPageReqVO reqVO);
     void shipOwnOrder(MerchantOrderShipReqVO reqVO);
+    PageResult<PersonalSellerOrderRespVO> getOwnPersonalOrderPage(Long sellerUserId, MerchantOrderPageReqVO reqVO);
     PageResult<PersonalSellerOrderRespVO> getOwnPersonalPendingShipmentPage(Long sellerUserId, MerchantOrderPageReqVO reqVO);
     void shipPersonalOrder(Long sellerUserId, MerchantOrderShipReqVO reqVO);
 }

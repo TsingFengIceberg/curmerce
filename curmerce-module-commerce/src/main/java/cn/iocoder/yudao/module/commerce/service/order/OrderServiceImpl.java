@@ -389,6 +389,15 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
+    public PageResult<PersonalSellerOrderRespVO> getOwnPersonalOrderPage(Long sellerUserId,
+                                                                           MerchantOrderPageReqVO reqVO) {
+        memberUserApi.validateActiveUser(sellerUserId);
+        PageResult<CommerceOrderDO> page = orderMapper.selectPagePersonalOwned(reqVO, sellerUserId);
+        return new PageResult<>(page.getList().stream().map(this::toPersonalSellerResponse).toList(), page.getTotal());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PageResult<MerchantOrderRespVO> getAdminOrderPage(CommerceOrderPageReqVO reqVO) {
         PageResult<CommerceOrderDO> page = orderMapper.selectPageAdmin(reqVO);
         return new PageResult<>(page.getList().stream().map(this::toMerchantResponse).toList(), page.getTotal());

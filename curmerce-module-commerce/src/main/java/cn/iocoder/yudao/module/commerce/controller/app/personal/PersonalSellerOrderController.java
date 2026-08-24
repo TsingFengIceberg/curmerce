@@ -34,6 +34,13 @@ public class PersonalSellerOrderController {
         return success(orderService.getOwnPersonalPendingShipmentPage(getLoginUserId(), reqVO));
     }
 
+    @GetMapping("/page")
+    @Operation(summary = "查询自己的个人商品卖出订单")
+    public CommonResult<PageResult<PersonalSellerOrderRespVO>> page(
+            @Valid MerchantOrderPageReqVO reqVO) {
+        return success(orderService.getOwnPersonalOrderPage(getLoginUserId(), reqVO));
+    }
+
     @PutMapping("/ship")
     @Operation(summary = "发货自己的个人商品订单")
     public CommonResult<Boolean> ship(@Valid @RequestBody MerchantOrderShipReqVO reqVO) {

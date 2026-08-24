@@ -102,7 +102,7 @@ export default function OrdersPage() {
           <h1>我的订单</h1>
           <p>查看订单状态、发货信息，并完成模拟支付和确认收货。</p>
         </div>
-        <Link className="button button--secondary" href="/catalog">继续购物</Link>
+        <div className="inline-actions"><Link className="button button--secondary" href="/personal/orders">卖出订单</Link><Link className="button button--secondary" href="/catalog">继续购物</Link></div>
       </div>
       {message ? <Notice tone="success">{message}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}

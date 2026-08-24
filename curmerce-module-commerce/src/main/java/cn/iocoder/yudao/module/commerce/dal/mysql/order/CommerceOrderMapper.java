@@ -97,6 +97,19 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
                 .orderByDesc(CommerceOrderDO::getId));
     }
 
+    default PageResult<CommerceOrderDO> selectPagePersonalOwned(MerchantOrderPageReqVO req,
+                                                                 Long sellerUserId) {
+        return selectPage(req, new LambdaQueryWrapperX<CommerceOrderDO>()
+                .eq(CommerceOrderDO::getSellerType, 2)
+                .eq(CommerceOrderDO::getSellerUserId, sellerUserId)
+                .isNull(CommerceOrderDO::getMerchantId)
+                .isNull(CommerceOrderDO::getStoreId)
+                .eq(req.getStatus() != null, CommerceOrderDO::getStatus, req.getStatus())
+                .like(req.getOrderNo() != null && !req.getOrderNo().isBlank(),
+                        CommerceOrderDO::getOrderNo, req.getOrderNo())
+                .orderByDesc(CommerceOrderDO::getId));
+    }
+
     default PageResult<CommerceOrderDO> selectPageAdmin(CommerceOrderPageReqVO req) {
         return selectPage(req, new LambdaQueryWrapperX<CommerceOrderDO>()
                 .eqIfPresent(CommerceOrderDO::getStatus, req.getStatus())

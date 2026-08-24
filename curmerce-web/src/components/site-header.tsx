@@ -93,7 +93,7 @@ export function SiteHeader() {
           {loggedIn ? <Link href="/personal/listings">我的闲置</Link> : null}
           {loggedIn ? <Link href="/community/following">关注 Feed</Link> : null}
           {loggedIn ? <Link href="/community/favorites">我的收藏</Link> : null}
-          {loggedIn ? <Link href="/personal/orders">卖家发货</Link> : null}
+          {loggedIn ? <Link href="/personal/orders">卖出订单</Link> : null}
           {platformAdmin ? (
             <>
               <Link href="/admin/merchants">商家审核</Link>

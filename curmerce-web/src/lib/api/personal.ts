@@ -34,6 +34,12 @@ export const personalApi = {
     const params = new URLSearchParams({ pageNo: String(input.pageNo), pageSize: String(input.pageSize) });
     return appApi<ApiPage<PersonalSellerOrder>>(`/commerce/personal-seller/order/page-pending-shipment?${params.toString()}`);
   },
+  orderPage(input: { pageNo: number; pageSize: number; status?: number; orderNo?: string }) {
+    const params = new URLSearchParams({ pageNo: String(input.pageNo), pageSize: String(input.pageSize) });
+    if (input.status !== undefined) params.set("status", String(input.status));
+    if (input.orderNo?.trim()) params.set("orderNo", input.orderNo.trim());
+    return appApi<ApiPage<PersonalSellerOrder>>(`/commerce/personal-seller/order/page?${params.toString()}`);
+  },
   ship(input: { id: number; logisticsCompany: string; trackingNo: string }) {
     return appApi<boolean>("/commerce/personal-seller/order/ship", { method: "PUT", body: jsonBody(input) });
   },
