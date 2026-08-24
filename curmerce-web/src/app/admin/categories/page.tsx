@@ -132,7 +132,7 @@ export default function AdminCategoriesPage() {
     setMessage(null);
     try {
       await adminCategoryApi.updateStatus({ id: node.id, status: node.status === 1 ? 0 : 1 });
-      setMessage(node.status === 1 ? "分类已停用" : "分类已启用");
+      setMessage(node.status === 0 ? "分类已停用" : "分类已启用");
       await loadCategories();
     } catch (cause) {
       handleError(cause, "更新分类状态失败");
@@ -163,7 +163,7 @@ export default function AdminCategoriesPage() {
             {flatCategories.map(({ node, depth }) => (
               <div className={`category-admin-row${editing?.id === node.id ? " category-admin-row--active" : ""}`} key={node.id} style={{ paddingLeft: `${16 + depth * 22}px` }}>
                 <div className="category-admin-row__name"><span className="category-admin-row__branch">{depth > 0 ? "↳" : "●"}</span><div><strong>{node.name}</strong><small>{node.code} · 排序 {node.sort}</small></div></div>
-                <div className="inline-actions"><span className={`tag category-status category-status--${node.status}`}>{node.status === 1 ? "启用" : "停用"}</span><button className="text-button" type="button" onClick={() => startEdit(node)}>编辑</button><button className="text-button" disabled={busy} type="button" onClick={() => void toggleStatus(node)}>{node.status === 1 ? "停用" : "启用"}</button></div>
+                <div className="inline-actions"><span className={`tag category-status category-status--${node.status}`}>{node.status === 0 ? "启用" : "停用"}</span><button className="text-button" type="button" onClick={() => startEdit(node)}>编辑</button><button className="text-button" disabled={busy} type="button" onClick={() => void toggleStatus(node)}>{node.status === 0 ? "停用" : "启用"}</button></div>
               </div>
             ))}
           </div>

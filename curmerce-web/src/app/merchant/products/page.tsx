@@ -37,7 +37,7 @@ interface ProductForm {
   skus: SkuForm[];
 }
 
-const emptySku: SkuForm = { code: "", specs: "", imageUrl: "", price: "0", marketPrice: "0", stock: "0", status: "1", sort: "0" };
+const emptySku: SkuForm = { code: "", specs: "", imageUrl: "", price: "0", marketPrice: "0", stock: "0", status: "0", sort: "0" };
 const emptyForm: ProductForm = { code: "", categoryId: "", name: "", subtitle: "", mainImageUrl: "", imageUrls: "", description: "", sort: "0", skus: [{ ...emptySku }] };
 
 const auditLabels: Record<number, string> = { 0: "草稿", 1: "待审核", 2: "审核通过", 3: "已驳回" };
@@ -265,7 +265,7 @@ export default function MerchantProductsPage() {
                 <label className="field"><span>价格（分）</span><input min="0" onChange={(event) => updateSku(index, "price", event.target.value)} type="number" value={sku.price} /></label>
                 <label className="field"><span>市场价（分）</span><input min="0" onChange={(event) => updateSku(index, "marketPrice", event.target.value)} type="number" value={sku.marketPrice} /></label>
                 <label className="field"><span>库存</span><input min="0" onChange={(event) => updateSku(index, "stock", event.target.value)} type="number" value={sku.stock} /></label>
-                <label className="field"><span>状态</span><select onChange={(event) => updateSku(index, "status", event.target.value)} value={sku.status}><option value="1">启用</option><option value="0">停用</option></select></label>
+                <label className="field"><span>状态</span><select onChange={(event) => updateSku(index, "status", event.target.value)} value={sku.status}><option value="0">启用</option><option value="1">停用</option></select></label>
               </div>
             </div>
           ))}
