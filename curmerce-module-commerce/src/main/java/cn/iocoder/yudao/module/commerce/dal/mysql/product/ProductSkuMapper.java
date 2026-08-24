@@ -34,6 +34,18 @@ public interface ProductSkuMapper extends BaseMapperX<ProductSkuDO> {
                 .orderByAsc(ProductSkuDO::getId));
     }
 
+    default List<ProductSkuDO> selectListByProductIdsAndMerchantId(Collection<Long> productIds, Long merchantId) {
+        if (productIds == null || productIds.isEmpty()) {
+            return List.of();
+        }
+        return selectList(new LambdaQueryWrapper<ProductSkuDO>()
+                .in(ProductSkuDO::getProductId, productIds)
+                .eq(ProductSkuDO::getMerchantId, merchantId)
+                .orderByAsc(ProductSkuDO::getProductId)
+                .orderByAsc(ProductSkuDO::getSort)
+                .orderByAsc(ProductSkuDO::getId));
+    }
+
     default List<ProductSkuDO> selectListByProductId(Long productId) {
         return selectList(new LambdaQueryWrapper<ProductSkuDO>()
                 .eq(ProductSkuDO::getProductId, productId)

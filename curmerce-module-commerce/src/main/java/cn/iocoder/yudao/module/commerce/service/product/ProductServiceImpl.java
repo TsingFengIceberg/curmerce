@@ -167,8 +167,16 @@ public class ProductServiceImpl implements ProductService {
     public PageResult<ProductAggregate> getOwnProductPage(ProductPageOwnReqVO reqVO) {
         MerchantAccessContext context = requireEnabledStore(reqVO.getStoreId());
         PageResult<ProductDO> page = productMapper.selectPageOwn(reqVO, context.merchant().getId());
-        return new PageResult<>(page.getList().stream().map(product -> new ProductAggregate(product, List.of())).toList(),
-                page.getTotal());
+        List<Long> productIds = page.getList().stream().map(ProductDO::getId).toList();
+        Map<Long, List<ProductSkuDO>> skusByProductId = new HashMap<>();
+        for (ProductSkuDO sku : skuMapper.selectListByProductIdsAndMerchantId(productIds,
+                context.merchant().getId())) {
+            skusByProductId.computeIfAbsent(sku.getProductId(), ignored -> new ArrayList<>()).add(sku);
+        }
+        return new PageResult<>(page.getList().stream()
+                .map(product -> new ProductAggregate(product,
+                        skusByProductId.getOrDefault(product.getId(), List.of())))
+                .toList(), page.getTotal());
     }
 
     @Override

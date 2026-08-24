@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductCreateOwnReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductIdReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductPageOwnReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductRejectReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductSkuSaveReqVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductCategoryDO;
@@ -27,6 +28,8 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
 
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.*;
@@ -78,6 +81,23 @@ class ProductServiceImplTest {
         ServiceException error = assertThrows(ServiceException.class, () -> service.updateOwnProduct(updateRequest()));
         assertEquals(PRODUCT_NOT_EXISTS_OR_ACCESS_DENIED.getCode(), error.getCode());
         verifyNoInteractions(skuMapper);
+    }
+
+    @Test
+    void ownProductPage_includesSkusInListResponse() {
+        when(merchantAccessService.requireApprovedOwner()).thenReturn(
+                context(7L, 8L, CommonStatusEnum.ENABLE.getStatus()));
+        ProductDO product = baseProduct();
+        when(productMapper.selectPageOwn(any(ProductPageOwnReqVO.class), eq(7L)))
+                .thenReturn(new PageResult<>(List.of(product), 1L));
+        when(skuMapper.selectListByProductIdsAndMerchantId(List.of(10L), 7L))
+                .thenReturn(List.of(validSku(11L), validSku(12L).setCode("sku_two")));
+
+        PageResult<ProductAggregate> result = service.getOwnProductPage(new ProductPageOwnReqVO());
+
+        assertEquals(1L, result.getTotal());
+        assertEquals(2, result.getList().get(0).skus().size());
+        verify(skuMapper).selectListByProductIdsAndMerchantId(List.of(10L), 7L);
     }
 
     @Test
