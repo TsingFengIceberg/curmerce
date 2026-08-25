@@ -2,7 +2,7 @@
 
 `generate-foundation-schema.sh` extracts only MySQL table definitions for the imported `system` and `infra` modules from the pinned `ruoyi-vue-pro` reference submodule. It deliberately excludes all upstream records because that dataset contains credentials and private-looking demonstration data.
 
-The generated schema is written to `target/generated-db/` and remains untracked. Apply `foundation-seed.sql` afterward, replacing the two placeholders with a locally generated BCrypt administrator password hash and OAuth client secret. Never commit those local values.
+The generated schema is written to `target/generated-db/` and remains untracked. Apply `foundation-seed.sql` afterward, replacing its three placeholders with a locally generated BCrypt administrator password hash, OAuth client secret, and the loopback API base URL used to serve uploaded files, for example `http://127.0.0.1:48080`. The file base URL must use the same port as `CURMERCE_SERVER_PORT`. Never commit those local values.
 
 ## Merchant onboarding migration
 

@@ -45,10 +45,17 @@ export function formatRefundStatus(status?: number | null) {
   return status === null || status === undefined ? "无售后" : REFUND_STATUS_LABELS[status] ?? `状态 ${status}`;
 }
 
+export function toDateTimeMillis(value?: string | number | null) {
+  if (value === null || value === undefined || value === "") return Number.NaN;
+  const normalized = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
+  return new Date(normalized).getTime();
+}
+
 export function formatDateTime(value?: string | number | null) {
   if (value === null || value === undefined || value === "") return "—";
-  const date = typeof value === "number" ? new Date(value) : new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
+  const millis = toDateTimeMillis(value);
+  if (Number.isNaN(millis)) return String(value);
+  const date = new Date(millis);
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
     month: "2-digit",

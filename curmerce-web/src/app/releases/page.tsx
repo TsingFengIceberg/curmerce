@@ -6,14 +6,24 @@ import { Notice } from "@/components/notice";
 import { releaseApi } from "@/lib/api/release";
 import { CurmerceApiError } from "@/lib/api/client";
 import { getAccessToken } from "@/lib/auth/storage";
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatDateTime, formatMoney, toDateTimeMillis } from "@/lib/format";
 import { memberApi } from "@/lib/api/member";
 import type { ReleaseCampaign } from "@/lib/types/api";
 
 const labels: Record<number, string> = { 10: "待开始", 20: "进行中", 30: "已结束", 40: "已取消" };
 function isOpen(campaign: ReleaseCampaign) {
   const now = Date.now();
-  return (campaign.status === 10 || campaign.status === 20) && new Date(String(campaign.startTime)).getTime() <= now && now < new Date(String(campaign.endTime)).getTime();
+  return (campaign.status === 10 || campaign.status === 20)
+    && toDateTimeMillis(campaign.startTime) <= now
+    && now < toDateTimeMillis(campaign.endTime);
+}
+
+function purchaseLabel(campaign: ReleaseCampaign, available: boolean, open: boolean) {
+  if (!available) return "已售罄";
+  const now = Date.now();
+  if (now < toDateTimeMillis(campaign.startTime)) return "尚未开始";
+  if (campaign.status === 30 || campaign.status === 40 || now >= toDateTimeMillis(campaign.endTime)) return "已结束";
+  return open ? "立即购买 1 件" : "暂不可购买";
 }
 
 export default function ReleasesPage() {
@@ -46,6 +56,6 @@ export default function ReleasesPage() {
     {message ? <Notice tone="success">{message}</Notice> : null}{error ? <Notice>{error}</Notice> : null}
     {loading ? <p className="empty-state">活动加载中…</p> : null}
     {!loading && items.length === 0 ? <p className="empty-state">当前没有公开的限时发售活动。</p> : null}
-    <div className="event-grid">{items.map((campaign) => { const available = campaign.items.some((item) => item.stock > 0); const item = campaign.items[0]; const open = isOpen(campaign); return <article className="event-card" key={campaign.id}><div className="event-card__top"><span className="tag">{labels[campaign.status] ?? `状态 ${campaign.status}`}</span><span className="event-card__date">{formatDateTime(campaign.startTime)} - {formatDateTime(campaign.endTime)}</span></div><h2>{campaign.name}</h2><p>每人限购 {campaign.perUserLimit} 件 · {campaign.items.length} 个活动 SKU</p>{item ? <div className="event-card__price"><strong>{formatMoney(item.campaignPrice)}</strong><span>剩余 {item.stock} 件 · 已售 {item.soldCount}</span></div> : null}<button className="button button--primary button--full" disabled={!available || busyId === campaign.id || !open} type="button" onClick={() => void purchase(campaign)}>{busyId === campaign.id ? "提交中…" : !open && campaign.status === 10 ? "尚未开始" : available && open ? "立即购买 1 件" : "已售罄"}</button></article>; })}</div>
+    <div className="event-grid">{items.map((campaign) => { const available = campaign.items.some((item) => item.stock > 0); const item = campaign.items[0]; const open = isOpen(campaign); return <article className="event-card" key={campaign.id}><div className="event-card__top"><span className="tag">{labels[campaign.status] ?? `状态 ${campaign.status}`}</span><span className="event-card__date">{formatDateTime(campaign.startTime)} - {formatDateTime(campaign.endTime)}</span></div><h2>{campaign.name}</h2><p>每人限购 {campaign.perUserLimit} 件 · {campaign.items.length} 个活动 SKU</p>{item ? <div className="event-card__price"><strong>{formatMoney(item.campaignPrice)}</strong><span>剩余 {item.stock} 件 · 已售 {item.soldCount}</span></div> : null}<button className="button button--primary button--full" disabled={!available || busyId === campaign.id || !open} type="button" onClick={() => void purchase(campaign)}>{busyId === campaign.id ? "提交中…" : purchaseLabel(campaign, available, open)}</button></article>; })}</div>
   </section>;
 }

@@ -19,7 +19,16 @@ export const adminAuctionApi = {
     if (input.name?.trim()) params.set("name", input.name.trim());
     return adminApi<ApiPage<AuctionSession>>(`/commerce/auction/page?${params}`);
   },
-  create(input: AuctionCreateInput) { return adminApi<number>("/commerce/auction/create", { method: "POST", body: jsonBody(input) }); },
+  create(input: AuctionCreateInput) {
+    return adminApi<number>("/commerce/auction/create", {
+      method: "POST",
+      body: jsonBody({
+        ...input,
+        startTime: new Date(input.startTime).getTime(),
+        endTime: new Date(input.endTime).getTime(),
+      }),
+    });
+  },
   publish(id: number) { return adminApi<boolean>(`/commerce/auction/publish?id=${id}`, { method: "PUT" }); },
   cancel(id: number) { return adminApi<boolean>(`/commerce/auction/cancel?id=${id}`, { method: "PUT" }); },
   end(id: number) { return adminApi<boolean>(`/commerce/auction/end?id=${id}`, { method: "PUT" }); },

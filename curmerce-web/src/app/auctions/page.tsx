@@ -7,11 +7,11 @@ import { auctionApi } from "@/lib/api/auction";
 import { CurmerceApiError } from "@/lib/api/client";
 import { getAccessToken } from "@/lib/auth/storage";
 import { memberApi } from "@/lib/api/member";
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatDateTime, formatMoney, toDateTimeMillis } from "@/lib/format";
 import type { AuctionSession, MemberAddress } from "@/lib/types/api";
 
 const labels: Record<number, string> = { 10: "待开始", 20: "进行中", 30: "已结束", 40: "已取消" };
-function isOpen(session: AuctionSession) { const now = Date.now(); return (session.status === 10 || session.status === 20) && new Date(String(session.startTime)).getTime() <= now && now < new Date(String(session.endTime)).getTime(); }
+function isOpen(session: AuctionSession) { const now = Date.now(); return (session.status === 10 || session.status === 20) && toDateTimeMillis(session.startTime) <= now && now < toDateTimeMillis(session.endTime); }
 
 export default function AuctionsPage() {
   const [items, setItems] = useState<AuctionSession[]>([]); const [addresses, setAddresses] = useState<MemberAddress[]>([]);

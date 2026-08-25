@@ -13,7 +13,7 @@ export CURMERCE_LOG_FILE=/tmp/curmerce-yudao-server-48082.log
 java -jar yudao-server/target/yudao-server.jar --spring.profiles.active=local
 ```
 
-如果 `48082` 已被占用，换用其他大于 `1024` 的本地端口，并同步设置前端 `NEXT_PUBLIC_API_BASE_URL`。不要终止其他用户已经启动的后端进程。
+初始化全新数据库时，将 `foundation-seed.sql` 中的 `__CURMERCE_FILE_BASE_URL__` 替换为这里实际使用的回环 API 地址，例如 `http://127.0.0.1:48082`。如果 `48082` 已被占用，换用其他大于 `1024` 的本地端口，并同步设置文件存储地址和前端 `NEXT_PUBLIC_API_BASE_URL`。不要终止其他用户已经启动的后端进程。
 
 ## 前端
 

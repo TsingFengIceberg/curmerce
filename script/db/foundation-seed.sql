@@ -31,3 +31,11 @@ VALUES
   (1, 'default', '__CURMERCE_OAUTH_CLIENT_SECRET__', 'Curmerce Local Client', '',
    'Local first-party client used by administrator login', 0, 1800, 2592000, '[]',
    '["password","refresh_token"]', '[]', '[]', '[]', '[]', '{}', 'bootstrap', 'bootstrap', b'0');
+
+INSERT INTO infra_file_config
+  (id, name, storage, remark, master, config, creator, updater, deleted)
+VALUES
+  (1, 'Curmerce Local Database File Storage', 1,
+   'Local development storage; replace with object storage before production use', b'1',
+   '{"@class":"cn.iocoder.yudao.module.infra.framework.file.core.client.db.DBFileClientConfig","domain":"__CURMERCE_FILE_BASE_URL__"}',
+   'bootstrap', 'bootstrap', b'0');

@@ -82,6 +82,16 @@ export default function MerchantAuctionsPage() {
       setError("请完整填写拍卖名称、商品、SKU 和时间");
       return;
     }
+    const startTime = new Date(form.startTime).getTime();
+    const endTime = new Date(form.endTime).getTime();
+    if (!Number.isFinite(startTime) || startTime <= Date.now()) {
+      setError("拍卖开始时间必须晚于当前时间");
+      return;
+    }
+    if (!Number.isFinite(endTime) || endTime <= startTime) {
+      setError("拍卖结束时间必须晚于开始时间");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
