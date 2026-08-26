@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Notice } from "@/components/notice";
+import { MediaImage } from "@/components/media-image";
 import { ProductCard } from "@/components/product-card";
 import { EmptyState } from "@/components/empty-state";
 import { communityApi } from "@/lib/api/community";
@@ -13,6 +14,7 @@ import { assetUrl, CurmerceApiError } from "@/lib/api/client";
 import { formatMoney, formatStock } from "@/lib/format";
 import { productFavoriteApi } from "@/lib/api/product-favorite";
 import { getAccessToken } from "@/lib/auth/storage";
+import { currentLocation, loginPath } from "@/lib/auth/guards";
 import type { CommunityPost, PublicProductDetail, PublicProductSku, PublicProductSummary } from "@/lib/types/api";
 import { BadgeCheck, Heart, RotateCcw, ShieldCheck, Store, Truck } from "lucide-react";
 
@@ -111,7 +113,7 @@ export default function ProductDetailPage() {
       setMessage("已加入购物车");
     } catch (cause) {
       if (cause instanceof CurmerceApiError && cause.status === 401) {
-        router.push("/login");
+        router.push(loginPath("/login", currentLocation()));
         return;
       }
       setError(cause instanceof CurmerceApiError ? cause.message : "加入购物车失败");
@@ -123,7 +125,7 @@ export default function ProductDetailPage() {
   async function toggleFavorite() {
     if (!product) return;
     if (!getAccessToken()) {
-      router.push("/login");
+      router.push(loginPath("/login", currentLocation()));
       return;
     }
     setFavoritePending(true);
@@ -152,13 +154,13 @@ export default function ProductDetailPage() {
       <div className="product-detail">
         <div className="product-detail__visual">
           <div className="product-detail__main-image">
-            {currentImage ? <img src={currentImage} alt={product.name} /> : <span>CURMERCE</span>}
+            <MediaImage alt={product.name} fallback={<span>CURMERCE</span>} src={currentImage} />
           </div>
           {gallery.length > 1 ? (
             <div className="product-detail__thumbnails">
               {gallery.map((image) => {
                 const source = assetUrl(image);
-                return source ? <button className={source === currentImage ? "product-thumbnail product-thumbnail--active" : "product-thumbnail"} key={image} type="button" onClick={() => setSelectedImage(image)}><img src={source} alt="切换商品展示图" /></button> : null;
+                return source ? <button className={source === currentImage ? "product-thumbnail product-thumbnail--active" : "product-thumbnail"} key={image} type="button" onClick={() => setSelectedImage(image)}><MediaImage src={source} alt="切换商品展示图" /></button> : null;
               })}
             </div>
           ) : null}

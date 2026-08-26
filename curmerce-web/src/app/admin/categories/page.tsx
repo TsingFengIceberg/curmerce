@@ -6,11 +6,14 @@ import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Drawer } from "@/components/drawer";
 import { EmptyState } from "@/components/empty-state";
+import { FormErrorSummary, type FormIssue } from "@/components/form-error-summary";
 import { ImageUploader } from "@/components/image-uploader";
+import { MediaImage } from "@/components/media-image";
 import { Notice } from "@/components/notice";
 import { adminCategoryApi } from "@/lib/api/admin-product";
 import { assetUrl, CurmerceApiError } from "@/lib/api/client";
 import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
+import { useUnsavedClose } from "@/hooks/use-unsaved-close";
 import type { ProductCategoryNode } from "@/lib/types/api";
 
 type CategoryForm = { id?: number; parentId: string; code: string; name: string; imageUrl: string; sort: string };
@@ -31,6 +34,8 @@ export default function AdminCategoriesPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<ProductCategoryNode | null>(null);
   const [form, setForm] = useState<CategoryForm>(emptyForm);
+  const [formBaseline, setFormBaseline] = useState("");
+  const [formIssues, setFormIssues] = useState<FormIssue[]>([]);
   const [dragId, setDragId] = useState<number | null>(null);
   const [focusedId, setFocusedId] = useState<number | null>(null);
   const [pendingStatus, setPendingStatus] = useState<ProductCategoryNode | null>(null);
@@ -39,6 +44,8 @@ export default function AdminCategoriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const flatCategories = useMemo(() => flatten(categories), [categories]);
+  const dirty = editorOpen && JSON.stringify(form) !== formBaseline;
+  const unsaved = useUnsavedClose({ dirty, subject: "分类编辑内容", onDiscard: discardEditor });
 
   useEffect(() => {
     if (!getAdminAccessToken()) { router.replace("/merchant/login"); return; }
@@ -71,27 +78,44 @@ export default function AdminCategoriesPage() {
   }
 
   function openCreate(parent?: ProductCategoryNode) {
+    const next = { ...emptyForm, parentId: parent ? String(parent.id) : "", sort: String(parent?.children?.length ? Math.max(...parent.children.map((node) => node.sort)) + 10 : 0) };
     setEditing(null);
-    setForm({ ...emptyForm, parentId: parent ? String(parent.id) : "", sort: String(parent?.children?.length ? Math.max(...parent.children.map((node) => node.sort)) + 10 : 0) });
+    setForm(next);
+    setFormBaseline(JSON.stringify(next));
+    setFormIssues([]);
     setEditorOpen(true);
     setError(null);
   }
 
   function openEdit(node: ProductCategoryNode) {
+    const next = { id: node.id, parentId: node.parentId ? String(node.parentId) : "", code: node.code, name: node.name, imageUrl: node.imageUrl ?? "", sort: String(node.sort ?? 0) };
     setEditing(node);
-    setForm({ id: node.id, parentId: node.parentId ? String(node.parentId) : "", code: node.code, name: node.name, imageUrl: node.imageUrl ?? "", sort: String(node.sort ?? 0) });
+    setForm(next);
+    setFormBaseline(JSON.stringify(next));
+    setFormIssues([]);
     setEditorOpen(true);
     setError(null);
   }
 
+  function discardEditor() {
+    setEditorOpen(false);
+    setEditing(null);
+    setFormBaseline("");
+    setFormIssues([]);
+  }
+
   async function saveCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.name.trim() || !form.sort.trim() || (!editing && form.code.trim().length < 2)) {
-      setError("请填写分类名称、排序值和至少 2 个字符的分类识别码");
-      return;
-    }
+    const issues: FormIssue[] = [];
+    if (!editing && form.code.trim().length < 2) issues.push({ field: "category-code", message: "分类识别码至少需要 2 个字符" });
+    if (!form.name.trim()) issues.push({ field: "category-name", message: "请填写分类名称" });
+    if (!form.sort.trim() || !Number.isFinite(Number(form.sort)) || Number(form.sort) < 0) issues.push({ field: "category-sort", message: "排序值必须是大于或等于 0 的数字" });
     if (editing && form.parentId && collectDescendantIds(editing).includes(Number(form.parentId))) {
-      setError("父分类不能选择当前分类或其子分类");
+      issues.push({ field: "category-parent", message: "父分类不能选择当前分类或其子分类" });
+    }
+    setFormIssues(issues);
+    if (issues.length) {
+      setError("分类信息还有需要修正的字段");
       return;
     }
     setBusy(true);
@@ -101,7 +125,7 @@ export default function AdminCategoriesPage() {
       if (editing) await adminCategoryApi.update({ id: editing.id, parentId, name: form.name.trim(), imageUrl: form.imageUrl.trim(), sort: Number(form.sort) });
       else await adminCategoryApi.create({ parentId, code: form.code.trim(), name: form.name.trim(), imageUrl: form.imageUrl.trim(), sort: Number(form.sort) });
       setMessage(editing ? "商品分类已更新" : "商品分类已创建");
-      setEditorOpen(false);
+      discardEditor();
       await loadCategories();
     } catch (cause) {
       handle(cause, "保存商品分类失败");
@@ -167,8 +191,9 @@ export default function AdminCategoriesPage() {
         {!loading ? <div className="category-tree-list">{categories.map((node) => <CategoryTreeRow busy={busy} depth={0} expanded={expanded} focusedId={focusedId} key={node.id} node={node} onCreate={openCreate} onDrop={(targetId) => void reorder(targetId)} onEdit={openEdit} onStatus={setPendingStatus} onToggle={toggleExpanded} setDragId={setDragId} />)}</div> : null}
       </div>
 
-      <Drawer open={editorOpen} title={editing ? "编辑商品分类" : form.parentId ? "创建子分类" : "创建顶级分类"} description={editing ? editing.name : form.parentId ? `父分类：${flatCategories.find(({ node }) => node.id === Number(form.parentId))?.node.name ?? "—"}` : "顶级分类将直接展示在商城分类导航中。"} busy={busy} onClose={() => setEditorOpen(false)}><form className="drawer-form" onSubmit={saveCategory}>{!editing ? <label className="field"><span>分类识别码</span><input maxLength={32} minLength={2} placeholder="例如 hobby-camera" required value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} /></label> : <div className="form-readonly">分类识别码：{editing.code}</div>}<label className="field"><span>父分类</span><select value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))}><option value="">顶级分类</option>{flatCategories.filter(({ node }) => !editing || !collectDescendantIds(editing).includes(node.id)).map(({ node, depth }) => <option key={node.id} value={node.id}>{"　".repeat(depth)}{node.name}</option>)}</select></label><label className="field"><span>分类名称</span><input maxLength={64} required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label><div className="field"><span>分类图片</span><ImageUploader audience="admin" directory="category" maxCount={1} value={form.imageUrl ? [form.imageUrl] : []} onChange={(urls) => setForm((current) => ({ ...current, imageUrl: urls[0] ?? "" }))} /></div><label className="field"><span>排序值</span><input min="0" required type="number" value={form.sort} onChange={(event) => setForm((current) => ({ ...current, sort: event.target.value }))} /><small className="field-help">数值越小越靠前，也可保存后在分类树中直接拖动。</small></label><div className="drawer-form__actions"><button className="button button--secondary" disabled={busy} type="button" onClick={() => setEditorOpen(false)}>取消</button><button className="button button--primary" disabled={busy} type="submit">{busy ? "保存中…" : editing ? "保存修改" : "创建分类"}</button></div></form></Drawer>
+      <Drawer open={editorOpen} title={editing ? "编辑商品分类" : form.parentId ? "创建子分类" : "创建顶级分类"} description={editing ? editing.name : form.parentId ? `父分类：${flatCategories.find(({ node }) => node.id === Number(form.parentId))?.node.name ?? "—"}` : "顶级分类将直接展示在商城分类导航中。"} busy={busy} onClose={unsaved.requestClose}><form className="drawer-form" noValidate onSubmit={saveCategory}><FormErrorSummary issues={formIssues} />{!editing ? <label className="field"><span>分类识别码</span><input id="category-code" maxLength={32} minLength={2} placeholder="例如 hobby-camera" required value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} /></label> : <div className="form-readonly">分类识别码：{editing.code}</div>}<label className="field"><span>父分类</span><select id="category-parent" value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))}><option value="">顶级分类</option>{flatCategories.filter(({ node }) => !editing || !collectDescendantIds(editing).includes(node.id)).map(({ node, depth }) => <option key={node.id} value={node.id}>{"　".repeat(depth)}{node.name}</option>)}</select></label><label className="field"><span>分类名称</span><input id="category-name" maxLength={64} required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label><div className="field"><span>分类图片</span><ImageUploader audience="admin" directory="category" maxCount={1} value={form.imageUrl ? [form.imageUrl] : []} onChange={(urls) => setForm((current) => ({ ...current, imageUrl: urls[0] ?? "" }))} /></div><label className="field"><span>排序值</span><input id="category-sort" min="0" required type="number" value={form.sort} onChange={(event) => setForm((current) => ({ ...current, sort: event.target.value }))} /><small className="field-help">数值越小越靠前，也可保存后在分类树中直接拖动。</small></label><div className="drawer-form__actions"><button className="button button--secondary" disabled={busy} type="button" onClick={unsaved.requestClose}>取消</button><button className="button button--primary" disabled={busy} type="submit">{busy ? "保存中…" : editing ? "保存修改" : "创建分类"}</button></div></form></Drawer>
       <ConfirmDialog open={Boolean(pendingStatus)} title={pendingStatus?.status === 0 ? "停用商品分类" : "启用商品分类"} description={pendingStatus?.status === 0 ? `停用“${pendingStatus?.name ?? ""}”后，新商品不能再选择该分类；已有商品不会被删除。` : `启用“${pendingStatus?.name ?? ""}”后，该分类可重新用于商品发布。`} confirmLabel={pendingStatus?.status === 0 ? "确认停用" : "确认启用"} dangerous={pendingStatus?.status === 0} busy={busy} onClose={() => setPendingStatus(null)} onConfirm={() => void toggleStatus()} />
+      {unsaved.confirmation}
     </section>
   );
 }
@@ -176,5 +201,5 @@ export default function AdminCategoriesPage() {
 function CategoryTreeRow({ node, depth, expanded, focusedId, busy, onToggle, onCreate, onEdit, onStatus, onDrop, setDragId }: { node: ProductCategoryNode; depth: number; expanded: Set<number>; focusedId: number | null; busy: boolean; onToggle: (id: number) => void; onCreate: (node: ProductCategoryNode) => void; onEdit: (node: ProductCategoryNode) => void; onStatus: (node: ProductCategoryNode) => void; onDrop: (id: number) => void; setDragId: (id: number | null) => void }) {
   const hasChildren = Boolean(node.children?.length);
   const open = expanded.has(node.id);
-  return <><div className={`category-tree-row${focusedId === node.id ? " category-tree-row--focused" : ""}`} draggable={!busy} onDragStart={() => setDragId(node.id)} onDragEnd={() => setDragId(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => onDrop(node.id)}><div className="category-tree-row__main" style={{ paddingLeft: `${10 + depth * 26}px` }}><button aria-label={open ? `折叠 ${node.name}` : `展开 ${node.name}`} className="category-tree-toggle" disabled={!hasChildren} type="button" onClick={() => onToggle(node.id)}>{hasChildren ? open ? <ChevronDown aria-hidden="true" size={16} /> : <ChevronRight aria-hidden="true" size={16} /> : <span />}</button><GripVertical aria-hidden="true" className="category-tree-drag" size={16} />{assetUrl(node.imageUrl) ? <img alt="" src={assetUrl(node.imageUrl) ?? ""} /> : <span className="category-tree-image"><ImageIcon aria-hidden="true" size={15} /></span>}<div><strong>{node.name}</strong><small>{node.code} · 排序 {node.sort}</small></div></div><span className={`tag category-status category-status--${node.status}`}>{node.status === 0 ? "启用" : "停用"}</span><div className="listing-table__actions"><button aria-label={`添加 ${node.name} 的子分类`} className="icon-button" title="添加子分类" type="button" onClick={() => onCreate(node)}><Plus aria-hidden="true" size={16} /></button><button aria-label={`编辑 ${node.name}`} className="icon-button" title="编辑分类" type="button" onClick={() => onEdit(node)}><Pencil aria-hidden="true" size={16} /></button><button className={node.status === 0 ? "text-button text-button--danger" : "text-button"} disabled={busy} type="button" onClick={() => onStatus(node)}>{node.status === 0 ? "停用" : "启用"}</button></div></div>{hasChildren && open ? node.children.map((child) => <CategoryTreeRow busy={busy} depth={depth + 1} expanded={expanded} focusedId={focusedId} key={child.id} node={child} onCreate={onCreate} onDrop={onDrop} onEdit={onEdit} onStatus={onStatus} onToggle={onToggle} setDragId={setDragId} />) : null}</>;
+  return <><div className={`category-tree-row${focusedId === node.id ? " category-tree-row--focused" : ""}`} draggable={!busy} onDragStart={() => setDragId(node.id)} onDragEnd={() => setDragId(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => onDrop(node.id)}><div className="category-tree-row__main" style={{ paddingLeft: `${10 + depth * 26}px` }}><button aria-label={open ? `折叠 ${node.name}` : `展开 ${node.name}`} className="category-tree-toggle" disabled={!hasChildren} type="button" onClick={() => onToggle(node.id)}>{hasChildren ? open ? <ChevronDown aria-hidden="true" size={16} /> : <ChevronRight aria-hidden="true" size={16} /> : <span />}</button><GripVertical aria-hidden="true" className="category-tree-drag" size={16} /><MediaImage alt="" fallback={<span className="category-tree-image"><ImageIcon aria-hidden="true" size={15} /></span>} src={assetUrl(node.imageUrl)} /><div><strong>{node.name}</strong><small>{node.code} · 排序 {node.sort}</small></div></div><span className={`tag category-status category-status--${node.status}`}>{node.status === 0 ? "启用" : "停用"}</span><div className="listing-table__actions"><button aria-label={`添加 ${node.name} 的子分类`} className="icon-button" title="添加子分类" type="button" onClick={() => onCreate(node)}><Plus aria-hidden="true" size={16} /></button><button aria-label={`编辑 ${node.name}`} className="icon-button" title="编辑分类" type="button" onClick={() => onEdit(node)}><Pencil aria-hidden="true" size={16} /></button><button className={node.status === 0 ? "text-button text-button--danger" : "text-button"} disabled={busy} type="button" onClick={() => onStatus(node)}>{node.status === 0 ? "停用" : "启用"}</button></div></div>{hasChildren && open ? node.children.map((child) => <CategoryTreeRow busy={busy} depth={depth + 1} expanded={expanded} focusedId={focusedId} key={child.id} node={child} onCreate={onCreate} onDrop={onDrop} onEdit={onEdit} onStatus={onStatus} onToggle={onToggle} setDragId={setDragId} />) : null}</>;
 }

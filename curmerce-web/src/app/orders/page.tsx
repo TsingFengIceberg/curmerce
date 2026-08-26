@@ -9,6 +9,7 @@ import { CopyButton } from "@/components/copy-button";
 import { EmptyState } from "@/components/empty-state";
 import { Notice } from "@/components/notice";
 import { Pagination } from "@/components/pagination";
+import { notifyWorkspaceBadgesChanged } from "@/components/workspace-shell";
 import { orderApi } from "@/lib/api/order";
 import { paymentApi } from "@/lib/api/payment";
 import { CurmerceApiError } from "@/lib/api/client";
@@ -76,6 +77,7 @@ export default function OrdersPage() {
     try {
       const payment = await paymentApi.create(order.id);
       await paymentApi.simulateCallback({ paymentNo: payment.paymentNo, callbackId: `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`, paidAmount: payment.amount });
+      notifyWorkspaceBadgesChanged();
       setMessage(`订单 ${order.orderNo} 已完成测试支付`);
       await Promise.all([loadOrders(), loadCounts()]);
     } catch (cause) { setError(cause instanceof CurmerceApiError ? cause.message : "测试支付失败"); }
@@ -87,7 +89,7 @@ export default function OrdersPage() {
     if (!order) return;
     setBusyId(order.id); setPendingCancel(null); setError(null); setMessage(null);
     try {
-      await orderApi.cancel(order.id); setMessage(`订单 ${order.orderNo} 已取消`);
+      await orderApi.cancel(order.id); setMessage(`订单 ${order.orderNo} 已取消`); notifyWorkspaceBadgesChanged();
       await Promise.all([loadOrders(), loadCounts()]);
     } catch (cause) { setError(cause instanceof CurmerceApiError ? cause.message : "取消订单失败"); }
     finally { setBusyId(null); }

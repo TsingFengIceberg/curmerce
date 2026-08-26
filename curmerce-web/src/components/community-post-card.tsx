@@ -1,7 +1,8 @@
 "use client";
 
-import { Bookmark, Heart, MessageCircle, PackageSearch, UserPlus } from "lucide-react";
+import { Bookmark, FileText, Heart, MessageCircle, PackageSearch, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { MediaImage } from "@/components/media-image";
 import { assetUrl } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import type { CommunityPost } from "@/lib/types/api";
@@ -10,10 +11,12 @@ export function CommunityPostCard({ post, reactionBusy = false, onFollow, onReac
   const author = post.authorNickname || `用户 ${post.authorUserId}`;
   return (
     <article className="community-card community-card--productized">
-      {post.mediaUrls?.[0] ? <Link className="community-card__cover" href={`/community/${post.id}`}><img src={assetUrl(post.mediaUrls[0]) ?? ""} alt={`${post.title}的封面`} /></Link> : null}
+      <Link className="community-card__cover" href={`/community/${post.id}`}>
+        <MediaImage alt={`${post.title}的封面`} fallback={<span className="community-card__cover-placeholder"><FileText aria-hidden="true" size={24} /><span>文字分享</span></span>} src={assetUrl(post.mediaUrls?.[0])} />
+      </Link>
       <div className="community-card__body">
         <div className="community-author-row">
-          <span className="community-avatar">{post.authorAvatar ? <img alt={`${author}的头像`} src={assetUrl(post.authorAvatar) ?? ""} /> : author.slice(0, 1)}</span>
+          <span className="community-avatar"><MediaImage alt={`${author}的头像`} fallback={author.slice(0, 1)} src={assetUrl(post.authorAvatar)} /></span>
           <span className="community-author-row__identity"><strong>{author}</strong><small>{formatDateTime(post.createTime)}</small></span>
           {onFollow && !post.followingAuthor ? <button aria-label={`关注 ${author}`} className="icon-button" title="关注作者" type="button" onClick={() => onFollow(post)}><UserPlus aria-hidden="true" size={15} /></button> : null}
         </div>

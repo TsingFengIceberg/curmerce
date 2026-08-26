@@ -3,6 +3,7 @@
 import { PackageSearch, Search } from "lucide-react";
 import { KeyboardEvent, useEffect, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
+import { MediaImage } from "@/components/media-image";
 import { Notice } from "@/components/notice";
 import { Pagination } from "@/components/pagination";
 import { adminProductApi } from "@/lib/api/admin-product";
@@ -63,7 +64,7 @@ export function MerchantProductPicker({ enabled, selected, excludedSkuIds = [], 
     return product.skus.filter((sku) => sku.id && sku.status === 0 && sku.stock > 0 && !excluded.has(sku.id)).length;
   }
 
-  const availableProducts = products.filter((product) => availableSkuCount(product) > 0 || product.id === selected?.id);
+  const availableProducts = products.filter((product) => (availableSkuCount(product) > 0 || product.id === selected?.id) && product.id !== selected?.id);
 
   return (
     <div className="merchant-product-picker">
@@ -75,7 +76,8 @@ export function MerchantProductPicker({ enabled, selected, excludedSkuIds = [], 
       {selected ? <div className="merchant-product-picker__selected"><span>已选择</span><ProductIdentity product={selected} skuCount={availableSkuCount(selected)} /></div> : null}
       {error ? <Notice>{error}</Notice> : null}
       {loading ? <div className="order-list-skeleton"><span /><span /></div> : null}
-      {!loading && !error && !availableProducts.length ? <EmptyState icon={<PackageSearch aria-hidden="true" size={21} />} title="没有可选商品" description={keyword ? "换一个商品名称继续搜索。" : "需要先准备已审核、已上架且有库存的商品。"} /> : null}
+      {!loading && !error && !availableProducts.length && !selected ? <EmptyState icon={<PackageSearch aria-hidden="true" size={21} />} title="没有可选商品" description={keyword ? "换一个商品名称继续搜索。" : "需要先准备已审核、已上架且有库存的商品。"} /> : null}
+      {!loading && !error && !availableProducts.length && selected ? <p className="product-picker-selected-note">当前商品已选定，可继续搜索以更换商品。</p> : null}
       {!loading && availableProducts.length ? <div className="merchant-product-picker__results">{availableProducts.map((product) => {
         const skuCount = availableSkuCount(product);
         const chosen = product.id === selected?.id;
@@ -88,5 +90,5 @@ export function MerchantProductPicker({ enabled, selected, excludedSkuIds = [], 
 
 function ProductIdentity({ product, skuCount }: { product: ProductAdmin; skuCount: number }) {
   const prices = product.skus.filter((sku) => sku.status === 0 && sku.stock > 0).map((sku) => sku.price);
-  return <span className="merchant-product-picker__identity">{assetUrl(product.mainImageUrl) ? <img alt="" src={assetUrl(product.mainImageUrl) ?? ""} /> : <i aria-hidden="true">C</i>}<span><strong>{product.name}</strong><small>{product.code} · {skuCount} 个可用 SKU{prices.length ? ` · ${formatMoney(Math.min(...prices))} 起` : ""}</small></span></span>;
+  return <span className="merchant-product-picker__identity"><MediaImage alt="" fallback={<i aria-hidden="true">C</i>} src={assetUrl(product.mainImageUrl)} /><span><strong>{product.name}</strong><small>{product.code} · {skuCount} 个可用 SKU{prices.length ? ` · ${formatMoney(Math.min(...prices))} 起` : ""}</small></span></span>;
 }

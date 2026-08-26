@@ -7,6 +7,7 @@ import { Drawer } from "@/components/drawer";
 import { EmptyState } from "@/components/empty-state";
 import { EventCountdown } from "@/components/event-countdown";
 import { Notice } from "@/components/notice";
+import { MediaImage } from "@/components/media-image";
 import { Pagination } from "@/components/pagination";
 import { releaseApi } from "@/lib/api/release";
 import { assetUrl, CurmerceApiError } from "@/lib/api/client";
@@ -115,7 +116,7 @@ export default function ReleasesPage() {
         const open = isOpen(campaign, now);
         const soldOut = !item || item.stock <= 0;
         return <article className="event-card event-card--release" key={campaign.id}>
-          <div className="event-card__visual">{item?.productImageUrl ? <img alt={item.productName ?? campaign.name} src={assetUrl(item.productImageUrl) ?? ""} /> : <span><ShoppingBag aria-hidden="true" size={30} /></span>}<span className="tag event-card__status">{labels[campaign.status] ?? `状态 ${campaign.status}`}</span></div>
+          <div className="event-card__visual"><MediaImage alt={item?.productName ?? campaign.name} fallback={<span><ShoppingBag aria-hidden="true" size={30} /></span>} src={assetUrl(item?.productImageUrl)} /><span className="tag event-card__status">{labels[campaign.status] ?? `状态 ${campaign.status}`}</span></div>
           <div className="event-card__content"><EventCountdown startTime={campaign.startTime} endTime={campaign.endTime} /><h2>{campaign.name}</h2><p className="event-card__schedule">{formatDateTime(campaign.startTime)} 至 {formatDateTime(campaign.endTime)}</p>
             {campaign.items.length > 1 ? <div className="event-sku-options" role="group" aria-label={`${campaign.name}规格`}>{campaign.items.map((option) => <button aria-pressed={item?.id === option.id} className={item?.id === option.id ? "event-sku-option event-sku-option--active" : "event-sku-option"} disabled={option.stock <= 0} key={option.id} type="button" onClick={() => setSelectedItems((current) => ({ ...current, [campaign.id]: option.id }))}><strong>{option.productName}</strong><span>{option.skuLabel || "默认规格"}</span><small>{option.stock > 0 ? `剩余 ${option.stock}` : "已售罄"}</small></button>)}</div> : item ? <div className="event-selected-sku"><strong>{item.productName}</strong><span>{item.skuLabel || "默认规格"}</span></div> : null}
             {item ? <div className="event-price-block"><div><strong>{formatMoney(item.campaignPrice)}</strong>{item.originalPrice && item.originalPrice > item.campaignPrice ? <del>{formatMoney(item.originalPrice)}</del> : null}</div><span>购买记录：已售 {item.soldCount} 件 · 活动库存剩余 {item.stock} 件</span></div> : null}

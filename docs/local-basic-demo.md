@@ -44,6 +44,8 @@ ssh -p 2002 -L 3002:127.0.0.1:3002 -L 48082:127.0.0.1:48082 user@47.99.117.47
 
 可复用的请求体模板见 `script/db/demo/basic-fixtures.json`。其中所有 ID、Token 和幂等键都必须替换为本次运行实际值。
 
+模板使用稳定的中文商家、商品和社区内容，并引用 `curmerce-web/public/demo/` 下的同源静态图片。`/demo/camera.png`、`/demo/coffee.png` 和 `/demo/camping.png` 不依赖后端文件端口或外部图片服务，适合截图和重复验收。素材来自 Google Noto Emoji，具体来源、校验值和许可证见该目录的 `NOTICE.md` 与 `NOTO-EMOJI-LICENSE`。
+
 ## 验证命令
 
 ```bash

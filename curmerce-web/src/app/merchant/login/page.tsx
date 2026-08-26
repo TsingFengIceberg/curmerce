@@ -8,10 +8,11 @@ import { Notice } from "@/components/notice";
 import { CurmerceApiError } from "@/lib/api/client";
 import { adminAuthApi } from "@/lib/api/admin-auth";
 import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
+import { safeReturnTo } from "@/lib/auth/guards";
 
-function destinationForRoles(roles: string[] | undefined) {
-  if (roles?.includes("super_admin")) return "/admin/merchants";
-  if (roles?.includes("merchant_owner")) return "/merchant/orders";
+function destinationForRoles(roles: string[] | undefined, requested?: string) {
+  if (roles?.includes("super_admin")) return requested?.startsWith("/admin") ? safeReturnTo(requested, "/admin") : "/admin";
+  if (roles?.includes("merchant_owner")) return requested?.startsWith("/merchant") && requested !== "/merchant/login" ? safeReturnTo(requested, "/merchant") : "/merchant";
   return null;
 }
 
@@ -23,9 +24,13 @@ export default function MerchantLoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [returnTo, setReturnTo] = useState<string | undefined>();
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("role") === "admin") setLoginKind("admin");
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("role") === "admin") setLoginKind("admin");
+    const requested = safeReturnTo(params.get("returnTo") ?? window.sessionStorage.getItem("curmerce.admin-return-to"), "");
+    setReturnTo(requested || undefined);
     let active = true;
 
     async function resumeExistingSession() {
@@ -36,7 +41,7 @@ export default function MerchantLoginPage() {
       try {
         const permission = await adminAuthApi.getPermissionInfo();
         if (!active) return;
-        const destination = destinationForRoles(permission.roles);
+        const destination = destinationForRoles(permission.roles, requested || undefined);
         if (destination) {
           router.replace(destination);
           return;
@@ -65,9 +70,10 @@ export default function MerchantLoginPage() {
     try {
       await adminAuthApi.login({ username: username.trim(), password });
       const permission = await adminAuthApi.getPermissionInfo();
-      const destination = destinationForRoles(permission.roles);
-      const matchesSelection = (loginKind === "admin" && destination === "/admin/merchants") || (loginKind === "merchant" && destination === "/merchant/orders");
+      const destination = destinationForRoles(permission.roles, returnTo);
+      const matchesSelection = (loginKind === "admin" && permission.roles?.includes("super_admin")) || (loginKind === "merchant" && permission.roles?.includes("merchant_owner"));
       if (destination && matchesSelection) {
+        window.sessionStorage.removeItem("curmerce.admin-return-to");
         router.replace(destination);
       } else if (destination) {
         await adminAuthApi.logout();

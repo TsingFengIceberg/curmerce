@@ -6,18 +6,22 @@ import { useRouter } from "next/navigation";
 import { memberApi } from "@/lib/api/member";
 import { CurmerceApiError } from "@/lib/api/client";
 import { saveToken } from "@/lib/auth/storage";
+import { safeReturnTo } from "@/lib/auth/guards";
 import { Notice } from "@/components/notice";
 
 export default function LoginPage() {
   const router = useRouter();
   const [registered, setRegistered] = useState(false);
+  const [returnTo, setReturnTo] = useState("/catalog");
   const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    setRegistered(new URLSearchParams(window.location.search).get("registered") === "1");
+    const params = new URLSearchParams(window.location.search);
+    setRegistered(params.get("registered") === "1");
+    setReturnTo(safeReturnTo(params.get("returnTo") ?? window.sessionStorage.getItem("curmerce.app-return-to"), "/catalog"));
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -27,7 +31,8 @@ export default function LoginPage() {
     try {
       const token = await memberApi.login({ mobile, password });
       saveToken(token);
-      router.replace("/catalog");
+      window.sessionStorage.removeItem("curmerce.app-return-to");
+      router.replace(returnTo);
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "登录失败，请稍后重试");
     } finally {

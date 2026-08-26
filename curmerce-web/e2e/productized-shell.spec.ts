@@ -13,8 +13,8 @@ const merchantProduct = {
   code: "summer_cup",
   name: "夏日玻璃杯",
   subtitle: "手工吹制",
-  mainImageUrl: null,
-  imageUrls: [],
+  mainImageUrl: "/demo/camera.png",
+  imageUrls: ["/demo/camera.png"],
   description: "清透耐热玻璃杯",
   auditStatus: 0,
   saleStatus: 0,
@@ -22,6 +22,38 @@ const merchantProduct = {
   createTime: "2026-08-26T08:00:00",
   updateTime: "2026-08-26T09:00:00",
   skus: [{ id: 31, productId: 21, code: "cup_clear", specificationValues: [{ name: "颜色", value: "透明" }], price: 12900, stock: 8, status: 0, sort: 0 }],
+};
+const publicProduct = {
+  id: 21,
+  categoryId: 5,
+  storeId: 4,
+  storeName: "山屿兴趣商店",
+  sellerType: 1,
+  name: "复古随身相机",
+  subtitle: "轻量机身，适合城市漫步记录",
+  mainImageUrl: "/demo/camera.png",
+  minPrice: 19900,
+  minMarketPrice: 24900,
+  totalStock: 20,
+  available: true,
+};
+const publicPost = {
+  id: 81,
+  authorUserId: 7,
+  authorNickname: "林间",
+  title: "周末城市漫步的随身相机体验",
+  content: "机身轻巧，适合记录街角光影。",
+  mediaUrls: ["/demo/camera.png"],
+  status: 1,
+  likeCount: 3,
+  favoriteCount: 2,
+  commentCount: 4,
+  liked: false,
+  favorited: false,
+  followingAuthor: false,
+  topics: [{ id: 1, name: "摄影", slug: "photography", postCount: 1 }],
+  products: [publicProduct],
+  createTime: "2026-08-26T08:00:00",
 };
 
 async function mockApi(page: Page, roles: string[] = []) {
@@ -32,6 +64,13 @@ async function mockApi(page: Page, roles: string[] = []) {
     if (pathname.endsWith("/system/auth/get-permission-info")) {
       data = { user: { id: 1, nickname: "验收账号" }, roles, permissions: [] };
     } else if (pathname.endsWith("/commerce/catalog/category-tree")) {
+      data = [];
+    } else if (pathname.endsWith("/commerce/catalog/product-page")) {
+      const personal = new URL(route.request().url()).searchParams.get("sellerType") === "2";
+      data = { list: [{ ...publicProduct, id: personal ? 22 : publicProduct.id, sellerType: personal ? 2 : 1, storeName: personal ? "个人卖家 · 林间" : publicProduct.storeName, name: personal ? "九成新露营灯" : publicProduct.name, mainImageUrl: personal ? "/demo/camping.png" : publicProduct.mainImageUrl }], total: 1 };
+    } else if (pathname.endsWith("/community/post/page") && pathname.startsWith("/app-api/")) {
+      data = { list: [publicPost], total: 1 };
+    } else if (pathname.endsWith("/community/post/popular-topics")) {
       data = [];
     } else if (pathname.endsWith("/member/user/get")) {
       data = { id: 7, nickname: "验收用户", mobile: "13800000000" };
@@ -94,6 +133,81 @@ test("mobile navigation stays collapsed until requested and fits the viewport", 
   await capture(page, testInfo, "discovery-mobile-navigation.png");
 });
 
+test("mobile catalog exposes synchronized filters in a drawer", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  await page.goto("/catalog?keyword=%E7%8E%BB%E7%92%83%E6%9D%AF&minPrice=50");
+
+  await expect(page.getByLabel("搜索商品")).toHaveValue("玻璃杯");
+  await expect(page.getByRole("button", { name: "关键词：玻璃杯" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "最低 ¥50" })).toBeVisible();
+  await page.getByRole("button", { name: "筛选（2）" }).click();
+
+  const drawer = page.getByRole("dialog", { name: "筛选商品" });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByLabel("最低价")).toHaveValue("50");
+  await drawer.getByLabel("最高价").fill("200");
+  await drawer.getByRole("button", { name: "应用筛选" }).click();
+  await expect(page).toHaveURL(/maxPrice=200/);
+  await expect(page.getByRole("button", { name: "最高 ¥200" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await capture(page, testInfo, "catalog-mobile-filter-drawer.png");
+});
+
+test("home sections fail independently", async ({ page }) => {
+  await mockApi(page);
+  await page.route("http://127.0.0.1:48080/app-api/commerce/catalog/product-page**", async (route) => {
+    const url = new URL(route.request().url());
+    if (!url.searchParams.has("sellerType")) {
+      await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ code: 500, msg: "catalog unavailable", data: null }) });
+      return;
+    }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ code: 0, data: emptyPage, msg: "" }) });
+  });
+
+  await page.goto("/");
+  await expect(page.getByText("推荐商品暂时加载失败")).toBeVisible();
+  await expect(page.getByText("周末城市漫步的随身相机体验")).toBeVisible();
+  await expect(page.getByText("暂时没有新的个人闲置")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "限时与稀缺" })).toBeVisible();
+});
+
+test("mobile community tabs and publish action remain distinct", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  await page.goto("/community");
+
+  const tabs = page.getByRole("navigation", { name: "社区导航" });
+  const publish = page.getByRole("link", { name: "发布帖子" });
+  await expect(tabs).toBeVisible();
+  await expect(publish).toBeVisible();
+  const boxes = await Promise.all([tabs.boundingBox(), publish.boundingBox()]);
+  expect(boxes[0]).not.toBeNull();
+  expect(boxes[1]).not.toBeNull();
+  if (boxes[0] && boxes[1]) {
+    const overlaps = boxes[0].x < boxes[1].x + boxes[1].width && boxes[0].x + boxes[0].width > boxes[1].x && boxes[0].y < boxes[1].y + boxes[1].height && boxes[0].y + boxes[0].height > boxes[1].y;
+    expect(overlaps).toBe(false);
+  }
+  await expectNoHorizontalOverflow(page);
+});
+
+test("mobile administration tables retain business-critical fields", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => localStorage.setItem("curmerce.admin-access-token", "admin-test-token"));
+  await mockApi(page, ["super_admin"]);
+  await page.route("http://127.0.0.1:48080/admin-api/commerce/product-review/page**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ code: 0, data: { list: [{ ...merchantProduct, auditStatus: 1 }], total: 1 }, msg: "" }) });
+  });
+  await page.goto("/admin/product-review");
+
+  await expect(page.getByText("夏日玻璃杯")).toBeVisible();
+  await expect(page.getByText("山屿商家")).toBeVisible();
+  await expect(page.getByText("山屿商店")).toBeVisible();
+  await expect(page.getByText("生活器物")).toBeVisible();
+  await expect(page.getByRole("article").getByText("待审核", { exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test("admin console exposes a stable sidebar, active state, breadcrumb and dashboard", async ({ page }, testInfo) => {
   await page.addInitScript(() => localStorage.setItem("curmerce.admin-access-token", "admin-test-token"));
   await mockApi(page, ["super_admin"]);
@@ -132,6 +246,8 @@ test("personal seller workspace remains usable on a phone-sized viewport", async
   await page.goto("/personal");
 
   const navigation = page.getByRole("navigation", { name: "个人卖家中心导航" });
+  await expect(navigation).not.toBeVisible();
+  await page.getByRole("button", { name: "卖家概览" }).click();
   await expect(navigation).toBeVisible();
   await expect(navigation.getByRole("link", { name: "卖家概览" })).toHaveClass(/workspace-nav__item--active/);
   await expect(page.getByRole("heading", { level: 1, name: "卖家概览" })).toBeVisible();
@@ -146,6 +262,8 @@ test("buyer account pages share a stable workspace navigation", async ({ page },
   await page.goto("/account");
 
   const navigation = page.getByRole("navigation", { name: "我的 Curmerce导航" });
+  await expect(navigation).not.toBeVisible();
+  await page.getByRole("button", { name: "我的首页" }).click();
   await expect(navigation).toBeVisible();
   await expect(navigation.getByRole("link", { name: "我的首页" })).toHaveClass(/workspace-nav__item--active/);
   await expect(page.getByRole("heading", { level: 1, name: "我的" })).toBeVisible();
@@ -320,6 +438,7 @@ test("merchant release editor supports create edit copy and paged product search
   let editor = page.getByRole("dialog", { name: "编辑活动草稿" });
   await expect(editor.getByLabel("活动名称")).toHaveValue("夏日限时活动");
   await expect(editor.getByText("已选择").first()).toBeVisible();
+  await expect(editor.getByText(/北京时间/).first()).toBeVisible();
   let accessibility = await new AxeBuilder({ page }).include("dialog[open]").analyze();
   expect(accessibility.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
   await editor.getByRole("button", { name: "关闭" }).click();
@@ -331,11 +450,20 @@ test("merchant release editor supports create edit copy and paged product search
 
   await page.getByRole("button", { name: "创建活动", exact: true }).click();
   editor = page.getByRole("dialog", { name: "创建限时发售" });
+  await editor.getByRole("button", { name: "保存草稿" }).click();
+  await expect(editor.getByRole("alert")).toContainText("请检查以下内容");
+  await expect(editor.getByRole("alert")).toBeFocused();
   await editor.getByRole("search", { name: "搜索可选商品" }).getByLabel("商品名称").fill("玻璃杯");
   await editor.getByRole("button", { name: "搜索", exact: true }).click();
   await editor.getByRole("button", { name: /夏日玻璃杯/ }).click();
   await expect(editor.getByText("已选择").first()).toBeVisible();
+  await expect(editor.getByText("夏日玻璃杯", { exact: true })).toHaveCount(1);
   await editor.getByLabel("活动名称").fill("新建限时活动");
+  await editor.getByRole("button", { name: "关闭" }).click();
+  const discard = page.getByRole("dialog", { name: "放弃限时发售草稿？" });
+  await expect(discard).toBeVisible();
+  await discard.getByRole("button", { name: "返回" }).click();
+  await expect(editor).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await capture(page, testInfo, "merchant-release-product-picker.png");
   await editor.getByRole("button", { name: "保存草稿" }).click();

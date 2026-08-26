@@ -26,6 +26,7 @@ import {
 } from "@/lib/auth/storage";
 import { memberApi } from "@/lib/api/member";
 import { adminAuthApi } from "@/lib/api/admin-auth";
+import { getPermissionInfoCached } from "@/lib/auth/guards";
 
 interface HeaderSession {
   hydrated: boolean;
@@ -64,7 +65,7 @@ export function SiteHeader() {
         return;
       }
       try {
-        const permission = await adminAuthApi.getPermissionInfo();
+        const permission = await getPermissionInfoCached();
         if (currentVersion !== requestVersion) return;
         setSession({ hydrated: true, buyerLoggedIn, adminLoggedIn: true, roles: permission.roles ?? [] });
       } catch {
@@ -145,12 +146,12 @@ export function SiteHeader() {
           </nav>
           <nav className="site-actions" aria-label="账户导航">
             <Link className={isActive(pathname, "/cart") ? "icon-link icon-link--active" : "icon-link"} href="/cart" title="购物车"><ShoppingCart aria-hidden="true" size={20} /><span className="mobile-only-label">购物车</span></Link>
-            {session.hydrated ? loggedIn ? (
+            <span className="site-session-slot">{session.hydrated ? loggedIn ? (
               <>
                 <Link className={isActive(pathname, "/account") ? "header-action header-action--active" : "header-action"} href="/account"><CircleUserRound aria-hidden="true" size={18} />我的</Link>
                 <button aria-label="退出用户账号" className="icon-link buyer-session-logout" title="退出用户账号" type="button" onClick={() => void logoutBuyer()}><LogOut aria-hidden="true" size={18} /><span className="mobile-only-label">退出用户账号</span></button>
               </>
-            ) : <Link className="header-action" href="/login"><LogIn aria-hidden="true" size={18} />登录</Link> : null}
+            ) : <Link className="header-action" href="/login"><LogIn aria-hidden="true" size={18} />登录</Link> : <span aria-hidden="true" className="header-session-skeleton" />}</span>
             <Link className="workspace-entry" href={workspaceHref}><LayoutDashboard aria-hidden="true" size={17} />{workspaceLabel}</Link>
           </nav>
         </div>

@@ -9,6 +9,7 @@ import { Notice } from "@/components/notice";
 import { Pagination } from "@/components/pagination";
 import { communityApi } from "@/lib/api/community";
 import { CurmerceApiError } from "@/lib/api/client";
+import { currentLocation, loginPath } from "@/lib/auth/guards";
 import type { CommunityPost, CommunityTopic } from "@/lib/types/api";
 
 const PAGE_SIZE = 18;
@@ -84,7 +85,7 @@ export default function CommunityPage() {
         favoriteCount: type === 2 ? Math.max(0, item.favoriteCount + (active ? 1 : -1)) : item.favoriteCount,
       } : item));
     } catch (cause) {
-      if (cause instanceof CurmerceApiError && cause.status === 401) router.push("/login");
+      if (cause instanceof CurmerceApiError && cause.status === 401) router.push(loginPath("/login", currentLocation()));
       else setError(cause instanceof CurmerceApiError ? cause.message : "互动操作失败");
     } finally {
       setReactionBusyId(null);

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Notice } from "@/components/notice";
+import { notifyWorkspaceBadgesChanged } from "@/components/workspace-shell";
+import { MediaImage } from "@/components/media-image";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
 import { CheckCircle2, Circle, FlaskConical } from "lucide-react";
@@ -71,6 +73,7 @@ export default function OrderDetailPage() {
         paidAmount: payment.amount,
       });
       setMessage("模拟支付成功，订单已进入待发货状态");
+      notifyWorkspaceBadgesChanged();
       await loadOrder(order.id);
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "模拟支付失败");
@@ -87,6 +90,7 @@ export default function OrderDetailPage() {
     try {
       await orderApi.cancel(order.id);
       setMessage("订单已取消");
+      notifyWorkspaceBadgesChanged();
       await loadOrder(order.id);
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "取消订单失败");
@@ -103,6 +107,7 @@ export default function OrderDetailPage() {
     try {
       await orderApi.confirmReceipt(order.id);
       setMessage("已确认收货，订单完成");
+      notifyWorkspaceBadgesChanged();
       await loadOrder(order.id);
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "确认收货失败");
@@ -126,6 +131,7 @@ export default function OrderDetailPage() {
       setRefundReason("");
       setShowRefundForm(false);
       setMessage("退款申请已提交，请在退款中心查看审核状态");
+      notifyWorkspaceBadgesChanged();
       await loadOrder(order.id);
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "提交退款申请失败");
@@ -158,7 +164,7 @@ export default function OrderDetailPage() {
                 const image = assetUrl(item.skuImageUrl || item.productImageUrl);
                 return (
                   <div className="order-item-row" key={item.id}>
-                    <div className="order-item-row__image">{image ? <img src={image} alt={item.productName} /> : <span>C</span>}</div>
+                    <div className="order-item-row__image"><MediaImage alt={item.productName} fallback={<span>C</span>} src={image} /></div>
                     <div className="order-item-row__info"><strong>{item.productName}</strong><span>{item.specificationValues?.map((value) => `${value.name}: ${value.value}`).join(" / ") || "默认规格"}</span><small>数量：{item.quantity}</small></div>
                     <strong>{formatMoney(item.totalAmount)}</strong>
                   </div>

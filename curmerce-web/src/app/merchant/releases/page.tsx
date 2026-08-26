@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Drawer } from "@/components/drawer";
 import { EmptyState } from "@/components/empty-state";
+import { FormErrorSummary, type FormIssue } from "@/components/form-error-summary";
+import { MediaImage } from "@/components/media-image";
 import { Notice } from "@/components/notice";
 import { Pagination } from "@/components/pagination";
 import { MerchantProductPicker } from "@/components/merchant-product-picker";
@@ -13,7 +15,8 @@ import { adminProductApi } from "@/lib/api/admin-product";
 import { assetUrl, CurmerceApiError } from "@/lib/api/client";
 import { adminReleaseApi } from "@/lib/api/release";
 import { ensureMerchantOwner } from "@/lib/auth/guards";
-import { formatDateTime, formatMoney, toDateTimeMillis } from "@/lib/format";
+import { useUnsavedClose } from "@/hooks/use-unsaved-close";
+import { beijingLocalDateTimeMillis, formatBeijingDateTime, formatDateTime, formatMoney, toDateTimeMillis } from "@/lib/format";
 import type { ProductAdmin, ProductSkuAdmin, ReleaseCampaign, ReleaseCreateInput } from "@/lib/types/api";
 
 const PAGE_SIZE = 12;
@@ -74,12 +77,16 @@ export default function MerchantReleasesPage() {
   const [stats, setStats] = useState({ drafts: 0, running: 0 });
   const [editor, setEditor] = useState<EditorState>(null);
   const [form, setForm] = useState<ReleaseForm>(blankForm);
+  const [formBaseline, setFormBaseline] = useState("");
+  const [formIssues, setFormIssues] = useState<FormIssue[]>([]);
   const [detail, setDetail] = useState<ReleaseCampaign | null>(null);
   const [pending, setPending] = useState<{ campaign: ReleaseCampaign; action: ReleaseAction } | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const dirty = Boolean(editor) && JSON.stringify(form) !== formBaseline;
+  const unsaved = useUnsavedClose({ dirty, subject: "限时发售草稿", onDiscard: discardEditor });
 
   useEffect(() => {
     void ensureMerchantOwner(router).then((allowed) => { if (allowed) void load(); });
@@ -111,21 +118,36 @@ export default function MerchantReleasesPage() {
   }
 
   function openCreate() {
-    setForm(blankForm());
+    const next = blankForm();
+    setForm(next);
+    setFormBaseline(JSON.stringify(next));
+    setFormIssues([]);
     setEditor({ mode: "create" });
     setError(null);
   }
 
   async function openEdit(campaign: ReleaseCampaign) {
     if (!await hydrateProducts(campaign.items.map((item) => item.productId))) return;
-    setForm(campaignForm(campaign));
+    const next = campaignForm(campaign);
+    setForm(next);
+    setFormBaseline(JSON.stringify(next));
+    setFormIssues([]);
     setEditor({ mode: "edit", id: campaign.id });
   }
 
   async function openCopy(campaign: ReleaseCampaign) {
     if (!await hydrateProducts(campaign.items.map((item) => item.productId))) return;
-    setForm(campaignForm(campaign, true));
+    const next = campaignForm(campaign, true);
+    setForm(next);
+    setFormBaseline(JSON.stringify(next));
+    setFormIssues([]);
     setEditor({ mode: "copy" });
+  }
+
+  function discardEditor() {
+    setEditor(null);
+    setFormBaseline("");
+    setFormIssues([]);
   }
 
   function mergeProducts(incoming: ProductAdmin[]) {
@@ -170,19 +192,27 @@ export default function MerchantReleasesPage() {
   }
 
   function inputPayload(): ReleaseCreateInput | null {
-    const startTime = new Date(form.startTime).getTime();
-    const endTime = new Date(form.endTime).getTime();
+    const startTime = beijingLocalDateTimeMillis(form.startTime);
+    const endTime = beijingLocalDateTimeMillis(form.endTime);
     const items = form.items.map((item) => ({ ...item, campaignPrice: Math.round(Number(item.priceYuan) * 100) }));
-    if (!form.name.trim() || !Number.isFinite(startTime) || startTime <= Date.now() || !Number.isFinite(endTime) || endTime <= startTime) {
-      setError("请填写活动名称，并确保开始时间晚于现在、结束时间晚于开始时间");
-      return null;
-    }
-    if (form.perUserLimit < 1 || items.some((item) => { const sku = selectedSku(item); return !sku || !Number.isFinite(item.campaignPrice) || item.campaignPrice < 0 || item.stock < 1 || item.stock > sku.stock; })) {
-      setError("请完整选择商品与 SKU，并确保价格有效、活动库存不超过可用库存");
-      return null;
-    }
+    const issues: FormIssue[] = [];
+    if (!form.name.trim()) issues.push({ field: "release-name", message: "请填写活动名称" });
+    if (form.perUserLimit < 1) issues.push({ field: "release-limit", message: "每人限购必须至少为 1 件" });
+    if (!Number.isFinite(startTime) || startTime <= Date.now()) issues.push({ field: "release-start-time", message: "开始时间必须晚于现在" });
+    if (!Number.isFinite(endTime) || endTime <= startTime) issues.push({ field: "release-end-time", message: "结束时间必须晚于开始时间" });
+    items.forEach((item, index) => {
+      const sku = selectedSku(item);
+      if (!item.productId) issues.push({ field: `release-product-${index}`, message: `活动 SKU ${index + 1} 需要选择商品` });
+      if (!sku) issues.push({ field: `release-sku-${index}`, message: `活动 SKU ${index + 1} 需要选择有库存的 SKU` });
+      if (!Number.isFinite(item.campaignPrice) || item.campaignPrice < 0) issues.push({ field: `release-price-${index}`, message: `活动 SKU ${index + 1} 的活动价无效` });
+      if (item.stock < 1 || (sku && item.stock > sku.stock)) issues.push({ field: `release-stock-${index}`, message: `活动 SKU ${index + 1} 的库存应在 1 到可用库存之间` });
+    });
     if (new Set(items.map((item) => item.skuId)).size !== items.length) {
-      setError("同一活动不能重复选择相同 SKU");
+      issues.push({ field: "release-items", message: "同一活动不能重复选择相同 SKU" });
+    }
+    setFormIssues(issues);
+    if (issues.length) {
+      setError("限时发售草稿还有需要修正的字段");
       return null;
     }
     return { name: form.name.trim(), startTime: form.startTime, endTime: form.endTime, perUserLimit: form.perUserLimit, items: items.map(({ productId, skuId, campaignPrice, stock }) => ({ productId, skuId, campaignPrice, stock })) };
@@ -198,7 +228,7 @@ export default function MerchantReleasesPage() {
       if (editor.mode === "edit" && editor.id) await adminReleaseApi.update(editor.id, input);
       else await adminReleaseApi.create(input);
       setMessage(editor.mode === "edit" ? "限时发售草稿已更新" : editor.mode === "copy" ? "活动副本已创建为草稿" : "限时发售草稿已创建");
-      setEditor(null);
+      discardEditor();
       await load();
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "活动保存失败");
@@ -247,15 +277,17 @@ export default function MerchantReleasesPage() {
         <Pagination pageNo={pageNo} pageSize={PAGE_SIZE} total={total} onChange={setPageNo} />
       </div>
 
-      <Drawer open={Boolean(editor)} title={editor?.mode === "edit" ? "编辑活动草稿" : editor?.mode === "copy" ? "复制限时发售" : "创建限时发售"} description="金额按人民币元填写，活动库存不能超过商品 SKU 可用库存。" busy={busy} onClose={() => setEditor(null)}>
-        <form className="drawer-form activity-editor" onSubmit={save}>
-          <div className="admin-form-grid"><label className="field"><span>活动名称</span><input required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label><label className="field"><span>每人限购</span><input min="1" required type="number" value={form.perUserLimit} onChange={(event) => setForm((current) => ({ ...current, perUserLimit: Number(event.target.value) }))} /></label><label className="field"><span>开始时间</span><input required type="datetime-local" value={form.startTime} onChange={(event) => setForm((current) => ({ ...current, startTime: event.target.value }))} /></label><label className="field"><span>结束时间</span><input required type="datetime-local" value={form.endTime} onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))} /></label></div>
-          <div className="event-form-items">{form.items.map((item, index) => { const sku = selectedSku(item); const skuOptions = availableSkus(index, item.productId); return <div className="event-form-item" key={index}><div className="activity-editor__item-heading"><strong>活动 SKU {index + 1}</strong>{form.items.length > 1 ? <button className="text-button text-button--danger" type="button" onClick={() => setForm((current) => ({ ...current, items: current.items.filter((_, itemIndex) => itemIndex !== index) }))}>移除</button> : null}</div><div className="field activity-editor__product-picker"><span>商品</span><MerchantProductPicker enabled={Boolean(editor)} selected={products.find((product) => product.id === item.productId)} excludedSkuIds={[...usedSkuIds(index)]} onSelect={(product) => selectProduct(index, product)} /></div><label className="field"><span>SKU</span><select required disabled={!item.productId} value={item.skuId || ""} onChange={(event) => { const skuId = Number(event.target.value); const nextSku = sellableSkus(products.find((product) => product.id === item.productId)).find((entry) => entry.id === skuId); updateItem(index, { skuId, priceYuan: nextSku ? (nextSku.price / 100).toFixed(2) : item.priceYuan, stock: nextSku ? Math.min(item.stock, nextSku.stock) : item.stock }); }}><option value="">请选择 SKU</option>{skuOptions.map((option) => <option key={option.id} value={option.id}>{skuLabel(option)}</option>)}</select></label><label className="field"><span>活动价（元）</span><input min="0" required step="0.01" type="number" value={item.priceYuan} onChange={(event) => updateItem(index, { priceYuan: event.target.value })} /></label><label className="field"><span>活动库存{sku ? `（最多 ${sku.stock}）` : ""}</span><input min="1" max={sku?.stock} required type="number" value={item.stock} onChange={(event) => updateItem(index, { stock: Number(event.target.value) })} /></label></div>; })}</div>
-          <div className="drawer-form__actions"><button className="button button--secondary" disabled={busy} type="button" onClick={() => setForm((current) => ({ ...current, items: [...current.items, newItem()] }))}>添加 SKU</button><button className="button button--primary" disabled={busy || form.items.some((item) => !item.productId || !item.skuId)} type="submit">{busy ? "保存中…" : editor?.mode === "edit" ? "保存修改" : "保存草稿"}</button></div>
+      <Drawer open={Boolean(editor)} title={editor?.mode === "edit" ? "编辑活动草稿" : editor?.mode === "copy" ? "复制限时发售" : "创建限时发售"} description="金额按人民币元填写，活动库存不能超过商品 SKU 可用库存。" busy={busy} onClose={unsaved.requestClose}>
+        <form className="drawer-form activity-editor" noValidate onSubmit={save}>
+          <FormErrorSummary issues={formIssues} />
+          <div className="admin-form-grid"><label className="field"><span>活动名称</span><input id="release-name" required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label><label className="field"><span>每人限购</span><input id="release-limit" min="1" required type="number" value={form.perUserLimit} onChange={(event) => setForm((current) => ({ ...current, perUserLimit: Number(event.target.value) }))} /></label><label className="field"><span>开始时间</span><input id="release-start-time" required type="datetime-local" value={form.startTime} onChange={(event) => setForm((current) => ({ ...current, startTime: event.target.value }))} /><small className="field-help">{formatBeijingDateTime(form.startTime)}</small></label><label className="field"><span>结束时间</span><input id="release-end-time" required type="datetime-local" value={form.endTime} onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))} /><small className="field-help">{formatBeijingDateTime(form.endTime)}</small></label></div>
+          <div className="event-form-items" id="release-items">{form.items.map((item, index) => { const sku = selectedSku(item); const skuOptions = availableSkus(index, item.productId); return <div className="event-form-item" key={index}><div className="activity-editor__item-heading"><strong>活动 SKU {index + 1}</strong>{form.items.length > 1 ? <button className="text-button text-button--danger" type="button" onClick={() => setForm((current) => ({ ...current, items: current.items.filter((_, itemIndex) => itemIndex !== index) }))}>移除</button> : null}</div><div className="field activity-editor__product-picker" id={`release-product-${index}`}><span>商品</span><MerchantProductPicker enabled={Boolean(editor)} selected={products.find((product) => product.id === item.productId)} excludedSkuIds={[...usedSkuIds(index)]} onSelect={(product) => selectProduct(index, product)} /></div><label className="field"><span>SKU</span><select id={`release-sku-${index}`} required disabled={!item.productId} value={item.skuId || ""} onChange={(event) => { const skuId = Number(event.target.value); const nextSku = sellableSkus(products.find((product) => product.id === item.productId)).find((entry) => entry.id === skuId); updateItem(index, { skuId, priceYuan: nextSku ? (nextSku.price / 100).toFixed(2) : item.priceYuan, stock: nextSku ? Math.min(item.stock, nextSku.stock) : item.stock }); }}><option value="">请选择 SKU</option>{skuOptions.map((option) => <option key={option.id} value={option.id}>{skuLabel(option)}</option>)}</select></label><label className="field"><span>活动价（元）</span><input id={`release-price-${index}`} min="0" required step="0.01" type="number" value={item.priceYuan} onChange={(event) => updateItem(index, { priceYuan: event.target.value })} /></label><label className="field"><span>活动库存{sku ? `（最多 ${sku.stock}）` : ""}</span><input id={`release-stock-${index}`} min="1" max={sku?.stock} required type="number" value={item.stock} onChange={(event) => updateItem(index, { stock: Number(event.target.value) })} /></label></div>; })}</div>
+          <div className="drawer-form__actions"><button className="button button--secondary" disabled={busy} type="button" onClick={() => setForm((current) => ({ ...current, items: [...current.items, newItem()] }))}>添加 SKU</button><button className="button button--secondary" disabled={busy} type="button" onClick={unsaved.requestClose}>取消</button><button className="button button--primary" disabled={busy} type="submit">{busy ? "保存中…" : editor?.mode === "edit" ? "保存修改" : "保存草稿"}</button></div>
         </form>
       </Drawer>
 
-      <Drawer open={Boolean(detail)} title="活动详情" description={detail ? detail.name : ""} onClose={() => setDetail(null)}>{detail ? <div className="drawer-form"><div className="detail-rows"><div><span>活动状态</span><strong>{labels[detail.status] ?? detail.status}</strong></div><div><span>活动排期</span><strong>{formatDateTime(detail.startTime)} 至 {formatDateTime(detail.endTime)}</strong></div><div><span>每人限购</span><strong>{detail.perUserLimit} 件</strong></div><div><span>活动 SKU</span><strong>{detail.items.length} 个</strong></div></div><div className="drawer-order-items"><h3>SKU 销售数据</h3>{detail.items.map((item) => <div key={item.id}>{assetUrl(item.productImageUrl) ? <img alt={item.productName || "活动商品"} src={assetUrl(item.productImageUrl) ?? ""} /> : <span className="listing-table__placeholder">C</span>}<span><strong>{item.productName || `商品 ${item.productId}`}</strong><small>{item.skuLabel || `SKU ${item.skuId}`} · 已售 {item.soldCount} · 剩余 {item.stock}</small></span><b>{formatMoney(item.campaignPrice)}</b></div>)}</div></div> : null}</Drawer>
+      <Drawer open={Boolean(detail)} title="活动详情" description={detail ? detail.name : ""} onClose={() => setDetail(null)}>{detail ? <div className="drawer-form"><div className="detail-rows"><div><span>活动状态</span><strong>{labels[detail.status] ?? detail.status}</strong></div><div><span>活动排期</span><strong>{formatDateTime(detail.startTime)} 至 {formatDateTime(detail.endTime)}</strong></div><div><span>每人限购</span><strong>{detail.perUserLimit} 件</strong></div><div><span>活动 SKU</span><strong>{detail.items.length} 个</strong></div></div><div className="drawer-order-items"><h3>SKU 销售数据</h3>{detail.items.map((item) => <div key={item.id}><MediaImage alt={item.productName || "活动商品"} fallback={<span className="listing-table__placeholder">C</span>} src={assetUrl(item.productImageUrl)} /><span><strong>{item.productName || `商品 ${item.productId}`}</strong><small>{item.skuLabel || `SKU ${item.skuId}`} · 已售 {item.soldCount} · 剩余 {item.stock}</small></span><b>{formatMoney(item.campaignPrice)}</b></div>)}</div></div> : null}</Drawer>
+      {unsaved.confirmation}
       <ConfirmDialog open={Boolean(pending)} title={actionMeta.title} description={actionMeta.description} confirmLabel={actionMeta.label} dangerous={actionMeta.dangerous} busy={busy} onClose={() => { if (!busy) setPending(null); }} onConfirm={() => void transition()} />
     </section>
   );

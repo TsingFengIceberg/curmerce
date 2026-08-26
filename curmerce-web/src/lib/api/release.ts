@@ -1,4 +1,5 @@
 import { adminApi, appApi, jsonBody } from "@/lib/api/client";
+import { beijingLocalDateTimeMillis } from "@/lib/format";
 import type { ApiPage, ReleaseCampaign, ReleaseCreateInput, ReleasePurchaseResult } from "@/lib/types/api";
 
 export const releaseApi = {
@@ -24,8 +25,8 @@ export const adminReleaseApi = {
       method: "POST",
       body: jsonBody({
         ...input,
-        startTime: new Date(input.startTime).getTime(),
-        endTime: new Date(input.endTime).getTime(),
+        startTime: beijingLocalDateTimeMillis(input.startTime),
+        endTime: beijingLocalDateTimeMillis(input.endTime),
       }),
     });
   },
@@ -35,8 +36,8 @@ export const adminReleaseApi = {
       body: jsonBody({
         id,
         ...input,
-        startTime: new Date(input.startTime).getTime(),
-        endTime: new Date(input.endTime).getTime(),
+        startTime: beijingLocalDateTimeMillis(input.startTime),
+        endTime: beijingLocalDateTimeMillis(input.endTime),
       }),
     });
   },

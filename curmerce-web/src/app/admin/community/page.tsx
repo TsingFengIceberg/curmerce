@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Drawer } from "@/components/drawer";
 import { EmptyState } from "@/components/empty-state";
 import { Notice } from "@/components/notice";
+import { MediaImage } from "@/components/media-image";
 import { Pagination } from "@/components/pagination";
 import { adminCommunityApi } from "@/lib/api/community";
 import { assetUrl, CurmerceApiError } from "@/lib/api/client";
@@ -136,5 +137,5 @@ export default function AdminCommunityPage() {
 }
 
 function ModerationPost({ title, content, images, author }: { title: string; content: string; images: string[]; author: string }) {
-  return <article className="moderation-post"><div><span className="moderation-post__author">{author}</span><h3>{title}</h3><p>{content}</p></div>{images.length ? <div className="moderation-post__images">{images.map((url) => assetUrl(url) ? <img alt={`${title} 配图`} key={url} src={assetUrl(url) ?? ""} /> : null)}</div> : <div className="moderation-post__no-image"><ImageIcon aria-hidden="true" size={18} />该帖子没有图片</div>}</article>;
+  return <article className="moderation-post"><div><span className="moderation-post__author">{author}</span><h3>{title}</h3><p>{content}</p></div>{images.length ? <div className="moderation-post__images">{images.map((url) => <MediaImage alt={`${title} 配图`} fallback={<span className="moderation-post__no-image"><ImageIcon aria-hidden="true" size={18} />图片加载失败</span>} key={url} src={assetUrl(url)} />)}</div> : <div className="moderation-post__no-image"><ImageIcon aria-hidden="true" size={18} />该帖子没有图片</div>}</article>;
 }

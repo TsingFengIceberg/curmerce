@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Boxes,
+  ChevronDown,
   ChevronRight,
   CircleDollarSign,
   CircleUserRound,
@@ -35,6 +36,13 @@ import { personalApi } from "@/lib/api/personal";
 import { getAccessToken, getAdminAccessToken } from "@/lib/auth/storage";
 
 type WorkspaceKind = "admin" | "merchant" | "personal" | "buyer";
+const WORKSPACE_BADGES_CHANGED_EVENT = "curmerce:workspace-badges-changed";
+const badgeCache = new Map<WorkspaceKind, { expiresAt: number; value: Record<string, number> }>();
+
+export function notifyWorkspaceBadgesChanged() {
+  badgeCache.clear();
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(WORKSPACE_BADGES_CHANGED_EVENT));
+}
 
 const workspaceMeta = {
   buyer: {
@@ -100,19 +108,26 @@ function currentLabel(kind: WorkspaceKind, pathname: string) {
   return meta.navigation.find((item) => matches(pathname, item.href, meta.root))?.label ?? meta.title;
 }
 
-async function loadTodoBadges(kind: WorkspaceKind): Promise<Record<string, number>> {
+async function loadTodoBadges(kind: WorkspaceKind, force = false): Promise<Record<string, number>> {
+  const cached = badgeCache.get(kind);
+  if (!force && cached && cached.expiresAt > Date.now()) return cached.value;
+  let value: Record<string, number>;
   if (kind === "buyer") {
     if (!getAccessToken()) return {};
     const [pendingPayment, shipped] = await Promise.all([
       orderApi.page({ pageNo: 1, pageSize: 1, status: 10 }),
       orderApi.page({ pageNo: 1, pageSize: 1, status: 30 }),
     ]);
-    return { "/orders": (pendingPayment.total ?? 0) + (shipped.total ?? 0) };
+    value = { "/orders": (pendingPayment.total ?? 0) + (shipped.total ?? 0) };
+    badgeCache.set(kind, { expiresAt: Date.now() + 30_000, value });
+    return value;
   }
   if (kind === "personal") {
     if (!getAccessToken()) return {};
     const shipping = await personalApi.orderPage({ pageNo: 1, pageSize: 1, status: 20 });
-    return { "/personal/orders": shipping.total ?? 0 };
+    value = { "/personal/orders": shipping.total ?? 0 };
+    badgeCache.set(kind, { expiresAt: Date.now() + 30_000, value });
+    return value;
   }
   if (!getAdminAccessToken()) return {};
   if (kind === "merchant") {
@@ -120,7 +135,9 @@ async function loadTodoBadges(kind: WorkspaceKind): Promise<Record<string, numbe
       adminOrderApi.pageOwn({ pageNo: 1, pageSize: 1, status: 20 }),
       adminRefundApi.pageOwn({ pageNo: 1, pageSize: 1, status: 10 }),
     ]);
-    return { "/merchant/orders": shipping.total ?? 0, "/merchant/refunds": refunds.total ?? 0 };
+    value = { "/merchant/orders": shipping.total ?? 0, "/merchant/refunds": refunds.total ?? 0 };
+    badgeCache.set(kind, { expiresAt: Date.now() + 30_000, value });
+    return value;
   }
   const [merchants, products, refunds, reports] = await Promise.all([
     adminMerchantApi.page({ pageNo: 1, pageSize: 1, status: 0 }),
@@ -128,27 +145,33 @@ async function loadTodoBadges(kind: WorkspaceKind): Promise<Record<string, numbe
     adminRefundApi.page({ pageNo: 1, pageSize: 1, status: 10 }),
     adminCommunityApi.reports({ pageNo: 1, pageSize: 1, status: 0 }),
   ]);
-  return {
+  value = {
     "/admin/merchants": merchants.total ?? 0,
     "/admin/product-review": products.total ?? 0,
     "/admin/refunds": refunds.total ?? 0,
     "/admin/community": reports.total ?? 0,
   };
+  badgeCache.set(kind, { expiresAt: Date.now() + 30_000, value });
+  return value;
 }
 
 export function WorkspaceShell({ kind, children }: { kind: WorkspaceKind; children: React.ReactNode }) {
   const pathname = usePathname();
   const [badges, setBadges] = useState<Record<string, number>>({});
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
-    void loadTodoBadges(kind).then((nextBadges) => {
+    setNavOpen(false);
+    const refresh = (force = false) => void loadTodoBadges(kind, force).then((nextBadges) => {
       if (active) setBadges(nextBadges);
-    }).catch(() => {
-      if (active) setBadges({});
-    });
+    }).catch(() => { if (active) setBadges({}); });
+    refresh();
+    const handleBadgesChanged = () => refresh(true);
+    window.addEventListener(WORKSPACE_BADGES_CHANGED_EVENT, handleBadgesChanged);
     return () => {
       active = false;
+      window.removeEventListener(WORKSPACE_BADGES_CHANGED_EVENT, handleBadgesChanged);
     };
   }, [kind, pathname]);
 
@@ -162,9 +185,10 @@ export function WorkspaceShell({ kind, children }: { kind: WorkspaceKind; childr
           <span className="workspace-sidebar__icon">{kind === "admin" ? <UsersRound aria-hidden="true" /> : kind === "merchant" ? <CircleDollarSign aria-hidden="true" /> : kind === "buyer" ? <CircleUserRound aria-hidden="true" /> : <FileText aria-hidden="true" />}</span>
           <div><strong>{meta.title}</strong><small>{meta.description}</small></div>
         </div>
-        <nav className="workspace-nav" aria-label={`${meta.title}导航`}>
+        <button aria-expanded={navOpen} className="workspace-nav-toggle" type="button" onClick={() => setNavOpen((current) => !current)}><span>{currentLabel(kind, pathname)}</span><ChevronDown aria-hidden="true" size={17} /></button>
+        <nav className={navOpen ? "workspace-nav workspace-nav--open" : "workspace-nav"} aria-label={`${meta.title}导航`}>
           {meta.navigation.map(({ href, label, icon: Icon }) => (
-            <Link className={matches(pathname, href, meta.root) ? "workspace-nav__item workspace-nav__item--active" : "workspace-nav__item"} href={href} key={href}>
+            <Link className={matches(pathname, href, meta.root) ? "workspace-nav__item workspace-nav__item--active" : "workspace-nav__item"} href={href} key={href} onClick={() => setNavOpen(false)}>
               <Icon aria-hidden="true" size={18} /><span>{label}</span><span className="workspace-nav__badge-slot">{badges[href] > 0 ? <span aria-label={`${badges[href]} 项待办`} className="workspace-nav__badge">{badges[href] > 99 ? "99+" : badges[href]}</span> : null}</span>{matches(pathname, href, meta.root) ? <ChevronRight className="workspace-nav__arrow" aria-hidden="true" size={16} /> : <span aria-hidden="true" />}
             </Link>
           ))}

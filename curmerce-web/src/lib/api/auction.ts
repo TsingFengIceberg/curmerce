@@ -1,4 +1,5 @@
 import { adminApi, appApi, jsonBody } from "@/lib/api/client";
+import { beijingLocalDateTimeMillis } from "@/lib/format";
 import type { ApiPage, AuctionBid, AuctionCreateInput, AuctionSession } from "@/lib/types/api";
 
 export const auctionApi = {
@@ -29,8 +30,8 @@ export const adminAuctionApi = {
       method: "POST",
       body: jsonBody({
         ...input,
-        startTime: new Date(input.startTime).getTime(),
-        endTime: new Date(input.endTime).getTime(),
+        startTime: beijingLocalDateTimeMillis(input.startTime),
+        endTime: beijingLocalDateTimeMillis(input.endTime),
       }),
     });
   },
@@ -40,8 +41,8 @@ export const adminAuctionApi = {
       body: jsonBody({
         id,
         ...input,
-        startTime: new Date(input.startTime).getTime(),
-        endTime: new Date(input.endTime).getTime(),
+        startTime: beijingLocalDateTimeMillis(input.startTime),
+        endTime: beijingLocalDateTimeMillis(input.endTime),
       }),
     });
   },

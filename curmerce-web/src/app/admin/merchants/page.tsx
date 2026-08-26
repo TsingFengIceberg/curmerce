@@ -8,6 +8,7 @@ import { Drawer } from "@/components/drawer";
 import { EmptyState } from "@/components/empty-state";
 import { Notice } from "@/components/notice";
 import { Pagination } from "@/components/pagination";
+import { notifyWorkspaceBadgesChanged } from "@/components/workspace-shell";
 import { adminMerchantApi } from "@/lib/api/admin-merchant";
 import { CurmerceApiError } from "@/lib/api/client";
 import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
@@ -90,6 +91,7 @@ export default function AdminMerchantsPage() {
     try {
       await adminMerchantApi.create(createForm);
       setMessage("商家入驻申请已创建");
+      notifyWorkspaceBadgesChanged();
       setCreateForm(emptyMerchant);
       setCreating(false);
       setPageNo(1);
@@ -131,6 +133,7 @@ export default function AdminMerchantsPage() {
       if (reviewMode === "approve") await adminMerchantApi.approve({ id: reviewTarget.id, ...account, nickname: account.nickname.trim() });
       else await adminMerchantApi.reject({ id: reviewTarget.id, reason: reason.trim() });
       setMessage(reviewMode === "approve" ? "商家已通过审核，后台主账号已创建" : "商家申请已拒绝");
+      notifyWorkspaceBadgesChanged();
       setReviewTarget(null);
       await load();
     } catch (cause) {

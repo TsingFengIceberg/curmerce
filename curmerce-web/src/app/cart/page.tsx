@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Notice } from "@/components/notice";
+import { MediaImage } from "@/components/media-image";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { Trash2 } from "lucide-react";
@@ -11,6 +12,7 @@ import { cartApi } from "@/lib/api/cart";
 import { assetUrl, CurmerceApiError } from "@/lib/api/client";
 import { formatMoney } from "@/lib/format";
 import { clearToken, getAccessToken } from "@/lib/auth/storage";
+import { currentLocation, loginPath } from "@/lib/auth/guards";
 import type { CartItem, CartList } from "@/lib/types/api";
 
 interface StoreGroup {
@@ -33,7 +35,7 @@ export default function CartPage() {
 
   useEffect(() => {
     if (!getAccessToken()) {
-      router.replace("/login");
+      router.replace(loginPath("/login", currentLocation()));
       return;
     }
     void loadCart();
@@ -48,7 +50,7 @@ export default function CartPage() {
     } catch (cause) {
       if (cause instanceof CurmerceApiError && cause.status === 401) {
         clearToken();
-        router.replace("/login");
+        router.replace(loginPath("/login", currentLocation()));
         return;
       }
       setError(cause instanceof CurmerceApiError ? cause.message : "购物车加载失败");
@@ -230,7 +232,7 @@ function CartItemRow({
   return (
     <article className={`cart-item${invalid ? " cart-item--invalid" : ""}`}>
       <input aria-label={`选择 ${item.product?.name ?? "商品"}`} checked={!invalid && item.selected} disabled={invalid || busy} type="checkbox" onChange={(event) => onSelect(event.target.checked)} />
-      <Link className="cart-item__image" href={item.product?.id ? `/products/${item.product.id}` : "/catalog"}>{image ? <img src={image} alt={item.product?.name ?? "商品"} /> : <span>C</span>}</Link>
+      <Link className="cart-item__image" href={item.product?.id ? `/products/${item.product.id}` : "/catalog"}><MediaImage alt={item.product?.name ?? "商品"} fallback={<span>C</span>} src={image} /></Link>
       <div className="cart-item__main">
         {item.product?.id ? <Link href={`/products/${item.product.id}`}><strong>{item.product.name}</strong></Link> : <strong>商品已不可用</strong>}
         <span>{item.sku?.specificationValues?.map((value) => `${value.name}: ${value.value}`).join(" / ") || "默认规格"}</span>

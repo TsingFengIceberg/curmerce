@@ -64,3 +64,23 @@ export function formatDateTime(value?: string | number | null) {
     minute: "2-digit",
   }).format(date);
 }
+
+export function formatBeijingDateTime(value?: string | null) {
+  if (!value) return "请选择时间";
+  const millis = beijingLocalDateTimeMillis(value);
+  if (!Number.isFinite(millis)) return "时间格式不正确";
+  return `${new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Shanghai",
+  }).format(millis)}（北京时间）`;
+}
+
+export function beijingLocalDateTimeMillis(value?: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(value)) return Number.NaN;
+  return new Date(`${value.length === 16 ? `${value}:00` : value}+08:00`).getTime();
+}

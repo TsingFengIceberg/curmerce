@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Drawer } from "@/components/drawer";
 import { EmptyState } from "@/components/empty-state";
+import { FormErrorSummary, type FormIssue } from "@/components/form-error-summary";
+import { MediaImage } from "@/components/media-image";
 import { Notice } from "@/components/notice";
 import { Pagination } from "@/components/pagination";
 import { MerchantProductPicker } from "@/components/merchant-product-picker";
@@ -13,7 +15,8 @@ import { adminAuctionApi } from "@/lib/api/auction";
 import { adminProductApi } from "@/lib/api/admin-product";
 import { assetUrl, CurmerceApiError } from "@/lib/api/client";
 import { ensureMerchantOwner } from "@/lib/auth/guards";
-import { formatDateTime, formatMoney, toDateTimeMillis } from "@/lib/format";
+import { useUnsavedClose } from "@/hooks/use-unsaved-close";
+import { beijingLocalDateTimeMillis, formatBeijingDateTime, formatDateTime, formatMoney, toDateTimeMillis } from "@/lib/format";
 import type { AuctionCreateInput, AuctionSession, ProductAdmin, ProductSkuAdmin } from "@/lib/types/api";
 
 const PAGE_SIZE = 12;
@@ -72,12 +75,16 @@ export default function MerchantAuctionsPage() {
   const [stats, setStats] = useState({ drafts: 0, running: 0 });
   const [editor, setEditor] = useState<EditorState>(null);
   const [form, setForm] = useState<AuctionForm>(blankForm);
+  const [formBaseline, setFormBaseline] = useState("");
+  const [formIssues, setFormIssues] = useState<FormIssue[]>([]);
   const [detail, setDetail] = useState<AuctionSession | null>(null);
   const [pending, setPending] = useState<{ session: AuctionSession; action: AuctionAction } | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const dirty = Boolean(editor) && JSON.stringify(form) !== formBaseline;
+  const unsaved = useUnsavedClose({ dirty, subject: "拍卖草稿", onDiscard: discardEditor });
 
   useEffect(() => {
     void ensureMerchantOwner(router).then((allowed) => { if (allowed) void load(); });
@@ -109,21 +116,36 @@ export default function MerchantAuctionsPage() {
   }
 
   function openCreate() {
-    setForm(blankForm());
+    const next = blankForm();
+    setForm(next);
+    setFormBaseline(JSON.stringify(next));
+    setFormIssues([]);
     setEditor({ mode: "create" });
     setError(null);
   }
 
   async function openEdit(session: AuctionSession) {
     if (!await hydrateProduct(session.productId)) return;
-    setForm(sessionForm(session));
+    const next = sessionForm(session);
+    setForm(next);
+    setFormBaseline(JSON.stringify(next));
+    setFormIssues([]);
     setEditor({ mode: "edit", id: session.id });
   }
 
   async function openCopy(session: AuctionSession) {
     if (!await hydrateProduct(session.productId)) return;
-    setForm(sessionForm(session, true));
+    const next = sessionForm(session, true);
+    setForm(next);
+    setFormBaseline(JSON.stringify(next));
+    setFormIssues([]);
     setEditor({ mode: "copy" });
+  }
+
+  function discardEditor() {
+    setEditor(null);
+    setFormBaseline("");
+    setFormIssues([]);
   }
 
   function mergeProducts(incoming: ProductAdmin[]) {
@@ -149,21 +171,24 @@ export default function MerchantAuctionsPage() {
   }
 
   function inputPayload(): AuctionCreateInput | null {
-    const start = new Date(form.startTime).getTime();
-    const end = new Date(form.endTime).getTime();
+    const start = beijingLocalDateTimeMillis(form.startTime);
+    const end = beijingLocalDateTimeMillis(form.endTime);
     const startingPrice = Math.round(Number(form.startingPriceYuan) * 100);
     const minIncrement = Math.round(Number(form.minIncrementYuan) * 100);
     const sku = sellableSkus(products.find((product) => product.id === form.productId)).find((item) => item.id === form.skuId);
-    if (!form.name.trim() || !sku) {
-      setError("请填写拍卖名称并选择有库存的商品 SKU");
-      return null;
-    }
+    const issues: FormIssue[] = [];
+    if (!form.name.trim()) issues.push({ field: "auction-name", message: "请填写拍卖名称" });
+    if (!form.productId) issues.push({ field: "auction-product", message: "请选择拍卖商品" });
+    if (!sku) issues.push({ field: "auction-sku", message: "请选择有库存的商品 SKU" });
     if (!Number.isFinite(startingPrice) || startingPrice < 0 || !Number.isFinite(minIncrement) || minIncrement < 1) {
-      setError("起拍价不能小于 0 元，最低加价至少为 0.01 元");
-      return null;
+      if (!Number.isFinite(startingPrice) || startingPrice < 0) issues.push({ field: "auction-starting-price", message: "起拍价不能小于 0 元" });
+      if (!Number.isFinite(minIncrement) || minIncrement < 1) issues.push({ field: "auction-min-increment", message: "最低加价至少为 0.01 元" });
     }
-    if (!Number.isFinite(start) || start <= Date.now() || !Number.isFinite(end) || end <= start) {
-      setError("开始时间必须晚于现在，结束时间必须晚于开始时间");
+    if (!Number.isFinite(start) || start <= Date.now()) issues.push({ field: "auction-start-time", message: "开始时间必须晚于现在" });
+    if (!Number.isFinite(end) || end <= start) issues.push({ field: "auction-end-time", message: "结束时间必须晚于开始时间" });
+    setFormIssues(issues);
+    if (issues.length) {
+      setError("拍卖草稿还有需要修正的字段");
       return null;
     }
     return { name: form.name.trim(), productId: form.productId, skuId: form.skuId, startingPrice, minIncrement, startTime: form.startTime, endTime: form.endTime };
@@ -179,7 +204,7 @@ export default function MerchantAuctionsPage() {
       if (editor.mode === "edit" && editor.id) await adminAuctionApi.update(editor.id, input);
       else await adminAuctionApi.create(input);
       setMessage(editor.mode === "edit" ? "拍卖草稿已更新" : editor.mode === "copy" ? "拍卖副本已创建为草稿" : "拍卖草稿已创建");
-      setEditor(null);
+      discardEditor();
       await load();
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "拍卖保存失败");
@@ -226,15 +251,16 @@ export default function MerchantAuctionsPage() {
         <div className="activity-toolbar"><select aria-label="拍卖状态" value={status} onChange={(event) => { setStatus(event.target.value); setPageNo(1); }}><option value="">全部状态</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><form className="order-search" onSubmit={search}><Search aria-hidden="true" size={16} /><input aria-label="拍卖名称" placeholder="搜索拍卖名称" value={nameInput} onChange={(event) => setNameInput(event.target.value)} /><button type="submit">查询</button></form><span>共 {total} 个场次</span></div>
         {loading ? <div className="order-list-skeleton"><span /><span /><span /></div> : null}
         {!loading && !sessions.length ? <EmptyState icon={<Gavel aria-hidden="true" size={23} />} title="没有符合条件的拍卖" description="调整筛选条件，或从有库存的商品创建拍卖。" actionLabel="创建拍卖" onAction={openCreate} /> : null}
-        {!loading && sessions.length ? <div className="activity-table activity-table--auction"><div className="activity-table__head"><span>拍卖商品</span><span>排期</span><span>竞价数据</span><span>状态</span><span>操作</span></div>{sessions.map((session) => <article className="activity-table__row" key={session.id}><div className="activity-table__product">{assetUrl(session.productImageUrl) ? <img alt={session.productName || session.name} src={assetUrl(session.productImageUrl) ?? ""} /> : <span className="listing-table__placeholder">C</span>}<span><strong>{session.name}</strong><small>{session.productName || `商品 ${session.productId}`} · {session.skuLabel || `SKU ${session.skuId}`}</small></span></div><div className="activity-table__schedule"><strong>{formatDateTime(session.startTime)}</strong><small>至 {formatDateTime(session.endTime)}</small></div><div className="activity-table__metric"><strong>{session.currentAmount == null ? `起拍 ${formatMoney(session.startingPrice)}` : `当前 ${formatMoney(session.currentAmount)}`}</strong><small>{session.bidCount ?? 0} 次出价 · 加价 {formatMoney(session.minIncrement)}</small></div><span className={`tag activity-status activity-status--${session.status}`}>{labels[session.status] ?? session.status}</span><div className="listing-table__actions"><button aria-label={`查看 ${session.name}`} className="icon-button" title="查看详情" type="button" onClick={() => setDetail(session)}><Eye aria-hidden="true" size={16} /></button>{session.status === 0 ? <button aria-label={`编辑 ${session.name}`} className="icon-button" title="编辑草稿" type="button" onClick={() => openEdit(session)}><Pencil aria-hidden="true" size={16} /></button> : null}<button aria-label={`复制 ${session.name}`} className="icon-button" title="复制为草稿" type="button" onClick={() => openCopy(session)}><Copy aria-hidden="true" size={16} /></button>{session.status === 0 ? <button className="text-button" type="button" onClick={() => setPending({ session, action: "publish" })}>发布</button> : null}{session.status === 0 || session.status === 10 ? <button className="text-button text-button--danger" type="button" onClick={() => setPending({ session, action: "cancel" })}>取消</button> : null}{session.status === 20 && Date.now() >= toDateTimeMillis(session.endTime) ? <button className="text-button" type="button" onClick={() => setPending({ session, action: "end" })}>结算</button> : null}</div></article>)}</div> : null}
+        {!loading && sessions.length ? <div className="activity-table activity-table--auction"><div className="activity-table__head"><span>拍卖商品</span><span>排期</span><span>竞价数据</span><span>状态</span><span>操作</span></div>{sessions.map((session) => <article className="activity-table__row" key={session.id}><div className="activity-table__product"><MediaImage alt={session.productName || session.name} fallback={<span className="listing-table__placeholder">C</span>} src={assetUrl(session.productImageUrl)} /><span><strong>{session.name}</strong><small>{session.productName || `商品 ${session.productId}`} · {session.skuLabel || `SKU ${session.skuId}`}</small></span></div><div className="activity-table__schedule"><strong>{formatDateTime(session.startTime)}</strong><small>至 {formatDateTime(session.endTime)}</small></div><div className="activity-table__metric"><strong>{session.currentAmount == null ? `起拍 ${formatMoney(session.startingPrice)}` : `当前 ${formatMoney(session.currentAmount)}`}</strong><small>{session.bidCount ?? 0} 次出价 · 加价 {formatMoney(session.minIncrement)}</small></div><span className={`tag activity-status activity-status--${session.status}`}>{labels[session.status] ?? session.status}</span><div className="listing-table__actions"><button aria-label={`查看 ${session.name}`} className="icon-button" title="查看详情" type="button" onClick={() => setDetail(session)}><Eye aria-hidden="true" size={16} /></button>{session.status === 0 ? <button aria-label={`编辑 ${session.name}`} className="icon-button" title="编辑草稿" type="button" onClick={() => openEdit(session)}><Pencil aria-hidden="true" size={16} /></button> : null}<button aria-label={`复制 ${session.name}`} className="icon-button" title="复制为草稿" type="button" onClick={() => openCopy(session)}><Copy aria-hidden="true" size={16} /></button>{session.status === 0 ? <button className="text-button" type="button" onClick={() => setPending({ session, action: "publish" })}>发布</button> : null}{session.status === 0 || session.status === 10 ? <button className="text-button text-button--danger" type="button" onClick={() => setPending({ session, action: "cancel" })}>取消</button> : null}{session.status === 20 && Date.now() >= toDateTimeMillis(session.endTime) ? <button className="text-button" type="button" onClick={() => setPending({ session, action: "end" })}>结算</button> : null}</div></article>)}</div> : null}
         <Pagination pageNo={pageNo} pageSize={PAGE_SIZE} total={total} onChange={setPageNo} />
       </div>
 
-      <Drawer open={Boolean(editor)} title={editor?.mode === "edit" ? "编辑拍卖草稿" : editor?.mode === "copy" ? "复制拍卖场次" : "创建拍卖"} description="从当前店铺已审核上架且有库存的 SKU 中选择拍卖商品。" busy={busy} onClose={() => setEditor(null)}>
-        <form className="drawer-form activity-editor" onSubmit={save}><label className="field"><span>拍卖名称</span><input required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label><div className="field"><span>商品</span><MerchantProductPicker enabled={Boolean(editor)} selected={selectedProduct} onSelect={selectProduct} /></div><label className="field"><span>SKU</span><select required disabled={!selectedProduct} value={form.skuId || ""} onChange={(event) => setForm((current) => ({ ...current, skuId: Number(event.target.value) }))}><option value="">请选择 SKU</option>{availableSkus.map((sku) => <option key={sku.id} value={sku.id}>{skuLabel(sku)}</option>)}</select></label><div className="admin-form-grid"><label className="field"><span>起拍价（元）</span><input min="0" required step="0.01" type="number" value={form.startingPriceYuan} onChange={(event) => setForm((current) => ({ ...current, startingPriceYuan: event.target.value }))} /></label><label className="field"><span>最低加价（元）</span><input min="0.01" required step="0.01" type="number" value={form.minIncrementYuan} onChange={(event) => setForm((current) => ({ ...current, minIncrementYuan: event.target.value }))} /></label><label className="field"><span>开始时间</span><input required type="datetime-local" value={form.startTime} onChange={(event) => setForm((current) => ({ ...current, startTime: event.target.value }))} /></label><label className="field"><span>结束时间</span><input required type="datetime-local" value={form.endTime} onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))} /></label></div><div className="drawer-form__actions"><button className="button button--secondary" disabled={busy} type="button" onClick={() => setEditor(null)}>取消</button><button className="button button--primary" disabled={busy || !form.productId || !form.skuId} type="submit">{busy ? "保存中…" : editor?.mode === "edit" ? "保存修改" : "保存草稿"}</button></div></form>
+      <Drawer open={Boolean(editor)} title={editor?.mode === "edit" ? "编辑拍卖草稿" : editor?.mode === "copy" ? "复制拍卖场次" : "创建拍卖"} description="从当前店铺已审核上架且有库存的 SKU 中选择拍卖商品。" busy={busy} onClose={unsaved.requestClose}>
+        <form className="drawer-form activity-editor" noValidate onSubmit={save}><FormErrorSummary issues={formIssues} /><label className="field"><span>拍卖名称</span><input id="auction-name" required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label><div className="field" id="auction-product"><span>商品</span><MerchantProductPicker enabled={Boolean(editor)} selected={selectedProduct} onSelect={selectProduct} /></div><label className="field"><span>SKU</span><select id="auction-sku" required disabled={!selectedProduct} value={form.skuId || ""} onChange={(event) => setForm((current) => ({ ...current, skuId: Number(event.target.value) }))}><option value="">请选择 SKU</option>{availableSkus.map((sku) => <option key={sku.id} value={sku.id}>{skuLabel(sku)}</option>)}</select></label><div className="admin-form-grid"><label className="field"><span>起拍价（元）</span><input id="auction-starting-price" min="0" required step="0.01" type="number" value={form.startingPriceYuan} onChange={(event) => setForm((current) => ({ ...current, startingPriceYuan: event.target.value }))} /></label><label className="field"><span>最低加价（元）</span><input id="auction-min-increment" min="0.01" required step="0.01" type="number" value={form.minIncrementYuan} onChange={(event) => setForm((current) => ({ ...current, minIncrementYuan: event.target.value }))} /></label><label className="field"><span>开始时间</span><input id="auction-start-time" required type="datetime-local" value={form.startTime} onChange={(event) => setForm((current) => ({ ...current, startTime: event.target.value }))} /><small className="field-help">{formatBeijingDateTime(form.startTime)}</small></label><label className="field"><span>结束时间</span><input id="auction-end-time" required type="datetime-local" value={form.endTime} onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))} /><small className="field-help">{formatBeijingDateTime(form.endTime)}</small></label></div><div className="drawer-form__actions"><button className="button button--secondary" disabled={busy} type="button" onClick={unsaved.requestClose}>取消</button><button className="button button--primary" disabled={busy} type="submit">{busy ? "保存中…" : editor?.mode === "edit" ? "保存修改" : "保存草稿"}</button></div></form>
       </Drawer>
 
-      <Drawer open={Boolean(detail)} title="拍卖详情" description={detail ? detail.name : ""} onClose={() => setDetail(null)}>{detail ? <div className="drawer-form"><div className="activity-detail-product">{assetUrl(detail.productImageUrl) ? <img alt={detail.productName || detail.name} src={assetUrl(detail.productImageUrl) ?? ""} /> : <span className="listing-table__placeholder">C</span>}<div><strong>{detail.productName || `商品 ${detail.productId}`}</strong><small>{detail.skuLabel || `SKU ${detail.skuId}`}</small><span>商品原价 {formatMoney(detail.originalPrice)}</span></div></div><div className="detail-rows"><div><span>场次状态</span><strong>{labels[detail.status] ?? detail.status}</strong></div><div><span>拍卖排期</span><strong>{formatDateTime(detail.startTime)} 至 {formatDateTime(detail.endTime)}</strong></div><div><span>价格规则</span><strong>起拍 {formatMoney(detail.startingPrice)} · 最低加价 {formatMoney(detail.minIncrement)}</strong></div><div><span>竞价表现</span><strong>{detail.bidCount ?? 0} 次出价 · {detail.currentAmount == null ? "暂无出价" : `当前 ${formatMoney(detail.currentAmount)}`}</strong></div>{detail.winnerUserId ? <div><span>结算结果</span><strong>中标用户 {detail.winnerUserId}</strong></div> : null}{detail.settlementFailureReason ? <div><span>结算异常</span><strong>{detail.settlementFailureReason}</strong></div> : null}</div></div> : null}</Drawer>
+      <Drawer open={Boolean(detail)} title="拍卖详情" description={detail ? detail.name : ""} onClose={() => setDetail(null)}>{detail ? <div className="drawer-form"><div className="activity-detail-product"><MediaImage alt={detail.productName || detail.name} fallback={<span className="listing-table__placeholder">C</span>} src={assetUrl(detail.productImageUrl)} /><div><strong>{detail.productName || `商品 ${detail.productId}`}</strong><small>{detail.skuLabel || `SKU ${detail.skuId}`}</small><span>商品原价 {formatMoney(detail.originalPrice)}</span></div></div><div className="detail-rows"><div><span>场次状态</span><strong>{labels[detail.status] ?? detail.status}</strong></div><div><span>拍卖排期</span><strong>{formatDateTime(detail.startTime)} 至 {formatDateTime(detail.endTime)}</strong></div><div><span>价格规则</span><strong>起拍 {formatMoney(detail.startingPrice)} · 最低加价 {formatMoney(detail.minIncrement)}</strong></div><div><span>竞价表现</span><strong>{detail.bidCount ?? 0} 次出价 · {detail.currentAmount == null ? "暂无出价" : `当前 ${formatMoney(detail.currentAmount)}`}</strong></div>{detail.winnerUserId ? <div><span>结算结果</span><strong>中标用户 {detail.winnerUserId}</strong></div> : null}{detail.settlementFailureReason ? <div><span>结算异常</span><strong>{detail.settlementFailureReason}</strong></div> : null}</div></div> : null}</Drawer>
+      {unsaved.confirmation}
       <ConfirmDialog open={Boolean(pending)} title={actionMeta.title} description={actionMeta.description} confirmLabel={actionMeta.label} dangerous={actionMeta.dangerous} busy={busy} onClose={() => { if (!busy) setPending(null); }} onConfirm={() => void transition()} />
     </section>
   );

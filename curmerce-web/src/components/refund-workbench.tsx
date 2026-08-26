@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
 import { EmptyState } from "@/components/empty-state";
 import { Pagination } from "@/components/pagination";
+import { notifyWorkspaceBadgesChanged } from "@/components/workspace-shell";
 import { RotateCcw } from "lucide-react";
 import { CurmerceApiError } from "@/lib/api/client";
 import { adminRefundApi } from "@/lib/api/admin-refund";
@@ -120,6 +121,7 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
       }
       setMessage(action === "approve" ? "退款已审核通过" : "退款已驳回");
       setPendingReview(null);
+      notifyWorkspaceBadgesChanged();
       await loadRefunds();
       await loadDetail(selected.id);
     } catch (cause) {
@@ -145,6 +147,7 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
         success: callbackSuccess,
       });
       setMessage(callbackSuccess ? "退款成功回调已模拟" : "退款失败回调已模拟");
+      notifyWorkspaceBadgesChanged();
       await loadRefunds();
       await loadDetail(selected.id);
     } catch (cause) {

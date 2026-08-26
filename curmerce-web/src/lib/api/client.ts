@@ -25,6 +25,7 @@ function toAbsoluteUrl(path: string) {
 
 export function assetUrl(path?: string | null) {
   if (!path) return null;
+  if (path.startsWith("/demo/")) return path;
   return /^https?:\/\//.test(path) ? path : `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
@@ -36,6 +37,11 @@ async function readJson(response: Response): Promise<unknown> {
   } catch {
     return { msg: text };
   }
+}
+
+function rememberUnauthorizedReturnTo(audience: "app" | "admin") {
+  if (typeof window === "undefined" || window.location.pathname.includes("/login")) return;
+  window.sessionStorage.setItem(`curmerce.${audience}-return-to`, `${window.location.pathname}${window.location.search}${window.location.hash}`);
 }
 
 export async function appApi<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -55,6 +61,7 @@ export async function appApi<T>(path: string, init: RequestInit = {}): Promise<T
   const payload = (await readJson(response)) as CommonResult<T> | ApiErrorShape | null;
 
   if (!response.ok) {
+    if (response.status === 401) rememberUnauthorizedReturnTo("app");
     const error = payload as ApiErrorShape | null;
     throw new CurmerceApiError(error?.msg || `请求失败（HTTP ${response.status}）`, response.status, error?.code);
   }
@@ -65,6 +72,7 @@ export async function appApi<T>(path: string, init: RequestInit = {}): Promise<T
 
   const result = payload as CommonResult<T>;
   if (result.code !== 0) {
+    if (result.code === 401 || result.code === 40101) rememberUnauthorizedReturnTo("app");
     throw new CurmerceApiError(result.msg || "请求失败", response.status, result.code);
   }
   return result.data;
@@ -95,6 +103,7 @@ export async function adminApi<T>(path: string, init: RequestInit = {}): Promise
   const payload = (await readJson(response)) as CommonResult<T> | ApiErrorShape | null;
 
   if (!response.ok) {
+    if (response.status === 401) rememberUnauthorizedReturnTo("admin");
     const error = payload as ApiErrorShape | null;
     throw new CurmerceApiError(error?.msg || `请求失败（HTTP ${response.status}）`, response.status, error?.code);
   }
@@ -105,6 +114,7 @@ export async function adminApi<T>(path: string, init: RequestInit = {}): Promise
 
   const result = payload as CommonResult<T>;
   if (result.code !== 0) {
+    if (result.code === 401 || result.code === 40101) rememberUnauthorizedReturnTo("admin");
     throw new CurmerceApiError(result.msg || "请求失败", response.status, result.code);
   }
   return result.data;

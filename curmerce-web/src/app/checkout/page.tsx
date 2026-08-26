@@ -13,6 +13,7 @@ import { memberApi } from "@/lib/api/member";
 import { orderApi } from "@/lib/api/order";
 import { formatMoney } from "@/lib/format";
 import { clearToken, getAccessToken } from "@/lib/auth/storage";
+import { currentLocation, loginPath } from "@/lib/auth/guards";
 import type { CartItem, CartList, MemberAddress, OrderCreateResult } from "@/lib/types/api";
 
 export default function CheckoutPage() {
@@ -30,7 +31,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!getAccessToken()) {
-      router.replace("/login");
+      router.replace(loginPath("/login", currentLocation()));
       return;
     }
     void loadCheckout();
@@ -62,7 +63,7 @@ export default function CheckoutPage() {
     } catch (cause) {
       if (cause instanceof CurmerceApiError && cause.status === 401) {
         clearToken();
-        router.replace("/login");
+        router.replace(loginPath("/login", currentLocation()));
         return;
       }
       setError(cause instanceof CurmerceApiError ? cause.message : "结算信息加载失败");

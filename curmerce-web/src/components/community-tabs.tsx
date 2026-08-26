@@ -21,7 +21,7 @@ export function CommunityTabs() {
           return <Link aria-current={active ? "page" : undefined} className={active ? "community-subnav__item community-subnav__item--active" : "community-subnav__item"} href={href} key={href}><Icon aria-hidden="true" size={16} />{label}</Link>;
         })}
       </nav>
-      <Link className="button button--primary button--small button--icon-label" href="/community/create"><PenSquare aria-hidden="true" size={16} />发布</Link>
+      <Link aria-label="发布帖子" className="button button--primary button--small button--icon-label community-compose-button" href="/community/create" title="发布帖子"><PenSquare aria-hidden="true" size={16} /><span>发布</span></Link>
     </div>
   );
 }
