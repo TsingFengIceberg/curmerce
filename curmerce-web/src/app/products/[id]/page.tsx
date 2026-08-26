@@ -15,6 +15,8 @@ import { formatMoney, formatStock } from "@/lib/format";
 import { productFavoriteApi } from "@/lib/api/product-favorite";
 import { getAccessToken } from "@/lib/auth/storage";
 import { currentLocation, loginPath } from "@/lib/auth/guards";
+import { notifyFeedback } from "@/components/feedback-center";
+import { notifyCartChanged, notifyFavoritesChanged } from "@/lib/ui-events";
 import type { CommunityPost, PublicProductDetail, PublicProductSku, PublicProductSummary } from "@/lib/types/api";
 import { BadgeCheck, Heart, RotateCcw, ShieldCheck, Store, Truck } from "lucide-react";
 
@@ -111,6 +113,8 @@ export default function ProductDetailPage() {
     try {
       await cartApi.add({ skuId: selectedSku.id, quantity });
       setMessage("已加入购物车");
+      notifyCartChanged();
+      notifyFeedback({ tone: "success", title: "已加入购物车", description: `${product?.name ?? "商品"} × ${quantity}` });
     } catch (cause) {
       if (cause instanceof CurmerceApiError && cause.status === 401) {
         router.push(loginPath("/login", currentLocation()));
@@ -128,16 +132,21 @@ export default function ProductDetailPage() {
       router.push(loginPath("/login", currentLocation()));
       return;
     }
+    const previous = favorite;
+    const next = !previous;
+    setFavorite(next);
     setFavoritePending(true);
     setMessage(null);
     setError(null);
     try {
-      const next = !favorite;
       await productFavoriteApi.set(product.id, next);
-      setFavorite(next);
       setMessage(next ? "已收藏商品" : "已取消收藏");
+      notifyFavoritesChanged();
+      notifyFeedback({ tone: "success", title: next ? "已收藏商品" : "已取消收藏", actionLabel: "撤销", onAction: async () => { await productFavoriteApi.set(product.id, previous); setFavorite(previous); notifyFavoritesChanged(); } });
     } catch (cause) {
+      setFavorite(previous);
       setError(cause instanceof CurmerceApiError ? cause.message : "收藏状态更新失败");
+      notifyFeedback({ tone: "error", title: "收藏状态更新失败", description: cause instanceof Error ? cause.message : undefined });
     } finally {
       setFavoritePending(false);
     }

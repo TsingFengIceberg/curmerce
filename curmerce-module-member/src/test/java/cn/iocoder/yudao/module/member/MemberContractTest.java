@@ -3,6 +3,10 @@ package cn.iocoder.yudao.module.member;
 import cn.iocoder.yudao.module.member.controller.app.auth.MemberAuthController;
 import cn.iocoder.yudao.module.member.controller.app.auth.vo.MemberAuthRegisterReqVO;
 import cn.iocoder.yudao.module.member.controller.app.user.MemberProfileController;
+import cn.iocoder.yudao.module.member.controller.admin.user.MemberUserController;
+import cn.iocoder.yudao.module.member.controller.admin.user.vo.MemberUserPageReqVO;
+import cn.iocoder.yudao.module.member.controller.admin.user.vo.MemberUserRespVO;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.junit.jupiter.api.Test;
 
 import jakarta.annotation.security.PermitAll;
@@ -29,5 +33,12 @@ class MemberContractTest {
         for (Method method : MemberProfileController.class.getDeclaredMethods()) {
             assertNull(method.getAnnotation(PermitAll.class));
         }
+    }
+
+    @Test
+    void adminMemberSearchIsPermissionProtectedAndDoesNotExposePassword() throws Exception {
+        Method page = MemberUserController.class.getMethod("page", MemberUserPageReqVO.class);
+        assertNotNull(page.getAnnotation(PreAuthorize.class));
+        assertThrows(NoSuchFieldException.class, () -> MemberUserRespVO.class.getDeclaredField("password"));
     }
 }

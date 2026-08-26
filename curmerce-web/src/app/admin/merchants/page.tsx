@@ -14,6 +14,7 @@ import { CurmerceApiError } from "@/lib/api/client";
 import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
 import { formatDateTime, formatMerchantStatus } from "@/lib/format";
 import type { MerchantSummary } from "@/lib/types/api";
+import { positiveInt, useUrlQuery } from "@/hooks/use-url-query";
 
 const PAGE_SIZE = 15;
 const emptyMerchant = { name: "", code: "", contactName: "", contactMobile: "", defaultStoreName: "", defaultStoreCode: "" };
@@ -22,12 +23,13 @@ type ReviewMode = "approve" | "reject";
 
 export default function AdminMerchantsPage() {
   const router = useRouter();
+  const { searchParams, update } = useUrlQuery();
   const [merchants, setMerchants] = useState<MerchantSummary[]>([]);
-  const [pageNo, setPageNo] = useState(1);
   const [total, setTotal] = useState(0);
-  const [status, setStatus] = useState("");
-  const [name, setName] = useState("");
-  const [nameInput, setNameInput] = useState("");
+  const pageNo = positiveInt(searchParams.get("page"));
+  const status = searchParams.get("status") ?? "";
+  const name = searchParams.get("name") ?? "";
+  const [nameInput, setNameInput] = useState(name);
   const [detail, setDetail] = useState<MerchantSummary | null>(null);
   const [creating, setCreating] = useState(false);
   const [createForm, setCreateForm] = useState(emptyMerchant);
@@ -40,20 +42,13 @@ export default function AdminMerchantsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const initialName = new URLSearchParams(window.location.search).get("name") ?? "";
-    setNameInput(initialName);
-    setName(initialName);
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
     if (!getAdminAccessToken()) { router.replace("/merchant/login"); return; }
     void load();
-  }, [hydrated, router, pageNo, status, name]);
+  }, [router, pageNo, status, name]);
+
+  useEffect(() => setNameInput(name), [name]);
 
   async function load() {
     setLoading(true);
@@ -80,8 +75,7 @@ export default function AdminMerchantsPage() {
 
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPageNo(1);
-    setName(nameInput.trim());
+    update({ page: 1, name: nameInput.trim() });
   }
 
   async function create(event: FormEvent<HTMLFormElement>) {
@@ -94,7 +88,7 @@ export default function AdminMerchantsPage() {
       notifyWorkspaceBadgesChanged();
       setCreateForm(emptyMerchant);
       setCreating(false);
-      setPageNo(1);
+      update({ page: 1 });
       await load();
     } catch (cause) {
       handle(cause, "创建商家申请失败");
@@ -149,11 +143,11 @@ export default function AdminMerchantsPage() {
       {message ? <Notice tone="success">{message}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}
       <div className="workspace-section admin-data-panel">
-        <div className="admin-data-toolbar"><select aria-label="商家审核状态" value={status} onChange={(event) => { setStatus(event.target.value); setPageNo(1); }}><option value="">全部状态</option><option value="0">待审核</option><option value="1">已通过</option><option value="2">已拒绝</option></select><form className="order-search" onSubmit={search}><Search aria-hidden="true" size={16} /><input aria-label="商家名称" placeholder="搜索商家名称" value={nameInput} onChange={(event) => setNameInput(event.target.value)} /><button type="submit">查询</button></form><span>共 {total} 家</span></div>
+        <div className="admin-data-toolbar"><select aria-label="商家审核状态" value={status} onChange={(event) => update({ status: event.target.value, page: 1 })}><option value="">全部状态</option><option value="0">待审核</option><option value="1">已通过</option><option value="2">已拒绝</option></select><form className="order-search" onSubmit={search}><Search aria-hidden="true" size={16} /><input aria-label="商家名称" placeholder="搜索商家名称" value={nameInput} onChange={(event) => setNameInput(event.target.value)} /><button type="submit">查询</button></form><span>共 {total} 家</span></div>
         {loading ? <div className="order-list-skeleton"><span /><span /><span /></div> : null}
         {!loading && !merchants.length ? <EmptyState icon={<Building2 aria-hidden="true" size={23} />} title="没有符合条件的商家" description="调整筛选条件或创建新的入驻申请。" actionLabel="创建申请" onAction={() => setCreating(true)} /> : null}
         {!loading && merchants.length ? <div className="admin-merchant-table"><div className="admin-merchant-table__head"><span>商家与店铺</span><span>联系人</span><span>申请时间</span><span>审核状态</span><span>操作</span></div>{merchants.map((merchant) => <article className="admin-merchant-table__row" key={merchant.id}><div className="admin-merchant-table__identity"><span className="admin-table-avatar"><Building2 aria-hidden="true" size={18} /></span><div><strong>{merchant.name}</strong><small>{merchant.defaultStoreName}</small></div></div><div className="admin-table-stack"><strong>{merchant.contactName}</strong><small>{merchant.contactMobile}</small></div><span className="admin-table-time">{formatDateTime(merchant.createTime)}</span><span className={`tag merchant-status merchant-status--${merchant.status}`}>{formatMerchantStatus(merchant.status)}</span><div className="listing-table__actions"><button aria-label={`查看 ${merchant.name}`} className="icon-button" title="查看资料" type="button" onClick={() => setDetail(merchant)}><Eye aria-hidden="true" size={16} /></button>{merchant.status === 0 ? <button aria-label={`通过 ${merchant.name}`} className="icon-button" title="审核通过" type="button" onClick={() => openReview(merchant, "approve")}><CheckCircle2 aria-hidden="true" size={16} /></button> : null}{merchant.status === 0 ? <button aria-label={`拒绝 ${merchant.name}`} className="icon-button icon-button--danger" title="拒绝申请" type="button" onClick={() => openReview(merchant, "reject")}><XCircle aria-hidden="true" size={16} /></button> : null}</div></article>)}</div> : null}
-        <Pagination pageNo={pageNo} pageSize={PAGE_SIZE} total={total} onChange={setPageNo} />
+        <Pagination pageNo={pageNo} pageSize={PAGE_SIZE} total={total} onChange={(page) => update({ page })} />
       </div>
 
       <Drawer open={creating} title="创建商家入驻申请" description="录入主体、联系人和首个店铺信息，创建后进入待审核队列。" busy={busy} onClose={() => setCreating(false)}><form className="drawer-form" onSubmit={create}><label className="field"><span>商家名称</span><input minLength={2} maxLength={64} required value={createForm.name} onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))} /></label><label className="field"><span>商家识别码</span><input minLength={3} maxLength={32} pattern="[a-z][a-z0-9_]{2,31}" placeholder="例如 autumn_hobby" required value={createForm.code} onChange={(event) => setCreateForm((current) => ({ ...current, code: event.target.value }))} /><small className="field-help">用于系统内唯一识别，创建后不建议修改。</small></label><div className="admin-form-grid"><label className="field"><span>联系人</span><input minLength={2} maxLength={30} required value={createForm.contactName} onChange={(event) => setCreateForm((current) => ({ ...current, contactName: event.target.value }))} /></label><label className="field"><span>联系电话</span><input maxLength={11} pattern="1[3-9][0-9]{9}" required value={createForm.contactMobile} onChange={(event) => setCreateForm((current) => ({ ...current, contactMobile: event.target.value }))} /></label></div><label className="field"><span>首个店铺名称</span><input minLength={2} maxLength={64} required value={createForm.defaultStoreName} onChange={(event) => setCreateForm((current) => ({ ...current, defaultStoreName: event.target.value }))} /></label><label className="field"><span>店铺识别码</span><input minLength={3} maxLength={32} pattern="[a-z][a-z0-9_]{2,31}" placeholder="例如 autumn_store" required value={createForm.defaultStoreCode} onChange={(event) => setCreateForm((current) => ({ ...current, defaultStoreCode: event.target.value }))} /></label><div className="drawer-form__actions"><button className="button button--secondary" disabled={busy} type="button" onClick={() => setCreating(false)}>取消</button><button className="button button--primary" disabled={busy} type="submit">{busy ? "创建中…" : "创建申请"}</button></div></form></Drawer>

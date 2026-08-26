@@ -9,6 +9,7 @@ import { refundApi } from "@/lib/api/refund";
 import { clearToken, getAccessToken } from "@/lib/auth/storage";
 import { formatDateTime, formatMoney, formatRefundStatus } from "@/lib/format";
 import type { RefundDetail } from "@/lib/types/api";
+import { ProcessTimeline } from "@/components/process-timeline";
 
 export default function RefundDetailPage() {
   const params = useParams<{ id: string }>();
@@ -76,6 +77,14 @@ export default function RefundDetailPage() {
           <div className="panel-heading"><h2>申请信息</h2></div>
           <div className="snapshot-card"><strong>退款原因</strong><p>{refund.reason || "未填写"}</p>{refund.reviewRemark ? <><strong>审核备注</strong><p>{refund.reviewRemark}</p></> : null}</div>
           {refund.callbackId ? <p className="payment-number">回调编号：{refund.callbackId} · {refund.callbackSuccess ? "回调成功" : "回调未成功"}</p> : null}
+        </section>
+        <section className="orders-panel">
+          <div className="panel-heading"><h2>退款进度</h2></div>
+          <ProcessTimeline steps={[
+            { id: "requested", label: "提交退款申请", time: formatDateTime(refund.requestedTime), state: "done" },
+            { id: "reviewed", label: refund.status === 30 ? "审核驳回" : "平台审核", description: refund.reviewRemark || undefined, time: refund.reviewedTime ? formatDateTime(refund.reviewedTime) : undefined, state: refund.status === 30 ? "error" : refund.reviewedTime ? "done" : "current" },
+            { id: "processed", label: "退款处理完成", description: refund.callbackId ? `回调 ${refund.callbackId}` : undefined, time: refund.processedTime ? formatDateTime(refund.processedTime) : undefined, state: refund.processedTime && refund.callbackSuccess ? "done" : refund.callbackId && refund.callbackSuccess === false ? "error" : "pending" },
+          ]} />
         </section>
       </div>
     </section>

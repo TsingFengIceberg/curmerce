@@ -3,6 +3,8 @@ package cn.iocoder.yudao.module.member.service.user;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.module.member.controller.app.auth.vo.MemberAuthRegisterReqVO;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.member.controller.admin.user.vo.MemberUserPageReqVO;
 import cn.iocoder.yudao.module.member.controller.app.user.vo.MemberProfileUpdateReqVO;
 import cn.iocoder.yudao.module.member.dal.dataobject.user.MemberUserDO;
 import cn.iocoder.yudao.module.member.dal.mysql.user.MemberUserMapper;
@@ -52,6 +54,7 @@ public class MemberUserServiceImpl implements MemberUserService {
         return user;
     }
     @Override public MemberUserDO getUserByMobile(String mobile) { return userMapper.selectByMobile(StrUtil.trim(mobile)); }
+    @Override public PageResult<MemberUserDO> getUserPage(MemberUserPageReqVO reqVO) { return userMapper.selectPage(reqVO); }
     @Override public boolean isPasswordMatch(String rawPassword, String encodedPassword) {
         return encodedPassword != null && passwordEncoder.matches(rawPassword, encodedPassword);
     }

@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 import { CommunityPostCard } from "@/components/community-post-card";
 import { EmptyState } from "@/components/empty-state";
 import { Notice } from "@/components/notice";
-import { Pagination } from "@/components/pagination";
 import { communityApi } from "@/lib/api/community";
 import { CurmerceApiError } from "@/lib/api/client";
 import { currentLocation, loginPath } from "@/lib/auth/guards";
@@ -54,7 +53,7 @@ export default function CommunityPage() {
     setError(null);
     try {
       const page = await communityApi.page({ pageNo, pageSize: PAGE_SIZE, keyword, topicSlug });
-      setPosts(page.list ?? []);
+      setPosts((current) => pageNo === 1 ? page.list ?? [] : Array.from(new Map([...current, ...(page.list ?? [])].map((post) => [post.id, post])).values()));
       setTotal(page.total ?? 0);
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "社区内容加载失败");
@@ -111,7 +110,7 @@ export default function CommunityPage() {
       {loading ? <div className="community-skeleton"><span /><span /><span /><span /></div> : null}
       {!loading && !posts.length ? <EmptyState icon={<Compass aria-hidden="true" size={23} />} title="没有找到匹配的内容" description="可以清空筛选继续发现，或者发布一篇新的分享。" actionLabel="清空筛选" onAction={clearFilters} /> : null}
       {!loading && posts.length ? <div className="community-grid community-grid--productized">{posts.map((post) => <CommunityPostCard post={post} key={post.id} reactionBusy={reactionBusyId === post.id} onFollow={() => void follow(post)} onReaction={(item, type, active) => void react(item, type, active)} />)}</div> : null}
-      <Pagination pageNo={pageNo} pageSize={PAGE_SIZE} total={total} onChange={setPageNo} />
+      {posts.length < total ? <button className="button button--secondary community-load-more" disabled={loading} type="button" onClick={() => setPageNo((current) => current + 1)}>{loading ? "加载中…" : `继续加载（剩余 ${total - posts.length} 篇）`}</button> : posts.length ? <p className="feed-end">已经看到当前筛选的全部内容</p> : null}
     </section>
   );
 }

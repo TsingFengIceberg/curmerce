@@ -12,6 +12,8 @@ import { CurmerceApiError } from "@/lib/api/client";
 import { productFavoriteApi } from "@/lib/api/product-favorite";
 import { getAccessToken } from "@/lib/auth/storage";
 import type { ProductFavorite } from "@/lib/types/api";
+import { notifyFeedback } from "@/components/feedback-center";
+import { notifyFavoritesChanged } from "@/lib/ui-events";
 
 const PAGE_SIZE = 12;
 
@@ -49,13 +51,18 @@ export default function ProductFavoritesPage() {
     setRemovingId(item.productId);
     setMessage(null);
     setError(null);
+    setItems((current) => current.filter((entry) => entry.productId !== item.productId));
+    setTotal((current) => Math.max(0, current - 1));
     try {
       await productFavoriteApi.set(item.productId, false);
       setMessage("已取消收藏");
+      notifyFavoritesChanged();
+      notifyFeedback({ tone: "success", title: "已取消收藏", description: item.product?.name ?? `商品 ${item.productId}`, actionLabel: "撤销", onAction: async () => { await productFavoriteApi.set(item.productId, true); await loadFavorites(); notifyFavoritesChanged(); } });
       if (items.length === 1 && pageNo > 1) setPageNo((current) => current - 1);
-      else await loadFavorites();
     } catch (cause) {
+      await loadFavorites();
       setError(cause instanceof CurmerceApiError ? cause.message : "取消收藏失败");
+      notifyFeedback({ tone: "error", title: "取消收藏失败", description: cause instanceof Error ? cause.message : undefined, actionLabel: "重试", onAction: () => removeFavorite(item) });
     } finally {
       setRemovingId(null);
     }

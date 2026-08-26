@@ -246,6 +246,16 @@ export interface MemberProfile {
   sex?: number | null;
 }
 
+export interface AdminMemberSummary {
+  id: number;
+  mobile: string;
+  nickname: string;
+  avatar?: string;
+  email?: string;
+  status: number;
+  createTime?: string;
+}
+
 export interface AreaNode {
   id: number;
   name: string;
@@ -509,6 +519,8 @@ export interface ProductPageQuery {
   name?: string;
   auditStatus?: number;
   saleStatus?: number;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface ProductSkuInput {

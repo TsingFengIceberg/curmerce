@@ -34,6 +34,9 @@ import { adminCommunityApi } from "@/lib/api/community";
 import { orderApi } from "@/lib/api/order";
 import { personalApi } from "@/lib/api/personal";
 import { getAccessToken, getAdminAccessToken } from "@/lib/auth/storage";
+import { memberApi } from "@/lib/api/member";
+import { adminStoreApi } from "@/lib/api/admin-product";
+import { getPermissionInfoCached } from "@/lib/auth/guards";
 
 type WorkspaceKind = "admin" | "merchant" | "personal" | "buyer";
 const WORKSPACE_BADGES_CHANGED_EVENT = "curmerce:workspace-badges-changed";
@@ -159,6 +162,8 @@ export function WorkspaceShell({ kind, children }: { kind: WorkspaceKind; childr
   const pathname = usePathname();
   const [badges, setBadges] = useState<Record<string, number>>({});
   const [navOpen, setNavOpen] = useState(false);
+  const [identity, setIdentity] = useState<{ name: string; context: string } | null>(null);
+  const [buyerAvailable, setBuyerAvailable] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -175,6 +180,37 @@ export function WorkspaceShell({ kind, children }: { kind: WorkspaceKind; childr
     };
   }, [kind, pathname]);
 
+  useEffect(() => {
+    let active = true;
+    async function loadIdentity() {
+      try {
+        if (kind === "buyer" || kind === "personal") {
+          if (!getAccessToken()) return;
+          const profile = await memberApi.getProfile();
+          const memberName = profile?.nickname?.trim() || (profile?.id ? `用户 ${profile.id}` : "当前用户");
+          if (active) setIdentity({ name: memberName, context: profile?.mobile || profile?.email || "普通用户" });
+          return;
+        }
+        if (!getAdminAccessToken()) return;
+        const permission = await getPermissionInfoCached();
+        if (kind === "merchant") {
+          const store = await adminStoreApi.own();
+          const operatorName = permission.user.nickname || permission.user.username || "商家账号";
+          if (active) setIdentity({ name: store?.name?.trim() || "当前店铺", context: `${operatorName} · 商家店主` });
+        } else if (active) {
+          const operatorName = permission.user.nickname || permission.user.username || "平台账号";
+          setIdentity({ name: operatorName, context: `${permission.user.username || operatorName} · 平台管理员` });
+        }
+      } catch {
+        if (active) setIdentity(null);
+      }
+    }
+    void loadIdentity();
+    return () => { active = false; };
+  }, [kind]);
+
+  useEffect(() => setBuyerAvailable(Boolean(getAccessToken())), []);
+
   if (pathname === "/merchant/login") return children;
   const meta = workspaceMeta[kind];
 
@@ -185,6 +221,7 @@ export function WorkspaceShell({ kind, children }: { kind: WorkspaceKind; childr
           <span className="workspace-sidebar__icon">{kind === "admin" ? <UsersRound aria-hidden="true" /> : kind === "merchant" ? <CircleDollarSign aria-hidden="true" /> : kind === "buyer" ? <CircleUserRound aria-hidden="true" /> : <FileText aria-hidden="true" />}</span>
           <div><strong>{meta.title}</strong><small>{meta.description}</small></div>
         </div>
+        {identity ? <div className="workspace-identity"><span aria-hidden="true">{identity.name.slice(0, 1)}</span><div><strong>{identity.name}</strong><small>{identity.context}</small></div></div> : null}
         <button aria-expanded={navOpen} className="workspace-nav-toggle" type="button" onClick={() => setNavOpen((current) => !current)}><span>{currentLabel(kind, pathname)}</span><ChevronDown aria-hidden="true" size={17} /></button>
         <nav className={navOpen ? "workspace-nav workspace-nav--open" : "workspace-nav"} aria-label={`${meta.title}导航`}>
           {meta.navigation.map(({ href, label, icon: Icon }) => (
@@ -193,6 +230,12 @@ export function WorkspaceShell({ kind, children }: { kind: WorkspaceKind; childr
             </Link>
           ))}
         </nav>
+        <div className="workspace-switcher">
+          {kind === "buyer" ? <Link href="/personal">切换到个人卖家中心</Link> : null}
+          {kind === "personal" ? <Link href="/account">返回买家账户</Link> : null}
+          {(kind === "admin" || kind === "merchant") && buyerAvailable ? <Link href="/account">打开我的买家账户</Link> : null}
+          {(kind === "admin" || kind === "merchant") ? <Link href="/catalog">返回公开商城</Link> : null}
+        </div>
       </aside>
       <div className="workspace-content">
         <div className="workspace-breadcrumb"><Link href={meta.root}>{meta.title}</Link><ChevronRight aria-hidden="true" size={14} /><span>{currentLabel(kind, pathname)}</span></div>

@@ -2,6 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
+import { FeedbackCenter } from "@/components/feedback-center";
+import { NetworkStatus } from "@/components/network-status";
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -11,7 +13,9 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       <SiteHeader />
+      <NetworkStatus />
       <main className={workspace ? "workspace-page-shell" : "page-shell"}>{children}</main>
+      <FeedbackCenter />
     </>
   );
 }

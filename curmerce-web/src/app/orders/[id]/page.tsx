@@ -8,7 +8,8 @@ import { notifyWorkspaceBadgesChanged } from "@/components/workspace-shell";
 import { MediaImage } from "@/components/media-image";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
-import { CheckCircle2, Circle, FlaskConical } from "lucide-react";
+import { FlaskConical } from "lucide-react";
+import { ProcessTimeline } from "@/components/process-timeline";
 import { CurmerceApiError, assetUrl } from "@/lib/api/client";
 import { orderApi } from "@/lib/api/order";
 import { paymentApi } from "@/lib/api/payment";
@@ -221,10 +222,12 @@ export default function OrderDetailPage() {
           </section>
           <section className="orders-panel timeline-panel">
             <p className="eyebrow">ORDER TIMELINE</p>
-            <div className="timeline-row timeline-row--done"><CheckCircle2 aria-hidden="true" size={17} /><span>创建订单</span><time>{formatDateTime(order.createTime)}</time></div>
-            <div className={order.paidTime ? "timeline-row timeline-row--done" : "timeline-row"}>{order.paidTime ? <CheckCircle2 aria-hidden="true" size={17} /> : <Circle aria-hidden="true" size={17} />}<span>完成支付</span><time>{order.paidTime ? formatDateTime(order.paidTime) : "等待中"}</time></div>
-            <div className={order.shippingTime ? "timeline-row timeline-row--done" : "timeline-row"}>{order.shippingTime ? <CheckCircle2 aria-hidden="true" size={17} /> : <Circle aria-hidden="true" size={17} />}<span>卖家发货</span><time>{order.shippingTime ? formatDateTime(order.shippingTime) : "等待中"}</time></div>
-            <div className={order.completionTime ? "timeline-row timeline-row--done" : "timeline-row"}>{order.completionTime ? <CheckCircle2 aria-hidden="true" size={17} /> : <Circle aria-hidden="true" size={17} />}<span>确认收货</span><time>{order.completionTime ? formatDateTime(order.completionTime) : "等待中"}</time></div>
+            <ProcessTimeline steps={[
+              { id: "created", label: "创建订单", time: formatDateTime(order.createTime), state: "done" },
+              { id: "paid", label: "完成支付", time: order.paidTime ? formatDateTime(order.paidTime) : undefined, state: order.paidTime ? "done" : order.status === 10 ? "current" : "pending" },
+              { id: "shipped", label: "卖家发货", description: order.trackingNo ? `${order.logisticsCompany || "物流"} · ${order.trackingNo}` : undefined, time: order.shippingTime ? formatDateTime(order.shippingTime) : undefined, state: order.shippingTime ? "done" : order.status === 20 ? "current" : "pending" },
+              { id: "completed", label: "确认收货", time: order.completionTime ? formatDateTime(order.completionTime) : undefined, state: order.completionTime ? "done" : order.status === 30 ? "current" : "pending" },
+            ]} />
           </section>
         </aside>
       </div>

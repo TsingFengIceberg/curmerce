@@ -93,6 +93,7 @@ class CommerceControllerContractTest {
     void merchantOrderSelfServiceRequestsDoNotAcceptClientOwnershipFields() {
         assertNoField(MerchantOrderPageReqVO.class, "merchantId", "storeId");
         assertNoField(MerchantOrderShipReqVO.class, "merchantId", "storeId");
+        assertDoesNotThrow(() -> MerchantOrderPageReqVO.class.getDeclaredField("createTime"));
     }
 
     @Test

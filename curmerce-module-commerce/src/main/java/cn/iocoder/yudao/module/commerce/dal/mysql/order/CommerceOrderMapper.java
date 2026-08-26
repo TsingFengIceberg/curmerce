@@ -74,6 +74,10 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
                 .eq(CommerceOrderDO::getMerchantId, merchantId)
                 .eq(CommerceOrderDO::getStoreId, storeId)
                 .eq(CommerceOrderDO::getStatus, OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus())
+                .between(req.getCreateTime() != null && req.getCreateTime().length == 2,
+                        CommerceOrderDO::getCreateTime,
+                        req.getCreateTime() == null ? null : req.getCreateTime()[0],
+                        req.getCreateTime() == null ? null : req.getCreateTime()[1])
                 .orderByDesc(CommerceOrderDO::getId));
     }
 
@@ -84,6 +88,10 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
                 .eq(CommerceOrderDO::getStoreId, storeId)
                 .eqIfPresent(CommerceOrderDO::getStatus, req.getStatus())
                 .likeIfPresent(CommerceOrderDO::getOrderNo, req.getOrderNo())
+                .between(req.getCreateTime() != null && req.getCreateTime().length == 2,
+                        CommerceOrderDO::getCreateTime,
+                        req.getCreateTime() == null ? null : req.getCreateTime()[0],
+                        req.getCreateTime() == null ? null : req.getCreateTime()[1])
                 .orderByDesc(CommerceOrderDO::getId));
     }
 
@@ -92,6 +100,7 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
         return selectPage(req, new LambdaQueryWrapperX<CommerceOrderDO>()
                 .eq(CommerceOrderDO::getSellerType, 2)
                 .eq(CommerceOrderDO::getSellerUserId, sellerUserId)
+                .betweenIfPresent(CommerceOrderDO::getCreateTime, req.getCreateTime())
                 .isNull(CommerceOrderDO::getMerchantId)
                 .isNull(CommerceOrderDO::getStoreId)
                 .eq(CommerceOrderDO::getStatus, OrderStatusEnum.PAID_PENDING_SHIPMENT.getStatus())
@@ -103,6 +112,7 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
         return selectPage(req, new LambdaQueryWrapperX<CommerceOrderDO>()
                 .eq(CommerceOrderDO::getSellerType, 2)
                 .eq(CommerceOrderDO::getSellerUserId, sellerUserId)
+                .betweenIfPresent(CommerceOrderDO::getCreateTime, req.getCreateTime())
                 .isNull(CommerceOrderDO::getMerchantId)
                 .isNull(CommerceOrderDO::getStoreId)
                 .eq(req.getStatus() != null, CommerceOrderDO::getStatus, req.getStatus())
@@ -117,6 +127,7 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
                 .eqIfPresent(CommerceOrderDO::getMerchantId, req.getMerchantId())
                 .eqIfPresent(CommerceOrderDO::getMemberUserId, req.getMemberUserId())
                 .likeIfPresent(CommerceOrderDO::getOrderNo, req.getOrderNo())
+                .betweenIfPresent(CommerceOrderDO::getCreateTime, req.getCreateTime())
                 .orderByDesc(CommerceOrderDO::getId));
     }
 

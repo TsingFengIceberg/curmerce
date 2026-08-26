@@ -14,6 +14,8 @@ import { formatMoney } from "@/lib/format";
 import { clearToken, getAccessToken } from "@/lib/auth/storage";
 import { currentLocation, loginPath } from "@/lib/auth/guards";
 import type { CartItem, CartList } from "@/lib/types/api";
+import { notifyFeedback } from "@/components/feedback-center";
+import { notifyCartChanged } from "@/lib/ui-events";
 
 interface StoreGroup {
   key: string;
@@ -77,11 +79,15 @@ export default function CartPage() {
     if (quantity < 1 || quantity > 99) return;
     setBusyId(item.id);
     setError(null);
+    const previousQuantity = item.quantity;
+    setCart((current) => ({ ...current, validList: current.validList.map((entry) => entry.id === item.id ? { ...entry, quantity } : entry) }));
     try {
       await cartApi.updateQuantity({ id: item.id, quantity });
-      await loadCart();
+      notifyCartChanged();
     } catch (cause) {
+      setCart((current) => ({ ...current, validList: current.validList.map((entry) => entry.id === item.id ? { ...entry, quantity: previousQuantity } : entry) }));
       setError(cause instanceof CurmerceApiError ? cause.message : "数量更新失败");
+      notifyFeedback({ tone: "error", title: "数量更新失败", description: cause instanceof Error ? cause.message : undefined, actionLabel: "重试", onAction: () => updateQuantity(item, quantity) });
     } finally {
       setBusyId(null);
     }
@@ -102,14 +108,20 @@ export default function CartPage() {
   }
 
   async function removeItems(itemIds: number[]) {
+    const removed = [...cart.validList, ...cart.invalidList].filter((item) => itemIds.includes(item.id));
     setBusyId(itemIds[0] ?? null);
     setError(null);
+    setCart((current) => ({ validList: current.validList.filter((item) => !itemIds.includes(item.id)), invalidList: current.invalidList.filter((item) => !itemIds.includes(item.id)) }));
     try {
       await cartApi.delete(itemIds);
       setMessage("购物车商品已删除");
-      await loadCart();
+      notifyCartChanged();
+      const canRestore = removed.some((item) => item.sku?.id);
+      notifyFeedback({ tone: "success", title: `已删除 ${removed.length} 件购物车商品`, actionLabel: canRestore ? "撤销" : undefined, onAction: canRestore ? async () => { for (const item of removed) if (item.sku?.id) await cartApi.add({ skuId: item.sku.id, quantity: item.quantity }); await loadCart(); notifyCartChanged(); } : undefined });
     } catch (cause) {
+      await loadCart();
       setError(cause instanceof CurmerceApiError ? cause.message : "购物车删除失败");
+      notifyFeedback({ tone: "error", title: "购物车删除失败", description: cause instanceof Error ? cause.message : undefined, actionLabel: "重试", onAction: () => removeItems(itemIds) });
     } finally {
       setBusyId(null);
     }

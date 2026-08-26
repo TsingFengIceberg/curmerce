@@ -15,6 +15,8 @@ import { formatMoney } from "@/lib/format";
 import { clearToken, getAccessToken } from "@/lib/auth/storage";
 import { currentLocation, loginPath } from "@/lib/auth/guards";
 import type { CartItem, CartList, MemberAddress, OrderCreateResult } from "@/lib/types/api";
+import { notifyFeedback } from "@/components/feedback-center";
+import { notifyCartChanged } from "@/lib/ui-events";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -94,6 +96,8 @@ export default function CheckoutPage() {
       const idempotencyKey = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `checkout-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const response = await orderApi.create(addressId, idempotencyKey);
       setResult(response);
+      notifyCartChanged();
+      notifyFeedback({ tone: "success", title: "订单创建成功", description: `订单号 ${response.orderNo}` });
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "订单创建失败");
     } finally {

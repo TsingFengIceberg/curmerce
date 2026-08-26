@@ -11,6 +11,7 @@ import { CurmerceApiError } from "@/lib/api/client";
 import { personalApi } from "@/lib/api/personal";
 import { formatDateTime } from "@/lib/format";
 import type { ProductOperationLog } from "@/lib/types/api";
+import { ProcessTimeline } from "@/components/process-timeline";
 
 const PAGE_SIZE = 10;
 const actorLabels: Record<number, string> = { 1: "个人卖家", 2: "商家", 3: "平台管理员" };
@@ -75,20 +76,15 @@ export function ProductOperationHistory({ open, productId, productName, scope, o
       {error ? <Notice>{error}</Notice> : null}
       {loading ? <div className="order-list-skeleton"><span /><span /><span /></div> : null}
       {!loading && !error && !logs.length ? <EmptyState icon={<History aria-hidden="true" size={23} />} title="暂无操作记录" description="创建、修改、审核和上下架操作将在这里留痕。" /> : null}
-      {!loading && logs.length ? <ol className="product-operation-timeline">{logs.map((log) => <li key={log.id}>
-        <span className="product-operation-timeline__marker" aria-hidden="true" />
-        <div className="product-operation-timeline__header"><strong>{actionLabels[log.action] ?? log.action}</strong><time>{formatDateTime(log.createTime)}</time></div>
-        <div className="product-operation-timeline__actor"><span>{actorLabels[log.operatorType] ?? "系统角色"}</span>{log.operatorUserId ? <small>操作人 #{log.operatorUserId}</small> : <small>系统记录</small>}</div>
-        <StatusTransition label="审核状态" from={log.fromAuditStatus} to={log.toAuditStatus} labels={auditLabels} />
-        <StatusTransition label="销售状态" from={log.fromSaleStatus} to={log.toSaleStatus} labels={saleLabels} />
-        {log.remark ? <p>{log.remark}</p> : null}
-      </li>)}</ol> : null}
+      {!loading && logs.length ? <ProcessTimeline label="商品操作记录" steps={logs.map((log) => ({ id: String(log.id), label: actionLabels[log.action] ?? log.action, time: formatDateTime(log.createTime), state: log.action === "REJECT" ? "error" as const : "done" as const, description: <span>{actorLabels[log.operatorType] ?? "系统角色"}{log.operatorUserId ? ` #${log.operatorUserId}` : ""}{transitionText(log)}{log.remark ? ` · ${log.remark}` : ""}</span> }))} /> : null}
       <Pagination pageNo={pageNo} pageSize={PAGE_SIZE} total={total} onChange={setPageNo} />
     </Drawer>
   );
 }
 
-function StatusTransition({ label, from, to, labels }: { label: string; from?: number | null; to?: number | null; labels: Record<number, string> }) {
-  if (to == null || (from != null && from === to)) return null;
-  return <div className="product-operation-timeline__transition"><span>{label}</span><strong>{from == null ? "—" : labels[from] ?? from}</strong><b aria-hidden="true">→</b><strong>{labels[to] ?? to}</strong></div>;
+function transitionText(log: ProductOperationLog) {
+  const transitions: string[] = [];
+  if (log.toAuditStatus != null && log.fromAuditStatus !== log.toAuditStatus) transitions.push(`审核：${log.fromAuditStatus == null ? "—" : auditLabels[log.fromAuditStatus] ?? log.fromAuditStatus} → ${auditLabels[log.toAuditStatus] ?? log.toAuditStatus}`);
+  if (log.toSaleStatus != null && log.fromSaleStatus !== log.toSaleStatus) transitions.push(`销售：${log.fromSaleStatus == null ? "—" : saleLabels[log.fromSaleStatus] ?? log.fromSaleStatus} → ${saleLabels[log.toSaleStatus] ?? log.toSaleStatus}`);
+  return transitions.length ? ` · ${transitions.join("；")}` : "";
 }

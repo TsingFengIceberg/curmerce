@@ -9,6 +9,9 @@ export const adminMerchantApi = {
     }
     return adminApi<ApiPage<MerchantSummary>>(`/commerce/merchant/page?${params.toString()}`);
   },
+  get(id: number) {
+    return adminApi<MerchantSummary>(`/commerce/merchant/get?id=${id}`);
+  },
   create(input: { name: string; code: string; contactName: string; contactMobile: string; defaultStoreName: string; defaultStoreCode: string }) {
     return adminApi<number>("/commerce/merchant/create", { method: "POST", body: jsonBody(input) });
   },

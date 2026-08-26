@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { CommunityPostCard } from "@/components/community-post-card";
 import { EmptyState } from "@/components/empty-state";
 import { Notice } from "@/components/notice";
-import { Pagination } from "@/components/pagination";
 import { communityApi } from "@/lib/api/community";
 import { CurmerceApiError } from "@/lib/api/client";
 import type { ApiPage, CommunityPost } from "@/lib/types/api";
@@ -38,7 +37,7 @@ export function CommunityFeedPage({ kind }: { kind: FeedKind }) {
     try {
       const loader = kind === "following" ? communityApi.following : communityApi.favorites;
       const page: ApiPage<CommunityPost> = await loader({ pageNo, pageSize: PAGE_SIZE });
-      setPosts(page.list ?? []);
+      setPosts((currentPosts) => pageNo === 1 ? page.list ?? [] : Array.from(new Map([...currentPosts, ...(page.list ?? [])].map((post) => [post.id, post])).values()));
       setTotal(page.total ?? 0);
     } catch (cause) {
       if (cause instanceof CurmerceApiError && cause.status === 401) {
@@ -83,7 +82,7 @@ export function CommunityFeedPage({ kind }: { kind: FeedKind }) {
       {loading ? <div className="community-skeleton"><span /><span /><span /></div> : null}
       {!loading && !posts.length ? <EmptyState icon={<Icon aria-hidden="true" size={23} />} title={current.emptyTitle} description={current.emptyDescription} action={{ href: "/community", label: "去发现内容" }} /> : null}
       {!loading && posts.length ? <div className="community-grid community-grid--productized">{posts.map((post) => <CommunityPostCard post={post} key={post.id} reactionBusy={reactionBusyId === post.id} onReaction={(item, type, active) => void react(item, type, active)} />)}</div> : null}
-      <Pagination pageNo={pageNo} pageSize={PAGE_SIZE} total={total} onChange={setPageNo} />
+      {posts.length < total ? <button className="button button--secondary community-load-more" disabled={loading} type="button" onClick={() => setPageNo((currentPage) => currentPage + 1)}>{loading ? "加载中…" : `继续加载（剩余 ${total - posts.length} 篇）`}</button> : posts.length ? <p className="feed-end">已经看到全部内容</p> : null}
     </section>
   );
 }

@@ -26,7 +26,9 @@ import {
 } from "@/lib/auth/storage";
 import { memberApi } from "@/lib/api/member";
 import { adminAuthApi } from "@/lib/api/admin-auth";
+import { cartApi } from "@/lib/api/cart";
 import { getPermissionInfoCached } from "@/lib/auth/guards";
+import { CART_CHANGED_EVENT } from "@/lib/ui-events";
 
 interface HeaderSession {
   hydrated: boolean;
@@ -50,6 +52,7 @@ export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
   const [session, setSession] = useState<HeaderSession>({ hydrated: false, buyerLoggedIn: false, adminLoggedIn: false, roles: [] });
   const backend = pathname.startsWith("/admin") || (pathname.startsWith("/merchant") && pathname !== "/merchant/login");
 
@@ -87,6 +90,30 @@ export function SiteHeader() {
   }, []);
 
   useEffect(() => setMenuOpen(false), [pathname]);
+
+  useEffect(() => {
+    let active = true;
+    async function refreshCartCount() {
+      if (!getAccessToken()) {
+        if (active) setCartCount(0);
+        return;
+      }
+      try {
+        const count = await cartApi.count();
+        if (active) setCartCount(Math.max(0, count ?? 0));
+      } catch {
+        if (active) setCartCount(0);
+      }
+    }
+    void refreshCartCount();
+    window.addEventListener(CART_CHANGED_EVENT, refreshCartCount);
+    window.addEventListener(AUTH_SESSION_CHANGED_EVENT, refreshCartCount);
+    return () => {
+      active = false;
+      window.removeEventListener(CART_CHANGED_EVENT, refreshCartCount);
+      window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, refreshCartCount);
+    };
+  }, []);
 
   const loggedIn = session.hydrated && session.buyerLoggedIn;
   const adminLoggedIn = session.hydrated && session.adminLoggedIn;
@@ -145,7 +172,7 @@ export function SiteHeader() {
             {publicLinks.map(({ href, label, icon: Icon }) => <Link className={isActive(pathname, href) ? "site-nav__link site-nav__link--active" : "site-nav__link"} href={href} key={href}><Icon aria-hidden="true" size={17} />{label}</Link>)}
           </nav>
           <nav className="site-actions" aria-label="账户导航">
-            <Link className={isActive(pathname, "/cart") ? "icon-link icon-link--active" : "icon-link"} href="/cart" title="购物车"><ShoppingCart aria-hidden="true" size={20} /><span className="mobile-only-label">购物车</span></Link>
+            <Link aria-label={`购物车${cartCount ? `，${cartCount} 件商品` : ""}`} className={isActive(pathname, "/cart") ? "icon-link icon-link--active cart-header-link" : "icon-link cart-header-link"} href="/cart" title="购物车"><ShoppingCart aria-hidden="true" size={20} />{cartCount ? <span className="cart-header-badge">{cartCount > 99 ? "99+" : cartCount}</span> : null}<span className="mobile-only-label">购物车{cartCount ? ` (${cartCount})` : ""}</span></Link>
             <span className="site-session-slot">{session.hydrated ? loggedIn ? (
               <>
                 <Link className={isActive(pathname, "/account") ? "header-action header-action--active" : "header-action"} href="/account"><CircleUserRound aria-hidden="true" size={18} />我的</Link>

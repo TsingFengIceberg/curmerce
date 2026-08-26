@@ -15,6 +15,7 @@ import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
 import { formatDateTime, formatMoney, formatRefundStatus } from "@/lib/format";
 import type { RefundDetail } from "@/lib/types/api";
 import { ensureMerchantOwner } from "@/lib/auth/guards";
+import { positiveInt, useUrlQuery } from "@/hooks/use-url-query";
 
 type RefundScope = "admin" | "merchant";
 
@@ -29,14 +30,15 @@ const statusFilters = [
 
 export function RefundWorkbench({ scope }: { scope: RefundScope }) {
   const router = useRouter();
+  const { searchParams, update } = useUrlQuery();
   const own = scope === "merchant";
   const [refunds, setRefunds] = useState<RefundDetail[]>([]);
   const [selected, setSelected] = useState<RefundDetail | null>(null);
-  const [status, setStatus] = useState(0);
-  const [orderNo, setOrderNo] = useState("");
-  const [queryOrderNo, setQueryOrderNo] = useState("");
+  const status = Number(searchParams.get("status") ?? 0);
+  const queryOrderNo = searchParams.get("orderNo") ?? "";
+  const [orderNo, setOrderNo] = useState(queryOrderNo);
   const [total, setTotal] = useState(0);
-  const [pageNo, setPageNo] = useState(1);
+  const pageNo = positiveInt(searchParams.get("page"));
   const [remark, setRemark] = useState("");
   const [callbackId, setCallbackId] = useState("");
   const [callbackSuccess, setCallbackSuccess] = useState(true);
@@ -60,6 +62,8 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
     }
     void loadRefunds(status, queryOrderNo);
   }, [router, status, queryOrderNo, pageNo]);
+
+  useEffect(() => setOrderNo(queryOrderNo), [queryOrderNo]);
 
   async function loadRefunds(nextStatus = status, nextOrderNo = queryOrderNo) {
     setLoading(true);
@@ -171,10 +175,10 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
       <div className="admin-toolbar">
         <div className="order-tabs" role="tablist" aria-label="退款状态筛选">
           {statusFilters.map((item) => (
-            <button className={`order-tab${status === item.value ? " order-tab--active" : ""}`} key={item.value} type="button" onClick={() => { setStatus(item.value); setPageNo(1); }}>{item.label}</button>
+            <button className={`order-tab${status === item.value ? " order-tab--active" : ""}`} key={item.value} type="button" onClick={() => update({ status: item.value || null, page: 1 })}>{item.label}</button>
           ))}
         </div>
-        <form className="admin-search" onSubmit={(event) => { event.preventDefault(); setPageNo(1); setQueryOrderNo(orderNo.trim()); }}>
+        <form className="admin-search" onSubmit={(event) => { event.preventDefault(); update({ page: 1, orderNo: orderNo.trim() }); }}>
           <input aria-label="订单号" onChange={(event) => setOrderNo(event.target.value)} placeholder="订单号" value={orderNo} />
           <button className="button button--secondary" type="submit">查询</button>
         </form>
@@ -193,7 +197,7 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
               </button>
             ))}
           </div>
-          <Pagination pageNo={pageNo} pageSize={20} total={total} onChange={setPageNo} />
+          <Pagination pageNo={pageNo} pageSize={20} total={total} onChange={(page) => update({ page })} />
         </div>
         <div className="orders-panel admin-detail-panel">
           {!selected ? <p className="empty-state">选择一条退款记录查看详情。</p> : (

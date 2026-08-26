@@ -26,6 +26,10 @@ function productQuery(input: ProductPageQuery) {
   optional.forEach(([key, value]) => {
     if (value !== undefined && value !== "") params.set(key, String(value));
   });
+  if (input.dateFrom || input.dateTo) {
+    params.set("createTime[0]", input.dateFrom ? `${input.dateFrom} 00:00:00` : "1970-01-01 00:00:00");
+    params.set("createTime[1]", input.dateTo ? `${input.dateTo} 23:59:59` : "9999-12-31 23:59:59");
+  }
   return params.toString();
 }
 

@@ -74,8 +74,12 @@ async function mockApi(page: Page, roles: string[] = []) {
       data = [];
     } else if (pathname.endsWith("/member/user/get")) {
       data = { id: 7, nickname: "验收用户", mobile: "13800000000" };
+    } else if (pathname.endsWith("/member/profile/get")) {
+      data = { id: 7, nickname: "验收用户", mobile: "13800000000", email: "member@example.test", sex: 0 };
     } else if (pathname.endsWith("/member/address/list")) {
       data = [];
+    } else if (pathname.endsWith("/commerce/store/get-own")) {
+      data = { id: 4, merchantId: 3, name: "山屿商店", code: "mountain_store", status: 1 };
     }
 
     await route.fulfill({
@@ -131,6 +135,20 @@ test("mobile navigation stays collapsed until requested and fits the viewport", 
   await expect(page.getByRole("link", { name: /工作台/ })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await capture(page, testInfo, "discovery-mobile-navigation.png");
+});
+
+test("short landscape navigation keeps content reachable without horizontal overflow", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await mockApi(page);
+  await page.goto("/");
+
+  const menuButton = page.getByRole("button", { name: "打开导航" });
+  await expect(menuButton).toBeVisible();
+  await menuButton.click();
+  await expect(page.getByRole("navigation", { name: "主导航" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /从真实兴趣出发/ })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await capture(page, testInfo, "discovery-short-landscape.png");
 });
 
 test("mobile catalog exposes synchronized filters in a drawer", async ({ page }, testInfo) => {
@@ -206,6 +224,27 @@ test("mobile administration tables retain business-critical fields", async ({ pa
   await expect(page.getByText("生活器物")).toBeVisible();
   await expect(page.getByRole("article").getByText("待审核", { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+test("one-sided administration date filters reach the backend as open ranges", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("curmerce.admin-access-token", "admin-test-token"));
+  await mockApi(page, ["super_admin"]);
+  const orderRequests: URL[] = [];
+  const reviewRequests: URL[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.endsWith("/commerce/order/page")) orderRequests.push(url);
+    if (url.pathname.endsWith("/commerce/product-review/page")) reviewRequests.push(url);
+  });
+
+  await page.goto("/admin/orders?dateFrom=2026-08-01");
+  await page.getByRole("button", { name: "更多筛选 (1)" }).click();
+  await expect(page.getByLabel("开始日期")).toHaveValue("2026-08-01");
+  await expect.poll(() => orderRequests.some((url) => url.searchParams.get("createTime[0]") === "2026-08-01 00:00:00" && url.searchParams.get("createTime[1]") === "9999-12-31 23:59:59")).toBe(true);
+
+  await page.goto("/admin/product-review?dateTo=2026-08-31");
+  await expect(page.getByLabel("结束日期")).toHaveValue("2026-08-31");
+  await expect.poll(() => reviewRequests.some((url) => url.searchParams.get("createTime[0]") === "1970-01-01 00:00:00" && url.searchParams.get("createTime[1]") === "2026-08-31 23:59:59")).toBe(true);
 });
 
 test("admin console exposes a stable sidebar, active state, breadcrumb and dashboard", async ({ page }, testInfo) => {
