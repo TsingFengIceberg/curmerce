@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.community.dal.dataobject.topic;
 
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -16,4 +17,6 @@ public class CommunityTopicDO extends BaseDO {
     private String name;
     private String slug;
     private Integer status;
+    @TableField(exist = false)
+    private Long postCount;
 }

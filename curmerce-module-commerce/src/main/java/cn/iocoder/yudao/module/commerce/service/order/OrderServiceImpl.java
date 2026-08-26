@@ -557,6 +557,10 @@ public class OrderServiceImpl implements OrderService {
             response.setBuyerMobile(buyer.getMobile()).setBuyerNickname(buyer.getNickname())
                     .setBuyerEmail(buyer.getEmail());
         }
+        MerchantDO merchant = order.getMerchantId() == null ? null : merchantMapper.selectById(order.getMerchantId());
+        StoreDO store = order.getStoreId() == null ? null : storeMapper.selectById(order.getStoreId());
+        response.setMerchantName(merchant == null ? null : merchant.getName())
+                .setStoreName(store == null ? null : store.getName());
         return response;
     }
 

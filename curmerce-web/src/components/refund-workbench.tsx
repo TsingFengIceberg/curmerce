@@ -1,9 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Notice } from "@/components/notice";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { CopyButton } from "@/components/copy-button";
+import { EmptyState } from "@/components/empty-state";
+import { Pagination } from "@/components/pagination";
+import { RotateCcw } from "lucide-react";
 import { CurmerceApiError } from "@/lib/api/client";
 import { adminRefundApi } from "@/lib/api/admin-refund";
 import { clearAdminToken, getAdminAccessToken } from "@/lib/auth/storage";
@@ -31,6 +35,7 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
   const [orderNo, setOrderNo] = useState("");
   const [queryOrderNo, setQueryOrderNo] = useState("");
   const [total, setTotal] = useState(0);
+  const [pageNo, setPageNo] = useState(1);
   const [remark, setRemark] = useState("");
   const [callbackId, setCallbackId] = useState("");
   const [callbackSuccess, setCallbackSuccess] = useState(true);
@@ -38,6 +43,8 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingReview, setPendingReview] = useState<"approve" | "reject" | null>(null);
+  const testToolsEnabled = process.env.NODE_ENV !== "production";
 
   useEffect(() => {
     if (own) {
@@ -51,13 +58,13 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
       return;
     }
     void loadRefunds(status, queryOrderNo);
-  }, [router, status, queryOrderNo]);
+  }, [router, status, queryOrderNo, pageNo]);
 
   async function loadRefunds(nextStatus = status, nextOrderNo = queryOrderNo) {
     setLoading(true);
     setError(null);
     try {
-      const query = { pageNo: 1, pageSize: 20, status: nextStatus || undefined, orderNo: nextOrderNo || undefined };
+      const query = { pageNo, pageSize: 20, status: nextStatus || undefined, orderNo: nextOrderNo || undefined };
       const response = own ? await adminRefundApi.pageOwn(query) : await adminRefundApi.page(query);
       const list = response?.list ?? [];
       setRefunds(list);
@@ -112,6 +119,7 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
         await adminRefundApi.reject(selected.id, remark);
       }
       setMessage(action === "approve" ? "退款已审核通过" : "退款已驳回");
+      setPendingReview(null);
       await loadRefunds();
       await loadDetail(selected.id);
     } catch (cause) {
@@ -146,23 +154,13 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
     }
   }
 
-  async function logout() {
-    clearAdminToken();
-    router.replace("/merchant/login");
-  }
-
   return (
     <section className="content-section admin-page refund-workbench-page">
       <div className="section-heading">
         <div>
           <p className="eyebrow">{own ? "MERCHANT · AFTER-SALES" : "ADMIN · AFTER-SALES"}</p>
           <h1>{own ? "商家退款审核" : "平台退款审核"}</h1>
-          <p>{own ? "只处理当前商家和店铺范围内的退款申请。" : "处理平台范围内的退款审核与模拟渠道回调。"}</p>
-        </div>
-        <div className="inline-actions">
-          <Link className="button button--secondary" href={own ? "/merchant/products" : "/admin/categories"}>管理商品</Link>
-          {!own ? <Link className="button button--secondary" href="/admin/product-review">商品审核</Link> : null}
-          <button className="button button--secondary" type="button" onClick={() => void logout()}>退出后台</button>
+          <p>{own ? "优先处理待审核申请，并结合订单信息及时给买家反馈。" : "处理平台范围内的退款审核，并跟踪渠道退款结果。"}</p>
         </div>
       </div>
       {message ? <Notice tone="success">{message}</Notice> : null}
@@ -170,10 +168,10 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
       <div className="admin-toolbar">
         <div className="order-tabs" role="tablist" aria-label="退款状态筛选">
           {statusFilters.map((item) => (
-            <button className={`order-tab${status === item.value ? " order-tab--active" : ""}`} key={item.value} type="button" onClick={() => setStatus(item.value)}>{item.label}</button>
+            <button className={`order-tab${status === item.value ? " order-tab--active" : ""}`} key={item.value} type="button" onClick={() => { setStatus(item.value); setPageNo(1); }}>{item.label}</button>
           ))}
         </div>
-        <form className="admin-search" onSubmit={(event) => { event.preventDefault(); setQueryOrderNo(orderNo.trim()); }}>
+        <form className="admin-search" onSubmit={(event) => { event.preventDefault(); setPageNo(1); setQueryOrderNo(orderNo.trim()); }}>
           <input aria-label="订单号" onChange={(event) => setOrderNo(event.target.value)} placeholder="订单号" value={orderNo} />
           <button className="button button--secondary" type="submit">查询</button>
         </form>
@@ -182,7 +180,7 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
         <div className="orders-panel">
           <div className="panel-heading"><h2>退款申请</h2><span>{total} 条</span></div>
           {loading ? <p className="empty-state">退款记录加载中…</p> : null}
-          {!loading && refunds.length === 0 ? <p className="empty-state">当前筛选下没有退款记录。</p> : null}
+          {!loading && refunds.length === 0 ? <EmptyState icon={<RotateCcw aria-hidden="true" size={22} />} title="当前没有退款申请" description="调整状态或订单号后重新查询。" /> : null}
           <div className="admin-record-list">
             {refunds.map((refund) => (
               <button className={`admin-record-card${selected?.id === refund.id ? " admin-record-card--active" : ""}`} key={refund.id} type="button" onClick={() => void loadDetail(refund.id)}>
@@ -192,17 +190,19 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
               </button>
             ))}
           </div>
+          <Pagination pageNo={pageNo} pageSize={20} total={total} onChange={setPageNo} />
         </div>
         <div className="orders-panel admin-detail-panel">
           {!selected ? <p className="empty-state">选择一条退款记录查看详情。</p> : (
             <>
               <div className="panel-heading"><h2>退款详情</h2><span className={`tag refund-status refund-status--${selected.status}`}>{formatRefundStatus(selected.status)}</span></div>
               <div className="detail-rows">
-                <div><span>退款单号</span><strong>{selected.refundNo}</strong></div>
-                <div><span>订单号</span><strong><Link className="text-button" href={`/orders/${selected.orderId}`}>{selected.orderNo}</Link></strong></div>
+                <div><span>退款单号</span><strong className="copyable-value">{selected.refundNo}<CopyButton value={selected.refundNo} /></strong></div>
+                <div><span>订单号</span><strong className="copyable-value">{selected.orderNo}<CopyButton value={selected.orderNo} /></strong></div>
                 <div><span>退款金额</span><strong>{formatMoney(selected.amount)}</strong></div>
                 <div><span>申请时间</span><strong>{formatDateTime(selected.requestedTime)}</strong></div>
                 <div><span>申请原因</span><strong>{selected.reason || "—"}</strong></div>
+                {selected.status === 10 ? <div><span>建议处理时限</span><strong>{selected.requestedTime ? `${formatDateTime(new Date(new Date(selected.requestedTime).getTime() + 48 * 60 * 60 * 1000).getTime())} 前` : "尽快处理"}</strong></div> : null}
                 <div><span>审核时间</span><strong>{formatDateTime(selected.reviewedTime)}</strong></div>
                 <div><span>审核备注</span><strong>{selected.reviewRemark || "—"}</strong></div>
                 <div><span>回调状态</span><strong>{selected.callbackSuccess === true ? "成功" : selected.callbackSuccess === false ? "失败" : "未回调"}</strong></div>
@@ -210,22 +210,23 @@ export function RefundWorkbench({ scope }: { scope: RefundScope }) {
               {selected.status === 10 ? (
                 <div className="admin-action-box">
                   <label className="field"><span>审核备注</span><textarea maxLength={255} onChange={(event) => setRemark(event.target.value)} placeholder="通过可填写说明，驳回必须填写原因" rows={3} value={remark} /></label>
-                  <div className="inline-actions"><button className="button button--primary" disabled={busy} type="button" onClick={() => void review("approve")}>审核通过</button><button className="button button--danger" disabled={busy} type="button" onClick={() => void review("reject")}>驳回退款</button></div>
+                  <div className="inline-actions"><button className="button button--primary" disabled={busy} type="button" onClick={() => setPendingReview("approve")}>审核通过</button><button className="button button--danger" disabled={busy} type="button" onClick={() => setPendingReview("reject")}>驳回退款</button></div>
                 </div>
               ) : null}
               {selected.status === 20 ? own ? (
-                <p className="field-help">退款审核通过后，由平台退款后台接收或模拟渠道回调；商家不能直接伪造回调结果。</p>
-              ) : (
-                <div className="admin-action-box">
+                <p className="field-help">退款审核通过，平台正在继续处理退款结果。</p>
+              ) : testToolsEnabled ? (
+                <details className="order-test-tools"><summary>开发测试工具</summary><div className="admin-action-box">
                   <label className="field"><span>回调幂等编号</span><input maxLength={64} onChange={(event) => setCallbackId(event.target.value)} value={callbackId} /></label>
                   <label className="field"><span>回调结果</span><select onChange={(event) => setCallbackSuccess(event.target.value === "success")} value={callbackSuccess ? "success" : "failure"}><option value="success">成功</option><option value="failure">失败</option></select></label>
                   <button className="button button--primary" disabled={busy} type="button" onClick={() => void simulateCallback()}>模拟退款回调</button>
-                </div>
-              ) : null}
+                </div></details>
+              ) : <p className="field-help">退款正在等待渠道处理结果。</p> : null}
             </>
           )}
         </div>
       </div>
+      <ConfirmDialog open={Boolean(pendingReview)} title={pendingReview === "approve" ? "通过退款申请" : "驳回退款申请"} description={pendingReview === "approve" ? `确认通过退款单 ${selected?.refundNo ?? ""}，金额 ${formatMoney(selected?.amount)}？` : `确认驳回退款单 ${selected?.refundNo ?? ""}？驳回原因会展示给买家。`} confirmLabel={pendingReview === "approve" ? "确认通过" : "确认驳回"} dangerous={pendingReview === "reject"} busy={busy} onClose={() => setPendingReview(null)} onConfirm={() => pendingReview && void review(pendingReview)} />
     </section>
   );
 }

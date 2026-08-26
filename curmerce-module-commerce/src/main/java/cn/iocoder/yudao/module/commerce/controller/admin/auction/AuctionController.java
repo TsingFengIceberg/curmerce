@@ -24,6 +24,15 @@ public class AuctionController {
     @PostMapping("/create") @Operation(summary = "创建拍卖场次")
     @PreAuthorize("@ss.hasPermission('commerce:auction:create')")
     public CommonResult<Long> create(@Valid @RequestBody AuctionCreateReqVO reqVO) { return success(auctionService.create(reqVO)); }
+    @PutMapping("/update") @Operation(summary = "修改拍卖草稿")
+    @PreAuthorize("@ss.hasPermission('commerce:auction:update')")
+    public CommonResult<Boolean> update(@Valid @RequestBody AuctionUpdateReqVO reqVO) {
+        auctionService.update(reqVO);
+        return success(true);
+    }
+    @GetMapping("/get") @Operation(summary = "查询我的拍卖详情")
+    @PreAuthorize("@ss.hasPermission('commerce:auction:query')")
+    public CommonResult<AuctionRespVO> get(@RequestParam Long id) { return success(auctionService.getOwn(id)); }
     @GetMapping("/page") @Operation(summary = "查询我的拍卖场次")
     @PreAuthorize("@ss.hasPermission('commerce:auction:query')")
     public CommonResult<PageResult<AuctionRespVO>> page(@Valid AuctionPageReqVO reqVO) { return success(auctionService.getOwnPage(reqVO)); }

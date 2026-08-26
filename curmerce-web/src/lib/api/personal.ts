@@ -1,5 +1,5 @@
 import { appApi, jsonBody } from "@/lib/api/client";
-import type { ApiPage, PersonalListing, PersonalListingInput, PersonalSellerOrder } from "@/lib/types/api";
+import type { ApiPage, PersonalListing, PersonalListingInput, PersonalSellerOrder, ProductOperationLog } from "@/lib/types/api";
 
 function listingQuery(input: { pageNo: number; pageSize: number; auditStatus?: number; saleStatus?: number }) {
   const params = new URLSearchParams({ pageNo: String(input.pageNo), pageSize: String(input.pageSize) });
@@ -29,6 +29,10 @@ export const personalApi = {
   },
   delist(id: number) {
     return appApi<boolean>(`/commerce/personal-listing/delist?id=${id}`, { method: "PUT" });
+  },
+  operationLog(productId: number, pageNo: number, pageSize: number) {
+    const params = new URLSearchParams({ productId: String(productId), pageNo: String(pageNo), pageSize: String(pageSize) });
+    return appApi<ApiPage<ProductOperationLog>>(`/commerce/personal-listing/operation-log?${params.toString()}`);
   },
   pendingShipment(input: { pageNo: number; pageSize: number }) {
     const params = new URLSearchParams({ pageNo: String(input.pageNo), pageSize: String(input.pageSize) });

@@ -9,10 +9,13 @@ import java.util.List;
 public class ProductRespVO {
     private Long id;
     private Long merchantId;
+    private String merchantName;
     private Long storeId;
+    private String storeName;
     private Integer sellerType;
     private Long sellerUserId;
     private Long categoryId;
+    private String categoryName;
     private String code;
     private String name;
     private String condition;

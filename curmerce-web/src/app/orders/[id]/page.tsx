@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Notice } from "@/components/notice";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { CopyButton } from "@/components/copy-button";
+import { CheckCircle2, Circle, FlaskConical } from "lucide-react";
 import { CurmerceApiError, assetUrl } from "@/lib/api/client";
 import { orderApi } from "@/lib/api/order";
 import { paymentApi } from "@/lib/api/payment";
@@ -22,6 +25,7 @@ export default function OrderDetailPage() {
   const [showRefundForm, setShowRefundForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<"cancel" | "receipt" | null>(null);
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -76,7 +80,7 @@ export default function OrderDetailPage() {
   }
 
   async function cancel() {
-    if (!order || !window.confirm(`确定取消订单 ${order.orderNo} 吗？`)) return;
+    if (!order) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -92,7 +96,7 @@ export default function OrderDetailPage() {
   }
 
   async function confirmReceipt() {
-    if (!order || !window.confirm("确认已经收到该订单商品吗？")) return;
+    if (!order) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -137,7 +141,7 @@ export default function OrderDetailPage() {
     <section className="content-section order-detail-page">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">ORDER · {order.orderNo}</p>
+          <p className="eyebrow copyable-value">ORDER · {order.orderNo}<CopyButton value={order.orderNo} label="复制订单号" /></p>
           <h1>订单详情</h1>
           <p>创建于 {formatDateTime(order.createTime)}</p>
         </div>
@@ -170,7 +174,7 @@ export default function OrderDetailPage() {
           {order.status >= 30 && order.status !== 50 ? (
             <section className="orders-panel order-detail-panel">
               <div className="panel-heading"><h2>物流信息</h2></div>
-              <div className="snapshot-card"><strong>{order.logisticsCompany || "商家物流"}</strong><span>运单号：{order.trackingNo || "—"}</span><p>发货时间：{formatDateTime(order.shippingTime)}</p></div>
+              <div className="snapshot-card"><strong>{order.logisticsCompany || "商家物流"}</strong><span className="copyable-value">运单号：{order.trackingNo || "—"}{order.trackingNo ? <CopyButton value={order.trackingNo} label="复制运单号" /> : null}</span><p>发货时间：{formatDateTime(order.shippingTime)}</p></div>
             </section>
           ) : null}
         </div>
@@ -180,15 +184,15 @@ export default function OrderDetailPage() {
             <h2>{formatOrderStatus(order.status)}</h2>
             <div className="summary-row"><span>支付状态</span><strong>{formatPaymentStatus(order.paymentStatus)}</strong></div>
             <div className="summary-row"><span>支付金额</span><strong>{formatMoney(order.paymentAmount ?? order.payableAmount)}</strong></div>
-            {order.paymentNo ? <p className="payment-number">支付单号：{order.paymentNo}</p> : null}
-            {order.status === 10 ? <button className="button button--primary button--full" disabled={busy} type="button" onClick={() => void pay()}>{busy ? "支付中…" : "模拟支付"}</button> : null}
-            {order.status === 10 ? <button className="button button--secondary button--full" disabled={busy} type="button" onClick={() => void cancel()}>取消订单</button> : null}
-            {order.status === 30 ? <button className="button button--primary button--full" disabled={busy} type="button" onClick={() => void confirmReceipt()}>{busy ? "处理中…" : "确认收货"}</button> : null}
+            {order.paymentNo ? <p className="payment-number copyable-value">支付单号：{order.paymentNo}<CopyButton value={order.paymentNo} label="复制" /></p> : null}
+            {order.status === 10 ? <details className="order-test-tools"><summary><FlaskConical aria-hidden="true" size={16} />演示环境支付工具</summary><div><p>这里仅用于验收支付回调和订单状态流转，不代表真实支付入口。</p><button className="button button--primary button--full" disabled={busy} type="button" onClick={() => void pay()}>{busy ? "处理中…" : "模拟支付成功"}</button></div></details> : null}
+            {order.status === 10 ? <button className="button button--secondary button--full" disabled={busy} type="button" onClick={() => setPendingAction("cancel")}>取消订单</button> : null}
+            {order.status === 30 ? <button className="button button--primary button--full" disabled={busy} type="button" onClick={() => setPendingAction("receipt")}>{busy ? "处理中…" : "确认收货"}</button> : null}
             {order.refund ? (
               <div className="refund-status-box">
                 <span>售后状态</span>
                 <strong>{formatRefundStatus(order.refund.status)}</strong>
-                <small>退款单：{order.refund.refundNo}</small>
+                <small className="copyable-value">退款单：{order.refund.refundNo}<CopyButton value={order.refund.refundNo} label="复制" /></small>
               </div>
             ) : null}
             {[20, 30, 40].includes(order.status) && !order.refund ? (
@@ -211,13 +215,14 @@ export default function OrderDetailPage() {
           </section>
           <section className="orders-panel timeline-panel">
             <p className="eyebrow">ORDER TIMELINE</p>
-            <div className="timeline-row"><span>创建订单</span><time>{formatDateTime(order.createTime)}</time></div>
-            {order.paidTime ? <div className="timeline-row"><span>完成支付</span><time>{formatDateTime(order.paidTime)}</time></div> : null}
-            {order.shippingTime ? <div className="timeline-row"><span>商家发货</span><time>{formatDateTime(order.shippingTime)}</time></div> : null}
-            {order.completionTime ? <div className="timeline-row"><span>确认收货</span><time>{formatDateTime(order.completionTime)}</time></div> : null}
+            <div className="timeline-row timeline-row--done"><CheckCircle2 aria-hidden="true" size={17} /><span>创建订单</span><time>{formatDateTime(order.createTime)}</time></div>
+            <div className={order.paidTime ? "timeline-row timeline-row--done" : "timeline-row"}>{order.paidTime ? <CheckCircle2 aria-hidden="true" size={17} /> : <Circle aria-hidden="true" size={17} />}<span>完成支付</span><time>{order.paidTime ? formatDateTime(order.paidTime) : "等待中"}</time></div>
+            <div className={order.shippingTime ? "timeline-row timeline-row--done" : "timeline-row"}>{order.shippingTime ? <CheckCircle2 aria-hidden="true" size={17} /> : <Circle aria-hidden="true" size={17} />}<span>卖家发货</span><time>{order.shippingTime ? formatDateTime(order.shippingTime) : "等待中"}</time></div>
+            <div className={order.completionTime ? "timeline-row timeline-row--done" : "timeline-row"}>{order.completionTime ? <CheckCircle2 aria-hidden="true" size={17} /> : <Circle aria-hidden="true" size={17} />}<span>确认收货</span><time>{order.completionTime ? formatDateTime(order.completionTime) : "等待中"}</time></div>
           </section>
         </aside>
       </div>
+      <ConfirmDialog open={pendingAction !== null} dangerous={pendingAction === "cancel"} title={pendingAction === "receipt" ? "确认已经收到商品？" : "取消这笔订单？"} description={pendingAction === "receipt" ? "确认后订单将完成。如商品存在问题，请先申请售后。" : `订单 ${order.orderNo} 将被取消，库存会按交易规则恢复。`} confirmLabel={pendingAction === "receipt" ? "确认收货" : "确认取消"} busy={busy} onClose={() => setPendingAction(null)} onConfirm={() => { const action = pendingAction; setPendingAction(null); if (action === "receipt") void confirmReceipt(); else void cancel(); }} />
     </section>
   );
 }

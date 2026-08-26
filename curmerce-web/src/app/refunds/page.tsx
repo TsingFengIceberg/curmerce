@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Notice } from "@/components/notice";
+import { Pagination } from "@/components/pagination";
 import { CurmerceApiError } from "@/lib/api/client";
 import { refundApi } from "@/lib/api/refund";
 import { clearToken, getAccessToken } from "@/lib/auth/storage";
@@ -18,6 +19,7 @@ const statusFilters = [
   { value: 40, label: "已拒绝" },
   { value: 50, label: "已失败" },
 ];
+const PAGE_SIZE = 12;
 
 export default function RefundsPage() {
   const router = useRouter();
@@ -26,6 +28,7 @@ export default function RefundsPage() {
   const [status, setStatus] = useState(0);
   const [orderNo, setOrderNo] = useState("");
   const [query, setQuery] = useState("");
+  const [pageNo, setPageNo] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,15 +38,15 @@ export default function RefundsPage() {
       return;
     }
     void loadRefunds(status, query);
-  }, [router, status, query]);
+  }, [router, status, query, pageNo]);
 
   async function loadRefunds(nextStatus = status, nextOrderNo = query) {
     setLoading(true);
     setError(null);
     try {
       const response = await refundApi.page({
-        pageNo: 1,
-        pageSize: 20,
+        pageNo,
+        pageSize: PAGE_SIZE,
         status: nextStatus || undefined,
         orderNo: nextOrderNo || undefined,
       });
@@ -67,7 +70,7 @@ export default function RefundsPage() {
         <div>
           <p className="eyebrow">ACCOUNT · REFUNDS</p>
           <h1>退款中心</h1>
-          <p>查看退款申请、审核和模拟退款回调的处理状态。</p>
+          <p>查看退款申请、平台审核和退款结果的处理进度。</p>
         </div>
         <Link className="button button--secondary" href="/orders">返回订单</Link>
       </div>
@@ -75,10 +78,10 @@ export default function RefundsPage() {
       <div className="refund-toolbar">
         <div className="order-tabs" role="tablist" aria-label="退款状态筛选">
           {statusFilters.map((item) => (
-            <button className={`order-tab${status === item.value ? " order-tab--active" : ""}`} key={item.value} type="button" onClick={() => setStatus(item.value)}>{item.label}</button>
+            <button className={`order-tab${status === item.value ? " order-tab--active" : ""}`} key={item.value} type="button" onClick={() => { setStatus(item.value); setPageNo(1); }}>{item.label}</button>
           ))}
         </div>
-        <form className="refund-search" onSubmit={(event) => { event.preventDefault(); setQuery(orderNo.trim()); }}>
+        <form className="refund-search" onSubmit={(event) => { event.preventDefault(); setPageNo(1); setQuery(orderNo.trim()); }}>
           <input aria-label="订单号" onChange={(event) => setOrderNo(event.target.value)} placeholder="按订单号查询" value={orderNo} />
           <button className="button button--secondary" type="submit">查询</button>
         </form>
@@ -98,6 +101,7 @@ export default function RefundsPage() {
             ))}
           </div>
         ) : null}
+        <Pagination pageNo={pageNo} pageSize={PAGE_SIZE} total={total} onChange={setPageNo} />
       </div>
     </section>
   );

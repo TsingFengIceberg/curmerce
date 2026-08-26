@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseCampaignDO;
+import cn.iocoder.yudao.module.commerce.controller.admin.release.vo.ReleasePageReqVO;
 import cn.iocoder.yudao.module.commerce.enums.release.ReleaseStatusEnum;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
@@ -16,9 +17,12 @@ public interface CommerceReleaseCampaignMapper extends BaseMapperX<CommerceRelea
                 .in(CommerceReleaseCampaignDO::getStatus, ReleaseStatusEnum.SCHEDULED.getStatus(), ReleaseStatusEnum.RUNNING.getStatus())
                 .orderByAsc(CommerceReleaseCampaignDO::getStartTime).orderByAsc(CommerceReleaseCampaignDO::getId));
     }
-    default PageResult<CommerceReleaseCampaignDO> selectOwnPage(cn.iocoder.yudao.framework.common.pojo.PageParam req, Long merchantId) {
+    default PageResult<CommerceReleaseCampaignDO> selectOwnPage(ReleasePageReqVO req, Long merchantId) {
         return selectPage(req, new LambdaQueryWrapperX<CommerceReleaseCampaignDO>()
-                .eq(CommerceReleaseCampaignDO::getMerchantId, merchantId).orderByDesc(CommerceReleaseCampaignDO::getId));
+                .eq(CommerceReleaseCampaignDO::getMerchantId, merchantId)
+                .eqIfPresent(CommerceReleaseCampaignDO::getStatus, req.getStatus())
+                .likeIfPresent(CommerceReleaseCampaignDO::getName, req.getName())
+                .orderByDesc(CommerceReleaseCampaignDO::getId));
     }
     default CommerceReleaseCampaignDO selectByIdForUpdate(Long id) {
         return selectOneForUpdate(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CommerceReleaseCampaignDO>()

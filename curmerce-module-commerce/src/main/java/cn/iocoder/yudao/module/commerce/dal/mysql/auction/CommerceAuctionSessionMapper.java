@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.auction.CommerceAuctionSessionDO;
+import cn.iocoder.yudao.module.commerce.controller.admin.auction.vo.AuctionPageReqVO;
 import cn.iocoder.yudao.module.commerce.enums.auction.AuctionStatusEnum;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
@@ -14,12 +15,17 @@ import java.util.List;
 public interface CommerceAuctionSessionMapper extends BaseMapperX<CommerceAuctionSessionDO> {
     default PageResult<CommerceAuctionSessionDO> selectPublicPage(cn.iocoder.yudao.framework.common.pojo.PageParam req) {
         return selectPage(req, new LambdaQueryWrapperX<CommerceAuctionSessionDO>()
-                .in(CommerceAuctionSessionDO::getStatus, AuctionStatusEnum.SCHEDULED.getStatus(), AuctionStatusEnum.RUNNING.getStatus())
-                .orderByAsc(CommerceAuctionSessionDO::getStartTime).orderByAsc(CommerceAuctionSessionDO::getId));
+                .in(CommerceAuctionSessionDO::getStatus, AuctionStatusEnum.SCHEDULED.getStatus(), AuctionStatusEnum.RUNNING.getStatus(),
+                        AuctionStatusEnum.ENDED.getStatus(), AuctionStatusEnum.SETTLEMENT_FAILED.getStatus())
+                .orderByAsc(CommerceAuctionSessionDO::getStatus).orderByAsc(CommerceAuctionSessionDO::getStartTime)
+                .orderByAsc(CommerceAuctionSessionDO::getId));
     }
-    default PageResult<CommerceAuctionSessionDO> selectOwnPage(cn.iocoder.yudao.framework.common.pojo.PageParam req, Long merchantId) {
+    default PageResult<CommerceAuctionSessionDO> selectOwnPage(AuctionPageReqVO req, Long merchantId) {
         return selectPage(req, new LambdaQueryWrapperX<CommerceAuctionSessionDO>()
-                .eq(CommerceAuctionSessionDO::getMerchantId, merchantId).orderByDesc(CommerceAuctionSessionDO::getId));
+                .eq(CommerceAuctionSessionDO::getMerchantId, merchantId)
+                .eqIfPresent(CommerceAuctionSessionDO::getStatus, req.getStatus())
+                .likeIfPresent(CommerceAuctionSessionDO::getName, req.getName())
+                .orderByDesc(CommerceAuctionSessionDO::getId));
     }
     default CommerceAuctionSessionDO selectByIdForUpdate(Long id) {
         return selectOneForUpdate(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CommerceAuctionSessionDO>()

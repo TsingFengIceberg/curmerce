@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductBaseSaveReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductCreateOwnReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductPageOwnReqVO;
@@ -12,11 +13,15 @@ import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.Prod
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductSkuSaveReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductSpecificationValueReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductUpdateOwnReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductOperationLogRespVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductCategoryDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductSkuDO;
+import cn.iocoder.yudao.module.commerce.dal.mysql.merchant.MerchantMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductCategoryMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductAuditStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
@@ -44,8 +49,12 @@ public class ProductServiceImpl implements ProductService {
 
     @Resource private ProductMapper productMapper;
     @Resource private ProductSkuMapper skuMapper;
+    @Resource private MerchantMapper merchantMapper;
+    @Resource private StoreMapper storeMapper;
+    @Resource private ProductCategoryMapper categoryMapper;
     @Resource private ProductCategoryService categoryService;
     @Resource private MerchantAccessService merchantAccessService;
+    @Resource private ProductOperationLogService operationLogService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -74,6 +83,8 @@ public class ProductServiceImpl implements ProductService {
             throw exception(PRODUCT_CODE_DUPLICATE);
         }
         insertSkus(product, context.merchant().getId(), reqVO.getSkus());
+        operationLogService.record(product.getId(), getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
+                "CREATE", null, product.getAuditStatus(), null, product.getSaleStatus(), "创建商品草稿");
         return product.getId();
     }
 
@@ -148,6 +159,8 @@ public class ProductServiceImpl implements ProductService {
         List<Long> omittedIds = currentSkus.stream().map(ProductSkuDO::getId)
                 .filter(id -> !retainedIds.contains(id)).toList();
         skuMapper.deleteByIdsAndOwnership(omittedIds, current.getId(), context.merchant().getId());
+        operationLogService.record(current.getId(), getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
+                "UPDATE", current.getAuditStatus(), current.getAuditStatus(), current.getSaleStatus(), current.getSaleStatus(), "更新商品资料与 SKU");
     }
 
     @Override
@@ -158,8 +171,7 @@ public class ProductServiceImpl implements ProductService {
         if (product == null || !context.store().getId().equals(product.getStoreId())) {
             throw exception(PRODUCT_NOT_EXISTS_OR_ACCESS_DENIED);
         }
-        return new ProductAggregate(product, skuMapper.selectListByProductIdAndMerchantId(product.getId(),
-                context.merchant().getId()));
+        return aggregate(product, skuMapper.selectListByProductIdAndMerchantId(product.getId(), context.merchant().getId()));
     }
 
     @Override
@@ -174,9 +186,15 @@ public class ProductServiceImpl implements ProductService {
             skusByProductId.computeIfAbsent(sku.getProductId(), ignored -> new ArrayList<>()).add(sku);
         }
         return new PageResult<>(page.getList().stream()
-                .map(product -> new ProductAggregate(product,
-                        skusByProductId.getOrDefault(product.getId(), List.of())))
+                .map(product -> aggregate(product, skusByProductId.getOrDefault(product.getId(), List.of())))
                 .toList(), page.getTotal());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<ProductOperationLogRespVO> getOwnOperationLogPage(Long productId, PageParam pageParam) {
+        getOwnProduct(productId);
+        return operationLogService.getPage(productId, pageParam);
     }
 
     @Override
@@ -200,6 +218,9 @@ public class ProductServiceImpl implements ProductService {
                 null, null, null) != 1) {
             throw exception(PRODUCT_STATE_CONFLICT);
         }
+        operationLogService.record(id, getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
+                "SUBMIT_REVIEW", product.getAuditStatus(), ProductAuditStatusEnum.PENDING.getStatus(),
+                product.getSaleStatus(), product.getSaleStatus(), "提交平台审核");
     }
 
     @Override
@@ -223,6 +244,9 @@ public class ProductServiceImpl implements ProductService {
                 ProductSaleStatusEnum.ON_SALE.getStatus()) != 1) {
             throw exception(PRODUCT_STATE_CONFLICT);
         }
+        operationLogService.record(id, getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
+                "LIST", product.getAuditStatus(), product.getAuditStatus(), ProductSaleStatusEnum.OFF_SHELF.getStatus(),
+                ProductSaleStatusEnum.ON_SALE.getStatus(), "商品上架");
     }
 
     @Override
@@ -238,6 +262,9 @@ public class ProductServiceImpl implements ProductService {
                 ProductSaleStatusEnum.OFF_SHELF.getStatus()) != 1) {
             throw exception(PRODUCT_STATE_CONFLICT);
         }
+        operationLogService.record(id, getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
+                "DELIST", product.getAuditStatus(), product.getAuditStatus(), ProductSaleStatusEnum.ON_SALE.getStatus(),
+                ProductSaleStatusEnum.OFF_SHELF.getStatus(), "商品下架");
     }
 
     @Override
@@ -245,36 +272,45 @@ public class ProductServiceImpl implements ProductService {
     public ProductAggregate getProductForReview(Long id) {
         ProductDO product = productMapper.selectById(id);
         if (product == null) throw exception(PRODUCT_NOT_EXISTS_OR_ACCESS_DENIED);
-        return new ProductAggregate(product, skuMapper.selectListByProductId(product.getId()));
+        return aggregate(product, skuMapper.selectListByProductId(product.getId()));
     }
 
     @Override
     @Transactional(readOnly = true)
     public PageResult<ProductAggregate> getProductReviewPage(ProductReviewPageReqVO reqVO) {
         PageResult<ProductDO> page = productMapper.selectReviewPage(reqVO);
-        return new PageResult<>(page.getList().stream().map(product -> new ProductAggregate(product, List.of())).toList(),
+        return new PageResult<>(page.getList().stream().map(product -> aggregate(product, List.of())).toList(),
                 page.getTotal());
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public PageResult<ProductOperationLogRespVO> getReviewOperationLogPage(Long productId, PageParam pageParam) {
+        getProductForReview(productId);
+        return operationLogService.getPage(productId, pageParam);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
-    public void approveProduct(Long id) {
+    public void approveProduct(Long id, Long reviewerId) {
         ProductDO product = requireReviewProductForUpdate(id);
         if (!ProductAuditStatusEnum.PENDING.getStatus().equals(product.getAuditStatus())
                 || !ProductSaleStatusEnum.OFF_SHELF.getStatus().equals(product.getSaleStatus())) {
             throw exception(PRODUCT_AUDIT_STATE_INVALID);
         }
-        Long reviewerId = getLoginUserId();
         if (reviewerId == null) throw exception(PRODUCT_STATE_CONFLICT);
         if (productMapper.updateAuditExpected(id, ProductAuditStatusEnum.PENDING.getStatus(),
                 ProductAuditStatusEnum.APPROVED.getStatus(), reviewerId, LocalDateTime.now(), null) != 1) {
             throw exception(PRODUCT_STATE_CONFLICT);
         }
+        operationLogService.record(id, reviewerId, ProductOperationLogService.OPERATOR_ADMIN, "APPROVE",
+                ProductAuditStatusEnum.PENDING.getStatus(), ProductAuditStatusEnum.APPROVED.getStatus(),
+                product.getSaleStatus(), product.getSaleStatus(), "平台审核通过");
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void rejectProduct(ProductRejectReqVO reqVO) {
+    public void rejectProduct(ProductRejectReqVO reqVO, Long reviewerId) {
         ProductDO product = requireReviewProductForUpdate(reqVO.getId());
         if (!ProductAuditStatusEnum.PENDING.getStatus().equals(product.getAuditStatus())
                 || !ProductSaleStatusEnum.OFF_SHELF.getStatus().equals(product.getSaleStatus())) {
@@ -284,12 +320,14 @@ public class ProductServiceImpl implements ProductService {
         if (reason == null || reason.isEmpty() || reason.length() > 255) {
             throw exception(PRODUCT_AUDIT_STATE_INVALID);
         }
-        Long reviewerId = getLoginUserId();
         if (reviewerId == null) throw exception(PRODUCT_STATE_CONFLICT);
         if (productMapper.updateAuditExpected(reqVO.getId(), ProductAuditStatusEnum.PENDING.getStatus(),
                 ProductAuditStatusEnum.REJECTED.getStatus(), reviewerId, LocalDateTime.now(), reason) != 1) {
             throw exception(PRODUCT_STATE_CONFLICT);
         }
+        operationLogService.record(reqVO.getId(), reviewerId, ProductOperationLogService.OPERATOR_ADMIN, "REJECT",
+                ProductAuditStatusEnum.PENDING.getStatus(), ProductAuditStatusEnum.REJECTED.getStatus(),
+                product.getSaleStatus(), product.getSaleStatus(), reason);
     }
 
     private MerchantAccessContext requireEnabledStore(Long requestedStoreId) {
@@ -301,6 +339,14 @@ public class ProductServiceImpl implements ProductService {
             throw exception(PRODUCT_STORE_DISABLED);
         }
         return context;
+    }
+
+    private ProductAggregate aggregate(ProductDO product, List<ProductSkuDO> skus) {
+        var merchant = product.getMerchantId() == null ? null : merchantMapper.selectById(product.getMerchantId());
+        var store = product.getStoreId() == null ? null : storeMapper.selectById(product.getStoreId());
+        var category = product.getCategoryId() == null ? null : categoryMapper.selectById(product.getCategoryId());
+        return new ProductAggregate(product, skus, merchant == null ? null : merchant.getName(),
+                store == null ? null : store.getName(), category == null ? null : category.getName());
     }
 
     private ProductDO requireOwnedProductForUpdate(Long id, MerchantAccessContext context) {

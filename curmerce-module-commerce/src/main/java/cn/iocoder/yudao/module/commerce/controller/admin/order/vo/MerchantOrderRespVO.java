@@ -15,7 +15,9 @@ public class MerchantOrderRespVO {
     private String buyerNickname;
     private String buyerEmail;
     private Long merchantId;
+    private String merchantName;
     private Long storeId;
+    private String storeName;
     private Integer sellerType;
     private Long sellerUserId;
     private Integer status;

@@ -1,126 +1,137 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useState } from "react";
+import { Filter, Search, ShoppingCart, SlidersHorizontal, X } from "lucide-react";
 import { CategoryTree } from "@/components/category-tree";
+import { EmptyState } from "@/components/empty-state";
 import { Notice } from "@/components/notice";
+import { Pagination } from "@/components/pagination";
 import { ProductCard } from "@/components/product-card";
 import { catalogApi } from "@/lib/api/catalog";
 import { CurmerceApiError } from "@/lib/api/client";
 import type { PublicCategoryNode, PublicProductSummary } from "@/lib/types/api";
 
 const PAGE_SIZE = 12;
+type SortValue = "" | "latest" | "priceAsc" | "priceDesc";
 
-export default function CatalogPage() {
+function numberParam(value: string | null) {
+  const parsed = Number(value);
+  return value && Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function CatalogContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [categories, setCategories] = useState<PublicCategoryNode[]>([]);
   const [products, setProducts] = useState<PublicProductSummary[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [keywordInput, setKeywordInput] = useState("");
-  const [keyword, setKeyword] = useState("");
-  const [pageNo, setPageNo] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [keywordInput, setKeywordInput] = useState(searchParams.get("keyword") ?? "");
+  const [minPriceInput, setMinPriceInput] = useState(searchParams.get("minPrice") ?? "");
+  const [maxPriceInput, setMaxPriceInput] = useState(searchParams.get("maxPrice") ?? "");
+  const [storeInput, setStoreInput] = useState(searchParams.get("store") ?? "");
   const [categoryLoading, setCategoryLoading] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  const pageNo = Math.max(1, numberParam(searchParams.get("page")) ?? 1);
+  const categoryId = numberParam(searchParams.get("category"));
+  const keyword = searchParams.get("keyword") ?? "";
+  const minPrice = numberParam(searchParams.get("minPrice"));
+  const maxPrice = numberParam(searchParams.get("maxPrice"));
+  const storeKeyword = searchParams.get("store") ?? "";
+  const sellerType = numberParam(searchParams.get("sellerType"));
+  const inStock = searchParams.get("inStock") === "1";
+  const sort = (searchParams.get("sort") ?? "") as SortValue;
+  const activeFilterCount = [categoryId, keyword, minPrice !== undefined, maxPrice !== undefined, storeKeyword, sellerType, inStock, sort].filter(Boolean).length;
+
   useEffect(() => {
-    void loadCategories();
+    void catalogApi.categoryTree().then((response) => setCategories(response ?? [])).catch((cause) => setError(cause instanceof CurmerceApiError ? cause.message : "商品分类加载失败")).finally(() => setCategoryLoading(false));
   }, []);
 
   useEffect(() => {
-    void loadProducts();
-  }, [pageNo, selectedCategoryId, keyword]);
-
-  async function loadCategories() {
-    setCategoryLoading(true);
-    try {
-      const response = await catalogApi.categoryTree();
-      setCategories(response ?? []);
-    } catch (cause) {
-      setError(cause instanceof CurmerceApiError ? cause.message : "商品分类加载失败");
-    } finally {
-      setCategoryLoading(false);
-    }
-  }
-
-  async function loadProducts() {
     setLoading(true);
     setError(null);
-    try {
-      const response = await catalogApi.productPage({
-        pageNo,
-        pageSize: PAGE_SIZE,
-        categoryId: selectedCategoryId ?? undefined,
-        keyword,
-      });
-      setProducts(response?.list ?? []);
-      setTotal(response?.total ?? 0);
-    } catch (cause) {
-      setError(cause instanceof CurmerceApiError ? cause.message : "商品加载失败");
-      setProducts([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
+    void catalogApi.productPage({
+      pageNo,
+      pageSize: PAGE_SIZE,
+      categoryId,
+      keyword,
+      minPrice: minPrice === undefined ? undefined : Math.round(minPrice * 100),
+      maxPrice: maxPrice === undefined ? undefined : Math.round(maxPrice * 100),
+      inStock,
+      sellerType,
+      storeKeyword,
+      sort: sort || undefined,
+    }).then((response) => { setProducts(response?.list ?? []); setTotal(response?.total ?? 0); })
+      .catch((cause) => { setError(cause instanceof CurmerceApiError ? cause.message : "商品加载失败"); setProducts([]); setTotal(0); })
+      .finally(() => setLoading(false));
+  }, [pageNo, categoryId, keyword, minPrice, maxPrice, inStock, sellerType, storeKeyword, sort]);
+
+  function updateQuery(changes: Record<string, string | number | boolean | undefined>, resetPage = true) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === undefined || value === "" || value === false) params.delete(key);
+      else params.set(key, value === true ? "1" : String(value));
     }
+    if (resetPage) params.delete("page");
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
   }
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPageNo(1);
-    setKeyword(keywordInput.trim());
+    updateQuery({ keyword: keywordInput.trim() });
   }
 
-  function selectCategory(categoryId: number | null) {
-    setPageNo(1);
-    setSelectedCategoryId(categoryId);
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextMin = numberParam(minPriceInput);
+    const nextMax = numberParam(maxPriceInput);
+    if (nextMin !== undefined && nextMax !== undefined && nextMin > nextMax) {
+      setError("最低价格不能高于最高价格");
+      return;
+    }
+    updateQuery({ minPrice: nextMin, maxPrice: nextMax, store: storeInput.trim() });
   }
 
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  function clearFilters() {
+    setKeywordInput(""); setMinPriceInput(""); setMaxPriceInput(""); setStoreInput("");
+    router.push(pathname);
+  }
 
   return (
     <section className="content-section catalog-page">
-      <div className="section-heading catalog-heading">
-        <div>
-          <p className="eyebrow">DISCOVER · COMMERCE</p>
-          <h1>把兴趣，变成下一件喜欢的东西。</h1>
-          <p>从 Curmerce 商家目录开始探索，先看商品，再进入可信交易。</p>
-        </div>
-        <Link className="button button--secondary" href="/cart">查看购物车 →</Link>
+      <div className="catalog-page-heading">
+        <div><p className="eyebrow">DISCOVER COMMERCE</p><h1>商城</h1><p>按兴趣、价格和销售方式找到适合自己的商品。</p></div>
+        <Link className="button button--secondary" href="/cart"><ShoppingCart aria-hidden="true" size={18} />购物车</Link>
       </div>
+      <form className="catalog-search catalog-search--product" onSubmit={submitSearch}><Search aria-hidden="true" size={19} /><input aria-label="搜索商品" value={keywordInput} onChange={(event) => setKeywordInput(event.target.value)} placeholder="搜索商品名称或描述" /><button className="button button--primary" type="submit">搜索</button></form>
       {error ? <Notice>{error}</Notice> : null}
-      <div className="catalog-layout">
-        <aside className="catalog-sidebar">
-          <div className="panel-heading">
-            <h2>商品分类</h2>
-            <span>{categoryLoading ? "加载中…" : `${categories.length} 个一级分类`}</span>
-          </div>
-          {categoryLoading ? <p className="empty-state">正在读取分类…</p> : <CategoryTree categories={categories} selectedId={selectedCategoryId} onSelect={selectCategory} />}
-        </aside>
-        <div className="catalog-results">
-          <form className="catalog-search" onSubmit={submitSearch}>
-            <input value={keywordInput} onChange={(event) => setKeywordInput(event.target.value)} placeholder="搜索商品名称或描述" />
-            <button className="button button--primary" type="submit">搜索</button>
+      <div className="catalog-layout catalog-layout--product">
+        <aside className="catalog-filter-panel">
+          <div className="catalog-filter-panel__heading"><div><SlidersHorizontal aria-hidden="true" size={18} /><h2>筛选</h2></div>{activeFilterCount ? <button className="text-button" type="button" onClick={clearFilters}><X aria-hidden="true" size={14} />清空 {activeFilterCount} 项</button> : null}</div>
+          <div className="catalog-filter-section"><h3>商品分类</h3>{categoryLoading ? <p className="filter-loading">分类加载中…</p> : <CategoryTree categories={categories} selectedId={categoryId ?? null} onSelect={(id) => updateQuery({ category: id ?? undefined })} />}</div>
+          <form onSubmit={applyFilters}>
+            <div className="catalog-filter-section"><h3>价格区间</h3><div className="price-range"><label><span>最低价</span><input min="0" step="0.01" inputMode="decimal" placeholder="¥ 0" value={minPriceInput} onChange={(event) => setMinPriceInput(event.target.value)} /></label><span>至</span><label><span>最高价</span><input min="0" step="0.01" inputMode="decimal" placeholder="不限" value={maxPriceInput} onChange={(event) => setMaxPriceInput(event.target.value)} /></label></div></div>
+            <div className="catalog-filter-section"><h3>销售方式</h3><label className="filter-radio"><input checked={!sellerType} name="sellerType" type="radio" onChange={() => updateQuery({ sellerType: undefined })} />全部</label><label className="filter-radio"><input checked={sellerType === 1} name="sellerType" type="radio" onChange={() => updateQuery({ sellerType: 1 })} />商家商品</label><label className="filter-radio"><input checked={sellerType === 2} name="sellerType" type="radio" onChange={() => updateQuery({ sellerType: 2 })} />个人闲置</label></div>
+            <div className="catalog-filter-section"><h3>店铺</h3><input className="filter-text-input" placeholder="搜索店铺名称" value={storeInput} onChange={(event) => setStoreInput(event.target.value)} /></div>
+            <label className="filter-checkbox"><input checked={inStock} type="checkbox" onChange={(event) => updateQuery({ inStock: event.target.checked })} />仅看有货商品</label>
+            <button className="button button--secondary button--full" type="submit"><Filter aria-hidden="true" size={17} />应用筛选</button>
           </form>
-          <div className="catalog-results__meta">
-            <span>{keyword ? `“${keyword}”的结果` : selectedCategoryId ? "当前分类商品" : "全部商品"}</span>
-            <span>{total} 件商品</span>
-          </div>
-          {loading ? <p className="empty-state catalog-loading">商品加载中…</p> : null}
-          {!loading && products.length === 0 ? <p className="empty-state catalog-loading">暂时没有符合条件的商品。</p> : null}
-          {!loading && products.length > 0 ? (
-            <div className="product-grid">
-              {products.map((product) => <ProductCard key={product.id} product={product} />)}
-            </div>
-          ) : null}
-          {total > 0 ? (
-            <div className="pagination">
-              <button className="button button--secondary" disabled={pageNo <= 1} type="button" onClick={() => setPageNo((current) => current - 1)}>上一页</button>
-              <span>第 {pageNo} / {pageCount} 页</span>
-              <button className="button button--secondary" disabled={pageNo >= pageCount} type="button" onClick={() => setPageNo((current) => current + 1)}>下一页</button>
-            </div>
-          ) : null}
+        </aside>
+        <div className="catalog-results catalog-results--product">
+          <div className="catalog-results-toolbar"><div><strong>{keyword ? `“${keyword}”的结果` : "全部商品"}</strong><span>{loading ? "正在更新…" : `共 ${total} 件`}</span></div><label><span>排序</span><select aria-label="商品排序" value={sort} onChange={(event) => updateQuery({ sort: event.target.value })}><option value="">综合排序</option><option value="latest">最新上架</option><option value="priceAsc">价格从低到高</option><option value="priceDesc">价格从高到低</option></select></label></div>
+          {loading ? <div className="catalog-skeleton">{Array.from({ length: 6 }, (_, index) => <span key={index} />)}</div> : products.length === 0 ? <EmptyState title="没有找到符合条件的商品" description="调整关键词或筛选条件后再试试。" action={{ href: "/catalog", label: "清空筛选" }} /> : <div className="product-grid">{products.map((product) => <ProductCard key={product.id} product={product} />)}</div>}
+          <Pagination pageNo={pageNo} pageSize={PAGE_SIZE} total={total} onChange={(page) => updateQuery({ page }, false)} />
         </div>
       </div>
     </section>
   );
+}
+
+export default function CatalogPage() {
+  return <Suspense fallback={<section className="content-section"><div className="catalog-skeleton">{Array.from({ length: 6 }, (_, index) => <span key={index} />)}</div></section>}><CatalogContent /></Suspense>;
 }

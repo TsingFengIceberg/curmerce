@@ -2,9 +2,11 @@ package cn.iocoder.yudao.module.commerce.controller.admin.product;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductIdReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductRejectReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductRespVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductOperationLogRespVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductReviewPageReqVO;
 import cn.iocoder.yudao.module.commerce.service.product.ProductAggregate;
 import cn.iocoder.yudao.module.commerce.service.product.ProductService;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
+import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - Curmerce 商品审核")
 @RestController
@@ -46,11 +49,19 @@ public class ProductReviewController {
         return success(ProductRespAssembler.toResponse(productService.getProductForReview(id)));
     }
 
+    @GetMapping("/operation-log")
+    @Operation(summary = "分页查询商品审核操作记录")
+    @PreAuthorize("@ss.hasPermission('commerce:product:query')")
+    public CommonResult<PageResult<ProductOperationLogRespVO>> operationLog(
+            @RequestParam Long productId, @Valid PageParam pageParam) {
+        return success(productService.getReviewOperationLogPage(productId, pageParam));
+    }
+
     @PutMapping("/approve")
     @Operation(summary = "审核通过商品")
     @PreAuthorize("@ss.hasPermission('commerce:product:audit')")
     public CommonResult<Boolean> approve(@Valid @RequestBody ProductIdReqVO reqVO) {
-        productService.approveProduct(reqVO.getId());
+        productService.approveProduct(reqVO.getId(), getLoginUserId());
         return success(true);
     }
 
@@ -58,7 +69,7 @@ public class ProductReviewController {
     @Operation(summary = "驳回商品")
     @PreAuthorize("@ss.hasPermission('commerce:product:audit')")
     public CommonResult<Boolean> reject(@Valid @RequestBody ProductRejectReqVO reqVO) {
-        productService.rejectProduct(reqVO);
+        productService.rejectProduct(reqVO, getLoginUserId());
         return success(true);
     }
 

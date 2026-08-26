@@ -2,11 +2,15 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MapPin, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { CurmerceApiError } from "@/lib/api/client";
 import { memberApi } from "@/lib/api/member";
 import { clearToken, getAccessToken } from "@/lib/auth/storage";
 import type { AreaNode, MemberAddress, MemberAddressInput } from "@/lib/types/api";
 import { Notice } from "@/components/notice";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Drawer } from "@/components/drawer";
+import { EmptyState } from "@/components/empty-state";
 
 function createEmptyForm(): MemberAddressInput {
   return { name: "", mobile: "", areaId: 0, detailAddress: "", defaultStatus: false };
@@ -26,6 +30,9 @@ export default function AddressesPage() {
   const [provinceId, setProvinceId] = useState(0);
   const [cityId, setCityId] = useState(0);
   const [defaultingId, setDefaultingId] = useState<number | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [deletingAddress, setDeletingAddress] = useState<MemberAddress | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -91,6 +98,7 @@ export default function AddressesPage() {
     });
     setMessage(null);
     setError(null);
+    setEditorOpen(true);
   }
 
   function resetForm() {
@@ -98,6 +106,19 @@ export default function AddressesPage() {
     setProvinceId(0);
     setCityId(0);
     setForm(createEmptyForm());
+  }
+
+  function openCreate() {
+    resetForm();
+    setMessage(null);
+    setError(null);
+    setEditorOpen(true);
+  }
+
+  function closeEditor() {
+    if (saving) return;
+    setEditorOpen(false);
+    resetForm();
   }
 
   const provinceNodes = areaTree;
@@ -138,6 +159,7 @@ export default function AddressesPage() {
         setMessage("地址已添加");
       }
       resetForm();
+      setEditorOpen(false);
       await loadAddresses();
     } catch (cause) {
       setError(cause instanceof CurmerceApiError || cause instanceof Error ? cause.message : "地址保存失败");
@@ -146,17 +168,21 @@ export default function AddressesPage() {
     }
   }
 
-  async function remove(address: MemberAddress) {
-    if (!window.confirm(`确定删除“${address.name}”的收货地址吗？`)) return;
+  async function remove() {
+    if (!deletingAddress) return;
+    setDeleting(true);
     setError(null);
     try {
-      await memberApi.deleteAddress(address.id);
+      await memberApi.deleteAddress(deletingAddress.id);
       setMessage("地址已删除");
-      if (editingId === address.id) resetForm();
-      setAddresses((current) => current.filter((item) => item.id !== address.id));
+      if (editingId === deletingAddress.id) closeEditor();
+      setAddresses((current) => current.filter((item) => item.id !== deletingAddress.id));
+      setDeletingAddress(null);
       await loadAddresses();
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "地址删除失败");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -191,55 +217,49 @@ export default function AddressesPage() {
           <h1>收货地址</h1>
           <p>维护买家下单时使用的地址快照。</p>
         </div>
-        <span className="section-heading__note">后端：/member/address/*</span>
+        <button className="button button--primary button--icon-label" type="button" onClick={openCreate}><Plus aria-hidden="true" size={17} />新建地址</button>
       </div>
       {message ? <Notice tone="success">{message}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}
-      <div className="address-layout">
-        <div className="address-list">
+      <div className="address-list address-list--productized">
           <div className="panel-heading">
             <h2>我的地址</h2>
             <span>{addresses.length} 条</span>
           </div>
           {loading ? <p className="empty-state">加载中…</p> : null}
-          {!loading && addresses.length === 0 ? <p className="empty-state">还没有收货地址，请在右侧添加。</p> : null}
+          {!loading && addresses.length === 0 ? <EmptyState icon={<MapPin aria-hidden="true" size={22} />} title="还没有收货地址" description="添加常用地址后，下单时可以直接选择。" actionLabel="添加第一条地址" onAction={openCreate} /> : null}
           <div className="address-cards">
             {addresses.map((address) => (
-              <article className={`address-card${address.defaultStatus ? " address-card--default" : ""}`} key={address.id}>
+              <article className={`address-card address-card--interactive${address.defaultStatus ? " address-card--default" : ""}`} key={address.id}>
                 <div className="address-card__topline">
                   <div>
                     <strong>{address.name}</strong>
                     <span>{address.mobile}</span>
                   </div>
-                  {address.defaultStatus ? <span className="tag">默认地址</span> : null}
+                  {address.defaultStatus ? <span className="tag"><Star aria-hidden="true" size={12} />默认地址</span> : null}
                 </div>
                 <p>{address.areaName ? `${address.areaName} · ` : ""}{address.detailAddress}</p>
                 <div className="address-card__actions">
-                  {!address.defaultStatus ? <button className="text-button" disabled={defaultingId === address.id} type="button" onClick={() => void makeDefault(address)}>{defaultingId === address.id ? "切换中…" : "设为默认"}</button> : null}
-                  <button className="text-button" type="button" onClick={() => startEdit(address)}>编辑</button>
-                  <button className="text-button text-button--danger" type="button" onClick={() => void remove(address)}>删除</button>
+                  {!address.defaultStatus ? <button className="text-button button--icon-label" disabled={defaultingId === address.id} type="button" onClick={() => void makeDefault(address)}><Star aria-hidden="true" size={14} />{defaultingId === address.id ? "切换中…" : "设为默认"}</button> : <span className="address-card__default-hint">当前默认地址</span>}
+                  <button aria-label={`编辑 ${address.name} 的地址`} className="icon-button" title="编辑地址" type="button" onClick={() => startEdit(address)}><Pencil aria-hidden="true" size={16} /></button>
+                  <button aria-label={`删除 ${address.name} 的地址`} className="icon-button icon-button--danger" title="删除地址" type="button" onClick={() => setDeletingAddress(address)}><Trash2 aria-hidden="true" size={16} /></button>
                 </div>
               </article>
             ))}
           </div>
-        </div>
-        <form className="form-card" onSubmit={submit}>
-          <div className="form-card__heading">
-            <div>
-              <p className="eyebrow">ADDRESS BOOK</p>
-              <h2>{editingId ? "编辑地址" : "添加地址"}</h2>
-            </div>
-            {editingId ? <button className="text-button" type="button" onClick={resetForm}>取消编辑</button> : null}
-          </div>
+      </div>
+      <Drawer open={editorOpen} title={editingId ? "编辑收货地址" : "新建收货地址"} description="该地址会用于订单收货信息快照。" busy={saving} onClose={closeEditor}>
+        <form className="drawer-form" onSubmit={submit}>
           <label className="field"><span>收件人</span><input required maxLength={30} value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="姓名" /></label>
           <label className="field"><span>手机号</span><input required inputMode="tel" value={form.mobile} onChange={(event) => update("mobile", event.target.value)} placeholder="手机号" /></label>
           <fieldset className="field-group"><legend>收货地区</legend><div className="form-grid form-grid--three"><select aria-label="省" required disabled={areaLoading || provinceNodes.length === 0} value={provinceId || ""} onChange={(event) => selectProvince(event.target.value)}><option value="">{areaLoading ? "地区加载中…" : "选择省"}</option>{provinceNodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select><select aria-label="市" required disabled={!provinceId || cityNodes.length === 0} value={cityId || ""} onChange={(event) => selectCity(event.target.value)}><option value="">{provinceId && cityNodes.length === 0 ? "无需选择市" : "选择市"}</option>{cityNodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select><select aria-label="区" required disabled={!cityId || districtNodes.length === 0} value={form.areaId || ""} onChange={(event) => selectDistrict(event.target.value)}><option value="">{cityId && districtNodes.length === 0 ? "无需选择区" : "选择区"}</option>{districtNodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select></div></fieldset>
           <p className="field-help">普通省市请选择到区县；香港、澳门等地区树叶子节点选中后可直接保存。</p>
           <label className="field"><span>详细地址</span><textarea required maxLength={255} rows={4} value={form.detailAddress} onChange={(event) => update("detailAddress", event.target.value)} placeholder="街道、楼栋、门牌号" /></label>
           <label className="checkbox-field"><input checked={form.defaultStatus} type="checkbox" onChange={(event) => update("defaultStatus", event.target.checked)} /><span>设为默认地址</span></label>
-          <button className="button button--primary button--full" disabled={saving} type="submit">{saving ? "保存中…" : editingId ? "保存修改" : "添加地址"}</button>
+          <div className="drawer-form__actions"><button className="button button--secondary" disabled={saving} type="button" onClick={closeEditor}>取消</button><button className="button button--primary" disabled={saving} type="submit">{saving ? "保存中…" : editingId ? "保存修改" : "添加地址"}</button></div>
         </form>
-      </div>
+      </Drawer>
+      <ConfirmDialog open={Boolean(deletingAddress)} title="删除收货地址" description={`确定删除“${deletingAddress?.name ?? ""}”的收货地址吗？删除后无法恢复。`} confirmLabel="删除地址" dangerous busy={deleting} onClose={() => { if (!deleting) setDeletingAddress(null); }} onConfirm={() => void remove()} />
     </section>
   );
 }

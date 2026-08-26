@@ -44,6 +44,7 @@ class ProductAggregateTransactionTest extends BaseDbUnitTest {
     @Resource private ProductSkuMapper skuMapper;
     @MockitoBean private MerchantAccessService merchantAccessService;
     @MockitoBean private ProductCategoryService categoryService;
+    @MockitoBean private ProductOperationLogService operationLogService;
 
     private MerchantDO merchant;
     private StoreDO store;

@@ -7,6 +7,7 @@ public class MemberUserRespDTO {
     private Long id;
     private String mobile;
     private String nickname;
+    private String avatar;
     private String email;
     private Integer status;
 }

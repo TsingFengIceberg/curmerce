@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.commerce.controller.admin.release.vo.ReleaseCreateReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.release.vo.ReleasePageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.release.vo.ReleaseUpdateReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.release.vo.ReleaseRespVO;
 import cn.iocoder.yudao.module.commerce.service.release.ReleaseService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,15 @@ public class ReleaseController {
     @PostMapping("/create") @Operation(summary = "创建限时发售活动")
     @PreAuthorize("@ss.hasPermission('commerce:release:create')")
     public CommonResult<Long> create(@Valid @RequestBody ReleaseCreateReqVO reqVO) { return success(releaseService.create(reqVO)); }
+    @PutMapping("/update") @Operation(summary = "修改限时发售草稿")
+    @PreAuthorize("@ss.hasPermission('commerce:release:update')")
+    public CommonResult<Boolean> update(@Valid @RequestBody ReleaseUpdateReqVO reqVO) {
+        releaseService.update(reqVO);
+        return success(true);
+    }
+    @GetMapping("/get") @Operation(summary = "查询我的限时发售详情")
+    @PreAuthorize("@ss.hasPermission('commerce:release:query')")
+    public CommonResult<ReleaseRespVO> get(@RequestParam Long id) { return success(releaseService.getOwn(id)); }
     @GetMapping("/page") @Operation(summary = "查询我的限时发售活动")
     @PreAuthorize("@ss.hasPermission('commerce:release:query')")
     public CommonResult<PageResult<ReleaseRespVO>> page(@Valid ReleasePageReqVO reqVO) { return success(releaseService.getOwnPage(reqVO)); }

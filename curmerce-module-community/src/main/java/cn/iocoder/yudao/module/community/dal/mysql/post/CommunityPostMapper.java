@@ -30,6 +30,10 @@ public interface CommunityPostMapper extends BaseMapperX<CommunityPostDO> {
                     "WHERE cpt.post_id = community_post.id AND cpt.deleted = 0 AND ct.deleted = 0 AND ct.status = 0 AND ct.slug = {0})",
                     req.getTopicSlug().trim());
         }
+        if (req.getProductId() != null) {
+            wrapper.apply("EXISTS (SELECT 1 FROM community_post_product cpp WHERE cpp.post_id = community_post.id " +
+                    "AND cpp.deleted = 0 AND cpp.product_id = {0})", req.getProductId());
+        }
         return selectPage(req, wrapper.orderByDesc(CommunityPostDO::getId));
     }
     default PageResult<CommunityPostDO> selectOwnerPage(Long userId, CommunityPostPageReqVO req) {

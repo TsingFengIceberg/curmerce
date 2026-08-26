@@ -37,6 +37,40 @@
           AND (p.name LIKE CONCAT('%', #{keyword}, '%')
                OR p.subtitle LIKE CONCAT('%', #{keyword}, '%'))
         </if>
-        ORDER BY p.sort ASC, p.id DESC
+        <if test="req.sellerType != null">
+          AND p.seller_type = #{req.sellerType}
+        </if>
+        <if test="req.storeKeyword != null and req.storeKeyword != ''">
+          AND s.name LIKE CONCAT('%', #{req.storeKeyword}, '%')
+        </if>
+        <if test="req.minPrice != null or req.maxPrice != null">
+          AND EXISTS (
+            SELECT 1 FROM commerce_product_sku price_sku
+            WHERE price_sku.product_id = p.id AND price_sku.deleted = 0 AND price_sku.status = 0
+            <if test="req.minPrice != null">AND price_sku.price &gt;= #{req.minPrice}</if>
+            <if test="req.maxPrice != null">AND price_sku.price &lt;= #{req.maxPrice}</if>
+          )
+        </if>
+        <if test="req.inStock != null and req.inStock">
+          AND EXISTS (
+            SELECT 1 FROM commerce_product_sku stock_sku
+            WHERE stock_sku.product_id = p.id AND stock_sku.deleted = 0 AND stock_sku.status = 0
+              AND stock_sku.stock &gt; 0
+          )
+        </if>
+        <choose>
+          <when test="req.sort == 'priceAsc'">
+            ORDER BY (SELECT MIN(sort_sku.price) FROM commerce_product_sku sort_sku WHERE sort_sku.product_id = p.id AND sort_sku.deleted = 0 AND sort_sku.status = 0) ASC, p.id DESC
+          </when>
+          <when test="req.sort == 'priceDesc'">
+            ORDER BY (SELECT MIN(sort_sku.price) FROM commerce_product_sku sort_sku WHERE sort_sku.product_id = p.id AND sort_sku.deleted = 0 AND sort_sku.status = 0) DESC, p.id DESC
+          </when>
+          <when test="req.sort == 'latest'">
+            ORDER BY p.id DESC
+          </when>
+          <otherwise>
+            ORDER BY p.sort ASC, p.id DESC
+          </otherwise>
+        </choose>
     </select>
 </mapper>

@@ -55,6 +55,13 @@ export interface PublicProductDetail extends PublicProductSummary {
   skus: PublicProductSku[];
 }
 
+export interface ProductFavorite {
+  id: number;
+  productId: number;
+  favoriteTime?: ApiDateValue;
+  product?: PublicProductSummary | null;
+}
+
 export interface PersonalListing {
   id: number;
   categoryId: number;
@@ -132,7 +139,9 @@ export interface OrderSummary {
   id: number;
   orderNo: string;
   merchantId?: number | null;
+  merchantName?: string | null;
   storeId?: number | null;
+  storeName?: string | null;
   sellerType?: number | null;
   sellerUserId?: number | null;
   status: number;
@@ -275,6 +284,10 @@ export interface ReleaseItem {
   id: number;
   productId: number;
   skuId: number;
+  productName?: string | null;
+  productImageUrl?: string | null;
+  skuLabel?: string | null;
+  originalPrice?: number | null;
   campaignPrice: number;
   stock: number;
   soldCount: number;
@@ -314,6 +327,10 @@ export interface AuctionSession {
   name: string;
   productId: number;
   skuId: number;
+  productName?: string | null;
+  productImageUrl?: string | null;
+  skuLabel?: string | null;
+  originalPrice?: number | null;
   status: number;
   startingPrice: number;
   minIncrement: number;
@@ -321,10 +338,20 @@ export interface AuctionSession {
   endTime: ApiDateValue;
   currentAmount?: number | null;
   currentBidderUserId?: number | null;
+  bidCount?: number | null;
   winnerUserId?: number | null;
   winningBidId?: number | null;
   settlementFailedTime?: ApiDateValue | null;
   settlementFailureReason?: string | null;
+}
+
+export interface AuctionBid {
+  id: number;
+  amount: number;
+  bidderLabel: string;
+  mine: boolean;
+  leading: boolean;
+  createTime?: ApiDateValue;
 }
 
 export interface AuctionCreateInput {
@@ -345,7 +372,9 @@ export interface MerchantOrder {
   buyerNickname?: string | null;
   buyerEmail?: string | null;
   merchantId?: number | null;
+  merchantName?: string | null;
   storeId?: number | null;
+  storeName?: string | null;
   sellerType?: number | null;
   sellerUserId?: number | null;
   status: number;
@@ -434,8 +463,11 @@ export interface ProductSkuAdmin {
 export interface ProductAdmin {
   id: number;
   merchantId: number;
+  merchantName?: string | null;
   storeId: number;
+  storeName?: string | null;
   categoryId: number;
+  categoryName?: string | null;
   code: string;
   name: string;
   subtitle?: string | null;
@@ -451,6 +483,20 @@ export interface ProductAdmin {
   createTime?: ApiDateValue;
   updateTime?: ApiDateValue;
   skus: ProductSkuAdmin[];
+}
+
+export interface ProductOperationLog {
+  id: number;
+  productId: number;
+  operatorUserId?: number | null;
+  operatorType: number;
+  action: string;
+  fromAuditStatus?: number | null;
+  toAuditStatus?: number | null;
+  fromSaleStatus?: number | null;
+  toSaleStatus?: number | null;
+  remark?: string | null;
+  createTime?: ApiDateValue;
 }
 
 export interface ProductPageQuery {
@@ -493,6 +539,7 @@ export interface CommunityTopic {
   id: number;
   name: string;
   slug: string;
+  postCount?: number;
 }
 
 export interface CommunityProductLink extends PublicProductSummary {}
@@ -532,7 +579,13 @@ export interface CommunityComment {
 export interface CommunityReport {
   id: number;
   postId: number;
+  postTitle?: string | null;
+  postContent?: string | null;
+  postMediaUrls?: string[] | null;
+  postAuthorUserId?: number | null;
+  postAuthorNickname?: string | null;
   reporterUserId: number;
+  reporterNickname?: string | null;
   reason: string;
   status: number;
   reviewerUserId?: number | null;

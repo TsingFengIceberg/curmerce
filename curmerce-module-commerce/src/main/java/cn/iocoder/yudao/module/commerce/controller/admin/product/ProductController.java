@@ -2,10 +2,12 @@ package cn.iocoder.yudao.module.commerce.controller.admin.product;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductCreateOwnReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductIdReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductPageOwnReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductRespVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductOperationLogRespVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductUpdateOwnReqVO;
 import cn.iocoder.yudao.module.commerce.service.product.ProductAggregate;
 import cn.iocoder.yudao.module.commerce.service.product.ProductService;
@@ -61,6 +63,14 @@ public class ProductController {
     @PreAuthorize("@ss.hasPermission('commerce:product:self-query')")
     public CommonResult<PageResult<ProductRespVO>> pageOwn(@Valid ProductPageOwnReqVO reqVO) {
         return success(toResponsePage(productService.getOwnProductPage(reqVO)));
+    }
+
+    @GetMapping("/operation-log-own")
+    @Operation(summary = "分页查询自己的商品操作记录")
+    @PreAuthorize("@ss.hasPermission('commerce:product:self-query')")
+    public CommonResult<PageResult<ProductOperationLogRespVO>> operationLogOwn(
+            @RequestParam Long productId, @Valid PageParam pageParam) {
+        return success(productService.getOwnOperationLogPage(productId, pageParam));
     }
 
     @PutMapping("/submit-own")

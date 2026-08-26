@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.commerce.service.merchant;
 
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.yudao.framework.security.core.LoginUser;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantOperatorDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.store.StoreDO;
@@ -13,8 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 
@@ -34,12 +36,8 @@ class MerchantAccessServiceImplTest {
 
     @Test
     void rejectsMissingLogin() {
-        try (MockedStatic<cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils> security =
-                     mockStatic(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.class)) {
-            security.when(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils::getLoginUserId)
-                    .thenReturn(null);
-            assertCode(STORE_ACCESS_DENIED);
-        }
+        SecurityContextHolder.clearContext();
+        assertCode(STORE_ACCESS_DENIED);
         verifyNoInteractions(operatorMapper, merchantMapper, storeMapper);
     }
 
@@ -102,10 +100,13 @@ class MerchantAccessServiceImplTest {
     }
 
     private void withLoginUser(Long userId, Runnable action) {
-        try (MockedStatic<cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils> security =
-                     mockStatic(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.class)) {
-            security.when(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils::getLoginUserId).thenReturn(userId);
+        try {
+            LoginUser loginUser = new LoginUser().setId(userId);
+            SecurityContextHolder.getContext().setAuthentication(
+                    new UsernamePasswordAuthenticationToken(loginUser, null, List.of()));
             action.run();
+        } finally {
+            SecurityContextHolder.clearContext();
         }
     }
 }

@@ -81,7 +81,7 @@ export async function appMultipartApi<T>(path: string, formData: FormData): Prom
 export async function adminApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
-  headers.set("Content-Type", "application/json");
+  if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   headers.set("tenant-id", TENANT_ID);
 
   const accessToken = getAdminAccessToken();
@@ -108,6 +108,10 @@ export async function adminApi<T>(path: string, init: RequestInit = {}): Promise
     throw new CurmerceApiError(result.msg || "请求失败", response.status, result.code);
   }
   return result.data;
+}
+
+export async function adminMultipartApi<T>(path: string, formData: FormData): Promise<T> {
+  return adminApi<T>(path, { method: "POST", body: formData });
 }
 
 export function jsonBody(value: unknown): BodyInit {

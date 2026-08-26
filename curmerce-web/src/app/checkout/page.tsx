@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Notice } from "@/components/notice";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { CopyButton } from "@/components/copy-button";
+import { Check, MapPin, PackageCheck, ReceiptText } from "lucide-react";
 import { cartApi } from "@/lib/api/cart";
 import { CurmerceApiError } from "@/lib/api/client";
 import { memberApi } from "@/lib/api/member";
@@ -22,6 +25,8 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<OrderCreateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -44,6 +49,7 @@ export default function CheckoutPage() {
         const otherSelectedIds = selectedItems.filter((item) => sellerKey(item.product) !== targetGroup).map((item) => item.id);
         if (otherSelectedIds.length > 0) {
           await cartApi.updateSelected({ ids: otherSelectedIds, selected: false });
+          setMessage(`本次只结算当前店铺，其他店铺的 ${otherSelectedIds.length} 件商品仍保留在购物车。`);
           const refreshed = await cartApi.list();
           nextCart = { validList: refreshed?.validList ?? [], invalidList: refreshed?.invalidList ?? [] };
         }
@@ -98,19 +104,22 @@ export default function CheckoutPage() {
     <section className="content-section checkout-page">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">CHECKOUT · IDEMPOTENT ORDER</p>
+          <p className="eyebrow">SECURE CHECKOUT</p>
           <h1>确认订单</h1>
-          <p>订单会保存收货地址快照，并以幂等键防止重复创建。</p>
+          <p>确认收货信息和商品明细后提交，本次只结算一个销售方的商品。</p>
         </div>
         <Link className="button button--secondary" href="/cart">返回购物车</Link>
       </div>
       {error ? <Notice>{error}</Notice> : null}
+      {message ? <Notice tone="info">{message}</Notice> : null}
+      {!loading && !result ? <ol className="checkout-steps"><li className="checkout-step checkout-step--active"><MapPin aria-hidden="true" size={17} /><span>确认地址</span></li><li className="checkout-step checkout-step--active"><PackageCheck aria-hidden="true" size={17} /><span>核对商品</span></li><li className="checkout-step"><ReceiptText aria-hidden="true" size={17} /><span>提交订单</span></li></ol> : null}
       {loading ? <p className="empty-state">结算信息加载中…</p> : null}
       {!loading && result ? (
         <div className="order-success">
           <p className="eyebrow">ORDER CREATED</p>
           <h2>订单已创建</h2>
-          <p>订单号：<strong>{result.orderNo}</strong></p>
+          <span className="order-created-icon"><Check aria-hidden="true" /></span>
+          <p className="copyable-value">订单号：<strong>{result.orderNo}</strong><CopyButton value={result.orderNo} label="复制订单号" /></p>
           <p>待支付金额：<strong>{formatMoney(result.payableAmount)}</strong></p>
           <div className="hero-card__actions"><Link className="button button--primary" href={`/orders/${result.orderId}`}>去订单支付</Link><Link className="button button--secondary" href="/catalog">继续购物</Link><Link className="button button--secondary" href="/cart">查看购物车</Link></div>
         </div>
@@ -135,12 +144,15 @@ export default function CheckoutPage() {
             <p className="eyebrow">SUMMARY</p>
             <h2>本店订单</h2>
             <div className="summary-row"><span>商品数量</span><strong>{items.reduce((sum, item) => sum + item.quantity, 0)}</strong></div>
+            <div className="summary-row"><span>商品小计</span><strong>{formatMoney(total)}</strong></div>
+            <div className="summary-row"><span>配送费</span><strong>¥0.00</strong></div>
             <div className="summary-row summary-row--total"><span>应付金额</span><strong>{formatMoney(total)}</strong></div>
-            <button className="button button--primary button--full" disabled={submitting || items.length === 0 || !addressId} type="button" onClick={() => void submitOrder()}>{submitting ? "创建中…" : "提交订单"}</button>
-            <p className="checkout-summary__hint">提交后订单进入待支付状态；重复点击不会创建重复订单。</p>
+            <button className="button button--primary button--full" disabled={submitting || items.length === 0 || !addressId} type="button" onClick={() => setConfirming(true)}>{submitting ? "创建中…" : `提交订单 · ${formatMoney(total)}`}</button>
+            <p className="checkout-summary__hint">提交后可在订单详情中完成测试支付。</p>
           </aside>
         </div>
       ) : null}
+      <ConfirmDialog open={confirming} title="确认提交订单？" description={`将使用当前收货地址创建 ${items.reduce((sum, item) => sum + item.quantity, 0)} 件商品的订单，应付 ${formatMoney(total)}。`} confirmLabel="确认提交" busy={submitting} onClose={() => setConfirming(false)} onConfirm={() => { setConfirming(false); void submitOrder(); }} />
     </section>
   );
 }

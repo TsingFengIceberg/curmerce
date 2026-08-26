@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Notice } from "@/components/notice";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EmptyState } from "@/components/empty-state";
+import { Trash2 } from "lucide-react";
 import { cartApi } from "@/lib/api/cart";
 import { assetUrl, CurmerceApiError } from "@/lib/api/client";
 import { formatMoney } from "@/lib/format";
@@ -17,6 +20,8 @@ interface StoreGroup {
   items: CartItem[];
 }
 
+type PendingAction = { type: "remove"; ids: number[] } | { type: "checkout"; group: StoreGroup; otherIds: number[] } | null;
+
 export default function CartPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartList>({ validList: [], invalidList: [] });
@@ -24,6 +29,7 @@ export default function CartPage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -94,7 +100,6 @@ export default function CartPage() {
   }
 
   async function removeItems(itemIds: number[]) {
-    if (!window.confirm(`确定删除选中的 ${itemIds.length} 件购物车商品吗？`)) return;
     setBusyId(itemIds[0] ?? null);
     setError(null);
     try {
@@ -117,17 +122,33 @@ export default function CartPage() {
     const otherStoreIds = cart.validList
       .filter((item) => item.selected && sellerKey(item.product) !== group.key)
       .map((item) => item.id);
+    if (otherStoreIds.length > 0) {
+      setPendingAction({ type: "checkout", group, otherIds: otherStoreIds });
+      return;
+    }
+    router.push(`/checkout?group=${encodeURIComponent(group.key)}`);
+  }
+
+  async function prepareCheckout(group: StoreGroup, otherStoreIds: number[]) {
     setError(null);
     setMessage(null);
     try {
-      if (otherStoreIds.length > 0) {
-        await cartApi.updateSelected({ ids: otherStoreIds, selected: false });
-      }
+      await cartApi.updateSelected({ ids: otherStoreIds, selected: false });
       router.push(`/checkout?group=${encodeURIComponent(group.key)}`);
     } catch (cause) {
       setError(cause instanceof CurmerceApiError ? cause.message : "准备结算失败");
     }
   }
+
+  async function confirmPendingAction() {
+    const action = pendingAction;
+    if (!action) return;
+    setPendingAction(null);
+    if (action.type === "remove") await removeItems(action.ids);
+    else await prepareCheckout(action.group, action.otherIds);
+  }
+
+  const selectedIds = cart.validList.filter((item) => item.selected).map((item) => item.id);
 
   return (
     <section className="content-section cart-page">
@@ -142,10 +163,11 @@ export default function CartPage() {
       {message ? <Notice tone="success">{message}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}
       {loading ? <p className="empty-state">购物车加载中…</p> : null}
-      {!loading && groups.length === 0 && cart.invalidList.length === 0 ? <p className="empty-state cart-empty">购物车还是空的，去商品目录挑选一些喜欢的东西吧。</p> : null}
+      {!loading && groups.length === 0 && cart.invalidList.length === 0 ? <EmptyState title="购物车还是空的" description="从商品目录或社区分享中挑选喜欢的东西。" action={{ href: "/catalog", label: "去逛商城" }} /> : null}
       {!loading ? (
         <div className="cart-layout">
           <div className="cart-groups">
+            {selectedIds.length > 0 ? <div className="cart-batch-toolbar"><span>已选择 {selectedIds.length} 件商品</span><button className="text-button text-button--danger" type="button" onClick={() => setPendingAction({ type: "remove", ids: selectedIds })}><Trash2 aria-hidden="true" size={15} />删除选中</button></div> : null}
             {groups.map((group) => {
               const selected = group.items.filter((item) => item.selected);
               const total = selected.reduce((sum, item) => sum + (item.sku?.price ?? 0) * item.quantity, 0);
@@ -158,7 +180,7 @@ export default function CartPage() {
                   </div>
                   <div className="cart-items">
                     {group.items.map((item) => (
-                      <CartItemRow busy={busyId === item.id} item={item} key={item.id} onRemove={() => void removeItems([item.id])} onSelect={(selectedValue) => void setSelected([item.id], selectedValue)} onQuantity={(quantity) => void updateQuantity(item, quantity)} />
+                      <CartItemRow busy={busyId === item.id} item={item} key={item.id} onRemove={() => setPendingAction({ type: "remove", ids: [item.id] })} onSelect={(selectedValue) => void setSelected([item.id], selectedValue)} onQuantity={(quantity) => void updateQuantity(item, quantity)} />
                     ))}
                   </div>
                   <div className="cart-store__footer">
@@ -171,12 +193,13 @@ export default function CartPage() {
           </div>
           {cart.invalidList.length > 0 ? (
             <section className="cart-invalid">
-              <div className="panel-heading"><h2>失效商品</h2><span>{cart.invalidList.length} 件</span></div>
-              {cart.invalidList.map((item) => <CartItemRow busy={busyId === item.id} item={item} invalid key={item.id} onRemove={() => void removeItems([item.id])} onSelect={() => undefined} onQuantity={() => undefined} />)}
+              <div className="panel-heading"><h2>失效商品</h2><button className="text-button text-button--danger" type="button" onClick={() => setPendingAction({ type: "remove", ids: cart.invalidList.map((item) => item.id) })}>清空 {cart.invalidList.length} 件</button></div>
+              {cart.invalidList.map((item) => <CartItemRow busy={busyId === item.id} item={item} invalid key={item.id} onRemove={() => setPendingAction({ type: "remove", ids: [item.id] })} onSelect={() => undefined} onQuantity={() => undefined} />)}
             </section>
           ) : null}
         </div>
       ) : null}
+      <ConfirmDialog open={pendingAction !== null} dangerous={pendingAction?.type === "remove"} title={pendingAction?.type === "checkout" ? "只结算当前店铺？" : "删除购物车商品？"} description={pendingAction?.type === "checkout" ? `其他店铺已选中的 ${pendingAction.otherIds.length} 件商品会保留在购物车，但本次将取消勾选。` : `将从购物车移除 ${pendingAction?.ids.length ?? 0} 件商品，此操作不能撤销。`} confirmLabel={pendingAction?.type === "checkout" ? "继续结算" : "确认删除"} onClose={() => setPendingAction(null)} onConfirm={() => void confirmPendingAction()} />
     </section>
   );
 }
@@ -207,9 +230,9 @@ function CartItemRow({
   return (
     <article className={`cart-item${invalid ? " cart-item--invalid" : ""}`}>
       <input aria-label={`选择 ${item.product?.name ?? "商品"}`} checked={!invalid && item.selected} disabled={invalid || busy} type="checkbox" onChange={(event) => onSelect(event.target.checked)} />
-      <div className="cart-item__image">{image ? <img src={image} alt={item.product?.name ?? "商品"} /> : <span>C</span>}</div>
+      <Link className="cart-item__image" href={item.product?.id ? `/products/${item.product.id}` : "/catalog"}>{image ? <img src={image} alt={item.product?.name ?? "商品"} /> : <span>C</span>}</Link>
       <div className="cart-item__main">
-        <strong>{item.product?.name ?? "商品已不可用"}</strong>
+        {item.product?.id ? <Link href={`/products/${item.product.id}`}><strong>{item.product.name}</strong></Link> : <strong>商品已不可用</strong>}
         <span>{item.sku?.specificationValues?.map((value) => `${value.name}: ${value.value}`).join(" / ") || "默认规格"}</span>
         {invalid && item.invalidReason ? <small>{item.invalidReason}</small> : null}
       </div>

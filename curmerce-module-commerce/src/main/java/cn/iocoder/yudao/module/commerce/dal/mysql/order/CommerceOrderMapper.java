@@ -59,6 +59,7 @@ public interface CommerceOrderMapper extends BaseMapperX<CommerceOrderDO> {
         return selectPage(req, new LambdaQueryWrapperX<CommerceOrderDO>()
                 .eq(CommerceOrderDO::getMemberUserId, userId)
                 .eqIfPresent(CommerceOrderDO::getStatus, req.getStatus())
+                .likeIfPresent(CommerceOrderDO::getOrderNo, req.getOrderNo())
                 .orderByDesc(CommerceOrderDO::getId));
     }
 

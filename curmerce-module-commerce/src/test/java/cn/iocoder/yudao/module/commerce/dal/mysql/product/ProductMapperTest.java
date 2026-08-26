@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.commerce.dal.mysql.product;
 
 import cn.iocoder.yudao.framework.test.core.ut.BaseDbUnitTest;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.module.commerce.controller.app.catalog.vo.PublicProductPageReqVO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductCategoryDO;
@@ -100,7 +101,7 @@ class ProductMapperTest extends BaseDbUnitTest {
         productMapper.insert(withoutSku);
 
         PageResult<ProductDO> page = productMapper.selectPublicPage(new PageParam().setPageNo(1).setPageSize(10),
-                List.of(category.getId()), null);
+                List.of(category.getId()), null, new PublicProductPageReqVO());
 
         assertEquals(1L, page.getTotal());
         assertEquals(List.of(visible.getId()), page.getList().stream().map(ProductDO::getId).toList());

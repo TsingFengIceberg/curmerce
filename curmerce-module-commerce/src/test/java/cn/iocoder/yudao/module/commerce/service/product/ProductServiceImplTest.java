@@ -13,8 +13,11 @@ import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductSkuDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.store.StoreDO;
+import cn.iocoder.yudao.module.commerce.dal.mysql.merchant.MerchantMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductCategoryMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductAuditStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
@@ -24,14 +27,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 
-import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -43,8 +44,12 @@ class ProductServiceImplTest {
 
     @Mock private ProductMapper productMapper;
     @Mock private ProductSkuMapper skuMapper;
+    @Mock private MerchantMapper merchantMapper;
+    @Mock private StoreMapper storeMapper;
+    @Mock private ProductCategoryMapper categoryMapper;
     @Mock private ProductCategoryService categoryService;
     @Mock private MerchantAccessService merchantAccessService;
+    @Mock private ProductOperationLogService operationLogService;
     @InjectMocks private ProductServiceImpl service;
 
     @Test
@@ -70,6 +75,8 @@ class ProductServiceImplTest {
                         && product.getSaleStatus().equals(ProductSaleStatusEnum.OFF_SHELF.getStatus())));
         verify(skuMapper).insert((ProductSkuDO) argThat((ProductSkuDO sku) ->
                 sku.getMerchantId().equals(7L) && sku.getProductId().equals(10L)));
+        verify(operationLogService).record(eq(10L), isNull(), eq(ProductOperationLogService.OPERATOR_MERCHANT),
+                eq("CREATE"), isNull(), eq(0), isNull(), eq(0), anyString());
     }
 
     @Test
@@ -112,6 +119,8 @@ class ProductServiceImplTest {
 
         service.submitOwnProduct(10L);
         verify(productMapper).updateAuditExpected(10L, 0, 1, null, null, null);
+        verify(operationLogService).record(eq(10L), isNull(), eq(ProductOperationLogService.OPERATOR_MERCHANT),
+                eq("SUBMIT_REVIEW"), eq(0), eq(1), eq(0), eq(0), anyString());
     }
 
     @Test
@@ -135,11 +144,7 @@ class ProductServiceImplTest {
                 .setSaleStatus(ProductSaleStatusEnum.OFF_SHELF.getStatus());
         when(productMapper.selectByIdForUpdate(10L)).thenReturn(pending);
         when(productMapper.updateAuditExpected(eq(10L), eq(1), eq(2), eq(99L), any(), isNull())).thenReturn(1);
-        try (MockedStatic<cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils> security =
-                     mockStatic(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.class)) {
-            security.when(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils::getLoginUserId).thenReturn(99L);
-            service.approveProduct(10L);
-        }
+        service.approveProduct(10L, 99L);
         verify(productMapper).updateAuditExpected(eq(10L), eq(1), eq(2), eq(99L), any(), isNull());
     }
 
@@ -148,13 +153,9 @@ class ProductServiceImplTest {
         ProductDO pending = baseProduct().setAuditStatus(ProductAuditStatusEnum.PENDING.getStatus())
                 .setSaleStatus(ProductSaleStatusEnum.OFF_SHELF.getStatus());
         when(productMapper.selectByIdForUpdate(10L)).thenReturn(pending);
-        try (MockedStatic<cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils> security =
-                     mockStatic(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.class)) {
-            security.when(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils::getLoginUserId).thenReturn(99L);
-            ServiceException error = assertThrows(ServiceException.class, () -> service.rejectProduct(
-                    new ProductRejectReqVO().setId(10L).setReason("   ")));
-            assertEquals(PRODUCT_AUDIT_STATE_INVALID.getCode(), error.getCode());
-        }
+        ServiceException error = assertThrows(ServiceException.class, () -> service.rejectProduct(
+                new ProductRejectReqVO().setId(10L).setReason("   "), 99L));
+        assertEquals(PRODUCT_AUDIT_STATE_INVALID.getCode(), error.getCode());
         verify(productMapper, never()).updateAuditExpected(anyLong(), anyInt(), anyInt(), any(), any(), any());
     }
 

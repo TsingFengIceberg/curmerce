@@ -19,7 +19,7 @@ public class MemberUserApiImpl implements MemberUserApi {
         MemberUserDO user = userService.getUser(id);
         if (user == null) return null;
         return new MemberUserRespDTO().setId(user.getId()).setMobile(user.getMobile())
-                .setNickname(user.getNickname()).setEmail(user.getEmail()).setStatus(user.getStatus());
+                .setNickname(user.getNickname()).setAvatar(user.getAvatar()).setEmail(user.getEmail()).setStatus(user.getStatus());
     }
 
     @Override

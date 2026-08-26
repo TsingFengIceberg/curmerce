@@ -7,4 +7,5 @@ public class CommunityTopicRespVO {
     private Long id;
     private String name;
     private String slug;
+    private Long postCount;
 }

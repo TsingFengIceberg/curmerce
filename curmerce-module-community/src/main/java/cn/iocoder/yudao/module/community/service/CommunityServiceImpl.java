@@ -129,6 +129,13 @@ public class CommunityServiceImpl implements CommunityService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<CommunityTopicRespVO> getPopularTopics(Integer limit) {
+        int safeLimit = Math.max(1, Math.min(Optional.ofNullable(limit).orElse(12), 50));
+        return topicMapper.selectPopularTopics(safeLimit).stream().map(this::toTopic).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PageResult<CommunityPostRespVO> getOwnerPosts(Long userId, CommunityPostOwnerPageReqVO req) {
         memberUserApi.validateActiveUser(userId);
         PageResult<CommunityPostDO> page = postMapper.selectOwnerPage(userId,
@@ -334,7 +341,7 @@ public class CommunityServiceImpl implements CommunityService {
                 .setFavoriteCount(Optional.ofNullable(post.getFavoriteCount()).orElse(0))
                 .setCommentCount(Optional.ofNullable(post.getCommentCount()).orElse(0)).setCreateTime(post.getCreateTime()).setUpdateTime(post.getUpdateTime());
         MemberUserRespDTO author = memberUserApi.getUser(post.getAuthorUserId());
-        if (author != null) response.setAuthorNickname(author.getNickname());
+        if (author != null) response.setAuthorNickname(author.getNickname()).setAuthorAvatar(author.getAvatar());
         List<CommunityPostTopicDO> postTopics = postTopicMapper.selectByPostId(post.getId());
         response.setTopics(postTopics.stream().map(item -> topicMapper.selectById(item.getTopicId())).filter(Objects::nonNull).map(this::toTopic).toList());
         response.setProducts(postProductMapper.selectByPostId(post.getId()).stream().map(item -> catalogService.getVisibleSummary(item.getProductId(), null)).filter(Objects::nonNull).toList());
@@ -344,13 +351,28 @@ public class CommunityServiceImpl implements CommunityService {
                 .setFollowingAuthor(logged && followMapper.selectOne(viewerId, post.getAuthorUserId()) != null);
         return response;
     }
-    private CommunityTopicRespVO toTopic(CommunityTopicDO topic) { return new CommunityTopicRespVO().setId(topic.getId()).setName(topic.getName()).setSlug(topic.getSlug()); }
+    private CommunityTopicRespVO toTopic(CommunityTopicDO topic) { return new CommunityTopicRespVO().setId(topic.getId()).setName(topic.getName()).setSlug(topic.getSlug()).setPostCount(topic.getPostCount()); }
     private CommunityCommentRespVO toCommentResponse(CommunityCommentDO comment) {
         CommunityCommentRespVO response = new CommunityCommentRespVO().setId(comment.getId()).setPostId(comment.getPostId()).setParentId(comment.getParentId()).setAuthorUserId(comment.getAuthorUserId()).setContent(comment.getContent()).setStatus(comment.getStatus()).setCreateTime(comment.getCreateTime());
         MemberUserRespDTO author = memberUserApi.getUser(comment.getAuthorUserId());
-        if (author != null) response.setAuthorNickname(author.getNickname());
+        if (author != null) response.setAuthorNickname(author.getNickname()).setAuthorAvatar(author.getAvatar());
         return response;
     }
-    private CommunityReportRespVO toReportResponse(CommunityReportDO report) { return new CommunityReportRespVO().setId(report.getId()).setPostId(report.getPostId()).setReporterUserId(report.getReporterUserId()).setReason(report.getReason()).setStatus(report.getStatus()).setReviewerUserId(report.getReviewerUserId()).setReviewRemark(report.getReviewRemark()).setReviewTime(report.getReviewTime()).setCreateTime(report.getCreateTime()); }
+    private CommunityReportRespVO toReportResponse(CommunityReportDO report) {
+        CommunityReportRespVO response = new CommunityReportRespVO().setId(report.getId()).setPostId(report.getPostId())
+                .setReporterUserId(report.getReporterUserId()).setReason(report.getReason()).setStatus(report.getStatus())
+                .setReviewerUserId(report.getReviewerUserId()).setReviewRemark(report.getReviewRemark())
+                .setReviewTime(report.getReviewTime()).setCreateTime(report.getCreateTime());
+        CommunityPostDO post = postMapper.selectById(report.getPostId());
+        if (post != null) {
+            response.setPostTitle(post.getTitle()).setPostContent(post.getContent()).setPostMediaUrls(post.getMediaUrls())
+                    .setPostAuthorUserId(post.getAuthorUserId());
+            MemberUserRespDTO author = memberUserApi.getUser(post.getAuthorUserId());
+            if (author != null) response.setPostAuthorNickname(author.getNickname());
+        }
+        MemberUserRespDTO reporter = memberUserApi.getUser(report.getReporterUserId());
+        if (reporter != null) response.setReporterNickname(reporter.getNickname());
+        return response;
+    }
     private record NormalizedContent(String title, String content, List<String> mediaUrls) { }
 }

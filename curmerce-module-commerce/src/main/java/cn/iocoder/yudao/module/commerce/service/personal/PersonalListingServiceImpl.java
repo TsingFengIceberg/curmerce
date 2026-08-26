@@ -3,6 +3,8 @@ package cn.iocoder.yudao.module.commerce.service.personal;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductOperationLogRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.personal.vo.*;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductSkuDO;
@@ -12,6 +14,7 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductAuditStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
+import cn.iocoder.yudao.module.commerce.service.product.ProductOperationLogService;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -31,6 +34,7 @@ public class PersonalListingServiceImpl implements PersonalListingService {
     @Resource private ProductCategoryMapper categoryMapper;
     @Resource private ProductMapper productMapper;
     @Resource private ProductSkuMapper skuMapper;
+    @Resource private ProductOperationLogService operationLogService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -50,6 +54,8 @@ public class PersonalListingServiceImpl implements PersonalListingService {
                 .setCode(code + "-sku").setPrice(req.getPrice()).setStock(1)
                 .setStatus(CommonStatusEnum.ENABLE.getStatus()).setSort(0);
         skuMapper.insert(sku);
+        operationLogService.record(product.getId(), userId, ProductOperationLogService.OPERATOR_PERSONAL,
+                "CREATE", null, product.getAuditStatus(), null, product.getSaleStatus(), "创建闲置商品草稿");
         return product.getId();
     }
 
@@ -75,6 +81,8 @@ public class PersonalListingServiceImpl implements PersonalListingService {
                 || skuMapper.updatePersonalPrice(sku.getId(), current.getId(), req.getPrice()) != 1) {
             throw exception(PERSONAL_LISTING_STATE_INVALID);
         }
+        operationLogService.record(current.getId(), userId, ProductOperationLogService.OPERATOR_PERSONAL,
+                "UPDATE", current.getAuditStatus(), current.getAuditStatus(), current.getSaleStatus(), current.getSaleStatus(), "更新闲置商品资料");
     }
 
     @Override @Transactional(readOnly = true)
@@ -92,6 +100,14 @@ public class PersonalListingServiceImpl implements PersonalListingService {
         return new PageResult<>(page.getList().stream().map(this::toResponse).toList(), page.getTotal());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<ProductOperationLogRespVO> getOperationLogPage(Long userId, Long productId, PageParam pageParam) {
+        memberUserApi.validateActiveUser(userId);
+        if (productMapper.selectPersonalById(productId, userId) == null) throw exception(PERSONAL_LISTING_NOT_FOUND);
+        return operationLogService.getPage(productId, pageParam);
+    }
+
     @Override @Transactional(rollbackFor = Exception.class)
     public void submit(Long userId, Long id) {
         memberUserApi.validateActiveUserForUpdate(userId);
@@ -107,6 +123,9 @@ public class PersonalListingServiceImpl implements PersonalListingService {
         if (productMapper.updateAuditExpected(id, product.getAuditStatus(), ProductAuditStatusEnum.PENDING.getStatus(), null, null, null) != 1) {
             throw exception(PERSONAL_LISTING_STATE_INVALID);
         }
+        operationLogService.record(id, userId, ProductOperationLogService.OPERATOR_PERSONAL,
+                "SUBMIT_REVIEW", product.getAuditStatus(), ProductAuditStatusEnum.PENDING.getStatus(),
+                product.getSaleStatus(), product.getSaleStatus(), "提交平台审核");
     }
 
     @Override @Transactional(rollbackFor = Exception.class)
@@ -120,15 +139,21 @@ public class PersonalListingServiceImpl implements PersonalListingService {
         if (productMapper.updatePersonalSaleExpected(id, userId, ProductSaleStatusEnum.OFF_SHELF.getStatus(), ProductSaleStatusEnum.ON_SALE.getStatus()) != 1) {
             throw exception(PERSONAL_LISTING_STATE_INVALID);
         }
+        operationLogService.record(id, userId, ProductOperationLogService.OPERATOR_PERSONAL,
+                "LIST", product.getAuditStatus(), product.getAuditStatus(), ProductSaleStatusEnum.OFF_SHELF.getStatus(),
+                ProductSaleStatusEnum.ON_SALE.getStatus(), "闲置商品上架");
     }
 
     @Override @Transactional(rollbackFor = Exception.class)
     public void delist(Long userId, Long id) {
         memberUserApi.validateActiveUserForUpdate(userId);
-        requireForUpdate(userId, id);
+        ProductDO product = requireForUpdate(userId, id);
         if (productMapper.updatePersonalSaleExpected(id, userId, ProductSaleStatusEnum.ON_SALE.getStatus(), ProductSaleStatusEnum.OFF_SHELF.getStatus()) != 1) {
             throw exception(PERSONAL_LISTING_STATE_INVALID);
         }
+        operationLogService.record(id, userId, ProductOperationLogService.OPERATOR_PERSONAL,
+                "DELIST", product.getAuditStatus(), product.getAuditStatus(), ProductSaleStatusEnum.ON_SALE.getStatus(),
+                ProductSaleStatusEnum.OFF_SHELF.getStatus(), "闲置商品下架");
     }
 
     private ProductDO requireForUpdate(Long userId, Long id) {

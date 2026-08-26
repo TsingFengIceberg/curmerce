@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Notice } from "@/components/notice";
+import { AvatarUploader } from "@/components/avatar-uploader";
 import { CurmerceApiError } from "@/lib/api/client";
 import { memberApi } from "@/lib/api/member";
 import { clearToken, getAccessToken } from "@/lib/auth/storage";
@@ -74,7 +75,6 @@ export default function ProfilePage() {
           <h1>个人资料</h1>
           <p>维护商城订单和社区内容使用的公开资料。</p>
         </div>
-        <span className="section-heading__note">用户 ID：{profile?.id ?? "—"}</span>
       </div>
       {message ? <Notice tone="success">{message}</Notice> : null}
       {error ? <Notice>{error}</Notice> : null}
@@ -86,7 +86,7 @@ export default function ProfilePage() {
         <label className="field"><span>手机号</span><input disabled value={profile?.mobile ?? ""} /></label>
         <label className="field"><span>昵称</span><input required minLength={2} maxLength={30} value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value })} /></label>
         <label className="field"><span>邮箱</span><input type="email" maxLength={254} value={form.email ?? ""} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="可选" /></label>
-        <label className="field"><span>头像地址</span><input maxLength={1024} value={form.avatar ?? ""} onChange={(event) => setForm({ ...form, avatar: event.target.value })} placeholder="可选的图片地址" /></label>
+        <AvatarUploader value={form.avatar} name={form.nickname || profile?.mobile || "用户"} disabled={saving} onChange={(avatar) => setForm({ ...form, avatar })} onError={setError} />
         <label className="field"><span>性别</span><select value={form.sex ?? 0} onChange={(event) => setForm({ ...form, sex: Number(event.target.value) })}><option value={0}>未知</option><option value={1}>男</option><option value={2}>女</option></select></label>
         <button className="button button--primary button--full" disabled={saving} type="submit">{saving ? "保存中…" : "保存资料"}</button>
       </form>

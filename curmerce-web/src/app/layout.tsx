@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { SiteHeader } from "@/components/site-header";
+import "./product-ui.css";
+import { AppChrome } from "@/components/app-chrome";
 
 export const metadata: Metadata = {
   title: "Curmerce",
@@ -11,8 +12,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="zh-CN">
       <body>
-        <SiteHeader />
-        <main className="page-shell">{children}</main>
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );

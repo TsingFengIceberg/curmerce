@@ -7,6 +7,8 @@ import cn.iocoder.yudao.module.community.controller.app.interaction.vo.*;
 import cn.iocoder.yudao.module.community.controller.app.post.vo.*;
 import cn.iocoder.yudao.module.community.controller.app.report.vo.CommunityReportCreateReqVO;
 
+import java.util.List;
+
 public interface CommunityService {
     Long createPost(Long userId, CommunityPostCreateReqVO req);
     void updatePost(Long userId, CommunityPostUpdateReqVO req);
@@ -14,6 +16,7 @@ public interface CommunityService {
     void deletePost(Long userId, Long id);
     CommunityPostRespVO getPost(Long viewerId, Long id);
     PageResult<CommunityPostRespVO> getFeed(Long viewerId, CommunityPostPageReqVO req);
+    List<CommunityTopicRespVO> getPopularTopics(Integer limit);
     PageResult<CommunityPostRespVO> getOwnerPosts(Long userId, CommunityPostOwnerPageReqVO req);
     PageResult<CommunityPostRespVO> getFavoritePosts(Long userId, CommunityPostOwnerPageReqVO req);
     PageResult<CommunityPostRespVO> getFollowingPosts(Long userId, CommunityPostOwnerPageReqVO req);

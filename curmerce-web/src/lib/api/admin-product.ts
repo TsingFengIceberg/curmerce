@@ -3,6 +3,7 @@ import type {
   ApiPage,
   ProductAdmin,
   ProductCategoryNode,
+  ProductOperationLog,
   ProductPageQuery,
   ProductSaveInput,
   StoreSummary,
@@ -85,12 +86,22 @@ export const adminProductApi = {
     return adminApi<boolean>("/commerce/product/delist-own", { method: "PUT", body: jsonBody({ id }) });
   },
 
+  operationLogOwn(productId: number, pageNo: number, pageSize: number) {
+    const params = new URLSearchParams({ productId: String(productId), pageNo: String(pageNo), pageSize: String(pageSize) });
+    return adminApi<ApiPage<ProductOperationLog>>(`/commerce/product/operation-log-own?${params.toString()}`);
+  },
+
   reviewPage(input: ProductPageQuery) {
     return adminApi<ApiPage<ProductAdmin>>(`/commerce/product-review/page?${productQuery(input)}`);
   },
 
   reviewDetail(id: number) {
     return adminApi<ProductAdmin>(`/commerce/product-review/get?id=${id}`);
+  },
+
+  reviewOperationLog(productId: number, pageNo: number, pageSize: number) {
+    const params = new URLSearchParams({ productId: String(productId), pageNo: String(pageNo), pageSize: String(pageSize) });
+    return adminApi<ApiPage<ProductOperationLog>>(`/commerce/product-review/operation-log?${params.toString()}`);
   },
 
   approve(id: number) {

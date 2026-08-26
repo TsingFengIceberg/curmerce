@@ -3,11 +3,14 @@ package cn.iocoder.yudao.module.commerce.dal.mysql.product;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.test.core.ut.BaseDbUnitTest;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.favorite.ProductFavoriteDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductCategoryDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductOperationLogDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductSkuDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.store.StoreDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.merchant.MerchantMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.favorite.ProductFavoriteMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
 import cn.iocoder.yudao.module.commerce.enums.merchant.MerchantAuditStatusEnum;
 import org.junit.jupiter.api.Test;
@@ -30,6 +33,43 @@ class ProductSchemaConstraintTest extends BaseDbUnitTest {
     private ProductMapper productMapper;
     @Resource
     private ProductSkuMapper skuMapper;
+    @Resource
+    private ProductOperationLogMapper operationLogMapper;
+    @Resource
+    private ProductFavoriteMapper favoriteMapper;
+
+    @Test
+    void productOperationLogRejectsMissingProductReference() {
+        assertConstraint(() -> operationLogMapper.insert(new ProductOperationLogDO()
+                .setProductId(999999L).setOperatorType(1).setAction("CREATE")));
+    }
+
+    @Test
+    void productOperationLogRejectsUnknownOperatorType() {
+        MerchantStore merchant = createMerchantStore("merchant_operation_log");
+        ProductDO product = validProduct(merchant, createCategory("category_operation_log"), "product_operation_log");
+        productMapper.insert(product);
+
+        assertConstraint(() -> operationLogMapper.insert(new ProductOperationLogDO()
+                .setProductId(product.getId()).setOperatorType(7).setAction("CREATE")));
+    }
+
+    @Test
+    void productFavoriteRejectsDuplicateUserProductPair() {
+        MerchantStore merchant = createMerchantStore("merchant_favorite");
+        ProductDO product = validProduct(merchant, createCategory("category_favorite"), "product_favorite");
+        productMapper.insert(product);
+        favoriteMapper.insert(new ProductFavoriteDO().setMemberUserId(7L).setProductId(product.getId()));
+
+        assertConstraint(() -> favoriteMapper.insert(
+                new ProductFavoriteDO().setMemberUserId(7L).setProductId(product.getId())));
+    }
+
+    @Test
+    void productFavoriteRejectsMissingProductReference() {
+        assertConstraint(() -> favoriteMapper.insert(
+                new ProductFavoriteDO().setMemberUserId(7L).setProductId(999999L)));
+    }
 
     @Test
     void rejectsCrossMerchantStoreOwnership() {

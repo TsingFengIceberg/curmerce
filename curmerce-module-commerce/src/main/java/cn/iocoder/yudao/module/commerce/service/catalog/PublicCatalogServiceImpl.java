@@ -78,7 +78,7 @@ public class PublicCatalogServiceImpl implements PublicCatalogService {
         if (categoryIds.isEmpty()) return PageResult.empty();
         String keyword = StrUtil.trim(reqVO.getKeyword());
         PageResult<ProductDO> page = productMapper.selectPublicPage(reqVO, categoryIds,
-                StrUtil.isBlank(keyword) ? null : keyword);
+                StrUtil.isBlank(keyword) ? null : keyword, reqVO);
         List<PublicProductSummaryRespVO> summaries = page.getList().stream()
                 .map(product -> buildSummary(product, categories))
                 .filter(Objects::nonNull)

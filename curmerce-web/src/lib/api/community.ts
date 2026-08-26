@@ -1,17 +1,21 @@
 import { adminApi, appApi, appMultipartApi, jsonBody } from "@/lib/api/client";
-import type { ApiPage, CommunityComment, CommunityPost, CommunityReport } from "@/lib/types/api";
+import type { ApiPage, CommunityComment, CommunityPost, CommunityReport, CommunityTopic } from "@/lib/types/api";
 
-function pageQuery(input: { pageNo: number; pageSize: number; keyword?: string; status?: number; topicSlug?: string }) {
+function pageQuery(input: { pageNo: number; pageSize: number; keyword?: string; status?: number; topicSlug?: string; productId?: number }) {
   const params = new URLSearchParams({ pageNo: String(input.pageNo), pageSize: String(input.pageSize) });
   if (input.keyword?.trim()) params.set("keyword", input.keyword.trim());
   if (input.status !== undefined) params.set("status", String(input.status));
   if (input.topicSlug?.trim()) params.set("topicSlug", input.topicSlug.trim());
+  if (input.productId) params.set("productId", String(input.productId));
   return params.toString();
 }
 
 export const communityApi = {
-  page(input: { pageNo: number; pageSize: number; keyword?: string; topicSlug?: string }) {
+  page(input: { pageNo: number; pageSize: number; keyword?: string; topicSlug?: string; productId?: number }) {
     return appApi<ApiPage<CommunityPost>>(`/community/post/page?${pageQuery(input)}`);
+  },
+  popularTopics(limit = 12) {
+    return appApi<CommunityTopic[]>(`/community/post/popular-topics?limit=${limit}`);
   },
   myPage(input: { pageNo: number; pageSize: number; keyword?: string }) {
     return appApi<ApiPage<CommunityPost>>(`/community/post/my-page?${pageQuery(input)}`);

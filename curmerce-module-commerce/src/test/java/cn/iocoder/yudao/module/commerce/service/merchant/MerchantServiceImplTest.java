@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.commerce.service.merchant;
 
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
+import cn.iocoder.yudao.framework.security.core.LoginUser;
 import cn.iocoder.yudao.module.commerce.controller.admin.merchant.vo.MerchantApproveReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.merchant.vo.MerchantCreateReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.merchant.vo.MerchantRejectReqVO;
@@ -15,10 +16,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
-import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
+import java.util.List;
+
 import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.MERCHANT_NOT_PENDING;
 import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.MERCHANT_REVIEW_CONFLICT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,12 +59,10 @@ class MerchantServiceImplTest {
         when(storeMapper.selectByCode("store_a")).thenReturn(null);
         when(adminUserApi.provisionUser(any())).thenReturn(9L);
         when(merchantMapper.updateReview(anyLong(), anyInt(), anyInt(), anyLong(), any(), anyLong(), isNull())).thenReturn(1);
-        try (MockedStatic<cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils> security =
-                     mockStatic(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.class)) {
-            security.when(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils::getLoginUserId).thenReturn(2L);
+        withLoginUser(2L, () -> {
             service.approveMerchant(new MerchantApproveReqVO().setId(1L).setUsername("owner01")
                     .setNickname("Owner").setPassword("secret-123"));
-        }
+        });
         verify(adminUserApi).provisionUser(argThat(req -> "merchant_owner".equals(req.getRoleCode())));
         verify(storeMapper).insert((cn.iocoder.yudao.module.commerce.dal.dataobject.store.StoreDO) any());
         verify(operatorMapper).insert((cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantOperatorDO)
@@ -74,12 +75,9 @@ class MerchantServiceImplTest {
     void reviewTerminalState_isRejected() {
         MerchantDO approved = new MerchantDO().setId(1L).setStatus(MerchantAuditStatusEnum.APPROVED.getStatus());
         when(merchantMapper.selectPendingForUpdate(1L)).thenReturn(approved);
-        try (MockedStatic<cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils> ignored =
-                     mockStatic(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.class)) {
-            ServiceException error = assertThrows(ServiceException.class, () -> service.rejectMerchant(
-                    new MerchantRejectReqVO().setId(1L).setReason("not eligible")));
-            assertEquals(MERCHANT_NOT_PENDING.getCode(), error.getCode());
-        }
+        ServiceException error = assertThrows(ServiceException.class, () -> service.rejectMerchant(
+                new MerchantRejectReqVO().setId(1L).setReason("not eligible")));
+        assertEquals(MERCHANT_NOT_PENDING.getCode(), error.getCode());
         verifyNoInteractions(adminUserApi, storeMapper, operatorMapper);
     }
 
@@ -94,15 +92,12 @@ class MerchantServiceImplTest {
         when(merchantMapper.updateReview(anyLong(), anyInt(), anyInt(), anyLong(), any(), anyLong(), isNull()))
                 .thenReturn(0);
 
-        try (MockedStatic<cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils> security =
-                     mockStatic(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.class)) {
-            security.when(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils::getLoginUserId)
-                    .thenReturn(2L);
+        withLoginUser(2L, () -> {
             ServiceException error = assertThrows(ServiceException.class, () -> service.approveMerchant(
                     new MerchantApproveReqVO().setId(1L).setUsername("owner01")
                             .setNickname("Owner").setPassword("secret-123")));
             assertEquals(MERCHANT_REVIEW_CONFLICT.getCode(), error.getCode());
-        }
+        });
         verify(merchantMapper).updateReview(eq(1L), eq(0), eq(1), eq(2L), any(), eq(9L), isNull());
     }
 
@@ -110,13 +105,21 @@ class MerchantServiceImplTest {
     void secondReviewAfterFirstTerminalState_isRejectedWithoutProvisioning() {
         MerchantDO approved = new MerchantDO().setId(1L).setStatus(MerchantAuditStatusEnum.APPROVED.getStatus());
         when(merchantMapper.selectPendingForUpdate(1L)).thenReturn(approved);
-        try (MockedStatic<cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils> security =
-                     mockStatic(cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.class)) {
-            ServiceException error = assertThrows(ServiceException.class, () -> service.approveMerchant(
-                    new MerchantApproveReqVO().setId(1L).setUsername("owner01")
-                            .setNickname("Owner").setPassword("secret-123")));
-            assertEquals(MERCHANT_NOT_PENDING.getCode(), error.getCode());
-        }
+        ServiceException error = assertThrows(ServiceException.class, () -> service.approveMerchant(
+                new MerchantApproveReqVO().setId(1L).setUsername("owner01")
+                        .setNickname("Owner").setPassword("secret-123")));
+        assertEquals(MERCHANT_NOT_PENDING.getCode(), error.getCode());
         verifyNoInteractions(adminUserApi, storeMapper, operatorMapper);
+    }
+
+    private void withLoginUser(Long userId, Runnable action) {
+        try {
+            LoginUser loginUser = new LoginUser().setId(userId);
+            SecurityContextHolder.getContext().setAuthentication(
+                    new UsernamePasswordAuthenticationToken(loginUser, null, List.of()));
+            action.run();
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 }

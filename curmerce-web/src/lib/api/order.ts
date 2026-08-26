@@ -12,12 +12,13 @@ export const orderApi = {
     });
   },
 
-  page(input: { pageNo: number; pageSize: number; status?: number }) {
+  page(input: { pageNo: number; pageSize: number; status?: number; orderNo?: string }) {
     const params = new URLSearchParams({
       pageNo: String(input.pageNo),
       pageSize: String(input.pageSize),
     });
     if (input.status) params.set("status", String(input.status));
+    if (input.orderNo?.trim()) params.set("orderNo", input.orderNo.trim());
     return appApi<ApiPage<OrderSummary>>(`/commerce/order/page?${params.toString()}`);
   },
 

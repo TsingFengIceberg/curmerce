@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.commerce.service.release;
 
 import cn.iocoder.yudao.module.commerce.controller.app.release.vo.ReleasePurchaseReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.release.vo.ReleaseCreateReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.release.vo.ReleaseUpdateReqVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseCampaignDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseItemDO;
@@ -24,6 +26,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 
 import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.RELEASE_PURCHASE_DUPLICATE;
+import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.RELEASE_NOT_FOUND;
+import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.RELEASE_STATE_INVALID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
@@ -40,6 +44,54 @@ class ReleaseServiceImplTest {
     @Mock private MemberUserApi memberUserApi;
     @Mock private OrderService orderService;
     @InjectMocks private ReleaseServiceImpl service;
+
+    @Test
+    void update_replacesItemsForOwnedDraft() {
+        MerchantAccessContext context = merchantContext();
+        when(merchantAccessService.requireApprovedOwner()).thenReturn(context);
+        when(campaignMapper.selectByIdForUpdate(10L)).thenReturn(new CommerceReleaseCampaignDO().setId(10L)
+                .setMerchantId(99L).setStoreId(199L).setStatus(0));
+        when(productMapper.selectByIdAndMerchantId(201L, 99L)).thenReturn(new cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductDO()
+                .setId(201L).setMerchantId(99L).setStoreId(199L));
+        when(skuMapper.selectByIdAndProductIdForUpdate(301L, 201L)).thenReturn(new cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductSkuDO()
+                .setId(301L).setProductId(201L).setMerchantId(99L).setStock(5));
+
+        service.update(updateRequest());
+
+        verify(campaignMapper).updateById(argThat((CommerceReleaseCampaignDO campaign) -> campaign.getId().equals(10L)
+                && campaign.getName().equals("Updated release") && campaign.getPerUserLimit().equals(2)));
+        verify(itemMapper).deleteByCampaignId(10L);
+        verify(itemMapper).insert(argThat((CommerceReleaseItemDO item) -> item.getCampaignId().equals(10L)
+                && item.getProductId().equals(201L) && item.getSkuId().equals(301L)
+                && item.getCampaignPrice().equals(800L) && item.getStock().equals(3)));
+    }
+
+    @Test
+    void update_rejectsNonDraft() {
+        when(merchantAccessService.requireApprovedOwner()).thenReturn(merchantContext());
+        when(campaignMapper.selectByIdForUpdate(10L)).thenReturn(new CommerceReleaseCampaignDO().setId(10L)
+                .setMerchantId(99L).setStoreId(199L).setStatus(10));
+
+        var error = assertThrows(cn.iocoder.yudao.framework.common.exception.ServiceException.class,
+                () -> service.update(updateRequest()));
+
+        assertEquals(RELEASE_STATE_INVALID.getCode(), error.getCode());
+        verify(campaignMapper, never()).updateById(any(CommerceReleaseCampaignDO.class));
+        verify(itemMapper, never()).deleteByCampaignId(anyLong());
+    }
+
+    @Test
+    void update_rejectsOtherMerchantCampaign() {
+        when(merchantAccessService.requireApprovedOwner()).thenReturn(merchantContext());
+        when(campaignMapper.selectByIdForUpdate(10L)).thenReturn(new CommerceReleaseCampaignDO().setId(10L)
+                .setMerchantId(100L).setStoreId(200L).setStatus(0));
+
+        var error = assertThrows(cn.iocoder.yudao.framework.common.exception.ServiceException.class,
+                () -> service.update(updateRequest()));
+
+        assertEquals(RELEASE_NOT_FOUND.getCode(), error.getCode());
+        verify(campaignMapper, never()).updateById(any(CommerceReleaseCampaignDO.class));
+    }
 
     @Test
     void purchase_deductsCampaignInventoryAndCreatesRecord() {
@@ -73,5 +125,17 @@ class ReleaseServiceImplTest {
                         .setAddressId(701L).setIdempotencyKey("release-key")));
         assertEquals(RELEASE_PURCHASE_DUPLICATE.getCode(), error.getCode());
         verify(itemMapper, never()).updateInventory(anyLong(), anyInt());
+    }
+
+    private MerchantAccessContext merchantContext() {
+        return new MerchantAccessContext(new MerchantDO().setId(99L), new StoreDO().setId(199L).setMerchantId(99L));
+    }
+
+    private ReleaseUpdateReqVO updateRequest() {
+        ReleaseCreateReqVO.Item item = new ReleaseCreateReqVO.Item().setProductId(201L).setSkuId(301L)
+                .setCampaignPrice(800L).setStock(3);
+        return (ReleaseUpdateReqVO) new ReleaseUpdateReqVO().setId(10L).setName(" Updated release ")
+                .setStartTime(LocalDateTime.now().plusHours(1)).setEndTime(LocalDateTime.now().plusHours(2))
+                .setPerUserLimit(2).setItems(java.util.List.of(item));
     }
 }

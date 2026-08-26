@@ -13,6 +13,7 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductAuditStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
+import cn.iocoder.yudao.module.commerce.service.product.ProductOperationLogService;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,7 @@ class PersonalListingServiceImplTest {
     @Mock private ProductCategoryMapper categoryMapper;
     @Mock private ProductMapper productMapper;
     @Mock private ProductSkuMapper skuMapper;
+    @Mock private ProductOperationLogService operationLogService;
     @InjectMocks private PersonalListingServiceImpl service;
 
     @Test
@@ -57,6 +59,8 @@ class PersonalListingServiceImplTest {
                         && "九成新".equals(product.getCondition())));
         verify(skuMapper).insert(argThat((ProductSkuDO sku) -> sku.getProductId().equals(10L)
                 && sku.getMerchantId() == null && sku.getStock().equals(1)));
+        verify(operationLogService).record(eq(10L), eq(101L), eq(ProductOperationLogService.OPERATOR_PERSONAL),
+                eq("CREATE"), isNull(), eq(0), isNull(), eq(0), anyString());
     }
 
     @Test
@@ -89,6 +93,8 @@ class PersonalListingServiceImplTest {
         service.submit(101L, 10L);
 
         verify(productMapper).updateAuditExpected(10L, 3, 1, null, null, null);
+        verify(operationLogService).record(eq(10L), eq(101L), eq(ProductOperationLogService.OPERATOR_PERSONAL),
+                eq("SUBMIT_REVIEW"), eq(3), eq(1), eq(0), eq(0), anyString());
     }
 
     @Test

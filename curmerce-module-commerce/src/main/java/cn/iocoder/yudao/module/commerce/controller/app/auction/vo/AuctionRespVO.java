@@ -10,6 +10,10 @@ public class AuctionRespVO {
     private String name;
     private Long productId;
     private Long skuId;
+    private String productName;
+    private String productImageUrl;
+    private String skuLabel;
+    private Long originalPrice;
     private Integer status;
     private Long startingPrice;
     private Long minIncrement;
@@ -17,6 +21,7 @@ public class AuctionRespVO {
     private LocalDateTime endTime;
     private Long currentAmount;
     private Long currentBidderUserId;
+    private Long bidCount;
     private Long winnerUserId;
     private Long winningBidId;
     private LocalDateTime settlementFailedTime;

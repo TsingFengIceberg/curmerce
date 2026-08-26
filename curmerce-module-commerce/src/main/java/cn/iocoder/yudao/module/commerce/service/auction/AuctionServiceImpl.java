@@ -3,7 +3,10 @@ package cn.iocoder.yudao.module.commerce.service.auction;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.commerce.controller.admin.auction.vo.AuctionCreateReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.auction.vo.AuctionPageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.auction.vo.AuctionUpdateReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.auction.vo.AuctionBidReqVO;
+import cn.iocoder.yudao.module.commerce.controller.app.auction.vo.AuctionBidPageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.app.auction.vo.AuctionBidRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.auction.vo.AuctionRespVO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.auction.CommerceAuctionBidDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.auction.CommerceAuctionSessionDO;
@@ -45,15 +48,9 @@ public class AuctionServiceImpl implements AuctionService {
     @Transactional(rollbackFor = Exception.class)
     public Long create(AuctionCreateReqVO reqVO) {
         MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
-        if (!reqVO.getEndTime().isAfter(reqVO.getStartTime())) throw exception(AUCTION_TIME_INVALID);
-        ProductDO product = productMapper.selectByIdAndMerchantId(reqVO.getProductId(), context.merchant().getId());
-        ProductSkuDO sku = product == null ? null : skuMapper.selectByIdAndProductIdForUpdate(reqVO.getSkuId(), reqVO.getProductId());
-        if (product == null || sku == null || !context.store().getId().equals(product.getStoreId())
-                || !context.merchant().getId().equals(sku.getMerchantId()) || sku.getStock() == null || sku.getStock() < 1) {
-            throw exception(AUCTION_ITEM_INVALID);
-        }
+        validateInput(reqVO, context);
         CommerceAuctionSessionDO session = new CommerceAuctionSessionDO().setMerchantId(context.merchant().getId())
-                .setStoreId(context.store().getId()).setProductId(product.getId()).setSkuId(sku.getId())
+                .setStoreId(context.store().getId()).setProductId(reqVO.getProductId()).setSkuId(reqVO.getSkuId())
                 .setName(reqVO.getName().trim()).setStatus(AuctionStatusEnum.DRAFT.getStatus())
                 .setStartingPrice(reqVO.getStartingPrice()).setMinIncrement(reqVO.getMinIncrement())
                 .setStartTime(reqVO.getStartTime()).setEndTime(reqVO.getEndTime());
@@ -62,10 +59,30 @@ public class AuctionServiceImpl implements AuctionService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void update(AuctionUpdateReqVO reqVO) {
+        MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
+        CommerceAuctionSessionDO session = requireOwnedForUpdate(reqVO.getId(), context);
+        if (!AuctionStatusEnum.DRAFT.getStatus().equals(session.getStatus())) throw exception(AUCTION_STATE_INVALID);
+        validateInput(reqVO, context);
+        sessionMapper.updateById(new CommerceAuctionSessionDO().setId(session.getId())
+                .setProductId(reqVO.getProductId()).setSkuId(reqVO.getSkuId()).setName(reqVO.getName().trim())
+                .setStartingPrice(reqVO.getStartingPrice()).setMinIncrement(reqVO.getMinIncrement())
+                .setStartTime(reqVO.getStartTime()).setEndTime(reqVO.getEndTime()));
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public PageResult<AuctionRespVO> getOwnPage(AuctionPageReqVO reqVO) {
         MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
         return mapPage(sessionMapper.selectOwnPage(reqVO, context.merchant().getId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AuctionRespVO getOwn(Long id) {
+        MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
+        return toResponse(requireOwned(id, context));
     }
 
     @Override
@@ -78,10 +95,25 @@ public class AuctionServiceImpl implements AuctionService {
     @Transactional(readOnly = true)
     public AuctionRespVO get(Long id, boolean publicOnly) {
         CommerceAuctionSessionDO session = sessionMapper.selectById(id);
-        if (session == null || (publicOnly && (session.getStatus() == null
-                || (session.getStatus() != AuctionStatusEnum.SCHEDULED.getStatus()
-                && session.getStatus() != AuctionStatusEnum.RUNNING.getStatus())))) throw exception(AUCTION_NOT_FOUND);
+        if (session == null || (publicOnly && !isPublicStatus(session.getStatus()))) throw exception(AUCTION_NOT_FOUND);
         return toResponse(session);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<AuctionBidRespVO> getBidPage(AuctionBidPageReqVO reqVO, Long loginUserId) {
+        CommerceAuctionSessionDO session = sessionMapper.selectById(reqVO.getSessionId());
+        if (session == null || !isPublicStatus(session.getStatus())) throw exception(AUCTION_NOT_FOUND);
+        PageResult<CommerceAuctionBidDO> page = bidMapper.selectPageBySession(reqVO, session.getId());
+        CommerceAuctionBidDO highest = bidMapper.selectHighest(session.getId());
+        return new PageResult<>(page.getList().stream().map(bid -> {
+            boolean mine = loginUserId != null && loginUserId.equals(bid.getBidderUserId());
+            String bidderId = String.valueOf(bid.getBidderUserId());
+            String suffix = bidderId.substring(Math.max(0, bidderId.length() - 4));
+            return new AuctionBidRespVO().setId(bid.getId()).setAmount(bid.getAmount())
+                    .setBidderLabel(mine ? "我" : "竞拍者 " + suffix).setMine(mine)
+                    .setLeading(highest != null && highest.getId().equals(bid.getId())).setCreateTime(bid.getCreateTime());
+        }).toList(), page.getTotal());
     }
 
     @Override
@@ -195,16 +227,43 @@ public class AuctionServiceImpl implements AuctionService {
         if (session == null || !context.merchant().getId().equals(session.getMerchantId()) || !context.store().getId().equals(session.getStoreId())) throw exception(AUCTION_NOT_FOUND);
         return session;
     }
+    private void validateInput(AuctionCreateReqVO reqVO, MerchantAccessContext context) {
+        if (!reqVO.getEndTime().isAfter(reqVO.getStartTime())) throw exception(AUCTION_TIME_INVALID);
+        ProductDO product = productMapper.selectByIdAndMerchantId(reqVO.getProductId(), context.merchant().getId());
+        ProductSkuDO sku = product == null ? null : skuMapper.selectByIdAndProductIdForUpdate(reqVO.getSkuId(), reqVO.getProductId());
+        if (product == null || sku == null || !context.store().getId().equals(product.getStoreId())
+                || !context.merchant().getId().equals(sku.getMerchantId()) || sku.getStock() == null || sku.getStock() < 1) {
+            throw exception(AUCTION_ITEM_INVALID);
+        }
+    }
     private PageResult<AuctionRespVO> mapPage(PageResult<CommerceAuctionSessionDO> page) {
         return new PageResult<>(page.getList().stream().map(this::toResponse).toList(), page.getTotal());
     }
     private AuctionRespVO toResponse(CommerceAuctionSessionDO session) {
         CommerceAuctionBidDO highest = bidMapper.selectHighest(session.getId());
+        ProductDO product = productMapper.selectById(session.getProductId());
+        ProductSkuDO sku = skuMapper.selectById(session.getSkuId());
+        String skuLabel = sku == null || sku.getSpecificationValues() == null || sku.getSpecificationValues().isEmpty()
+                ? (sku == null ? "默认规格" : sku.getCode())
+                : sku.getSpecificationValues().stream().map(value -> value.getName() + ": " + value.getValue())
+                .reduce((left, right) -> left + " / " + right).orElse("默认规格");
         return new AuctionRespVO().setId(session.getId()).setName(session.getName()).setProductId(session.getProductId()).setSkuId(session.getSkuId())
+                .setProductName(product == null ? "商品已不可用" : product.getName())
+                .setProductImageUrl(sku != null && sku.getImageUrl() != null ? sku.getImageUrl()
+                        : product == null ? null : product.getMainImageUrl())
+                .setSkuLabel(skuLabel).setOriginalPrice(sku == null ? null : sku.getPrice())
                 .setStatus(session.getStatus()).setStartingPrice(session.getStartingPrice()).setMinIncrement(session.getMinIncrement())
                 .setStartTime(session.getStartTime()).setEndTime(session.getEndTime()).setCurrentAmount(highest == null ? null : highest.getAmount())
-                .setCurrentBidderUserId(highest == null ? null : highest.getBidderUserId()).setWinnerUserId(session.getWinnerUserId())
+                .setCurrentBidderUserId(highest == null ? null : highest.getBidderUserId()).setBidCount(bidMapper.selectCountBySession(session.getId()))
+                .setWinnerUserId(session.getWinnerUserId())
                 .setWinningBidId(session.getWinningBidId()).setSettlementFailedTime(session.getSettlementFailedTime())
                 .setSettlementFailureReason(session.getSettlementFailureReason());
+    }
+
+    private boolean isPublicStatus(Integer status) {
+        return status != null && (AuctionStatusEnum.SCHEDULED.getStatus().equals(status)
+                || AuctionStatusEnum.RUNNING.getStatus().equals(status)
+                || AuctionStatusEnum.ENDED.getStatus().equals(status)
+                || AuctionStatusEnum.SETTLEMENT_FAILED.getStatus().equals(status));
     }
 }

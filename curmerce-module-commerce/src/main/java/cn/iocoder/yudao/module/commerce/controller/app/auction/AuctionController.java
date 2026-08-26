@@ -25,6 +25,10 @@ public class AuctionController {
     public CommonResult<PageResult<AuctionRespVO>> page(@Valid AuctionPageReqVO reqVO) { return success(auctionService.getPublicPage(reqVO)); }
     @GetMapping("/get") @PermitAll @Operation(summary = "查询拍卖详情")
     public CommonResult<AuctionRespVO> get(@RequestParam Long id) { return success(auctionService.get(id, true)); }
+    @GetMapping("/bid-page") @PermitAll @Operation(summary = "查询公开竞价记录")
+    public CommonResult<PageResult<AuctionBidRespVO>> bidPage(@Valid AuctionBidPageReqVO reqVO) {
+        return success(auctionService.getBidPage(reqVO, getLoginUserId()));
+    }
     @PostMapping("/bid") @Operation(summary = "提交拍卖出价")
     public CommonResult<Long> bid(@Valid @RequestBody AuctionBidReqVO reqVO) { return success(auctionService.bid(getLoginUserId(), reqVO)); }
     @PostMapping("/settle") @Operation(summary = "拍卖胜者创建订单")

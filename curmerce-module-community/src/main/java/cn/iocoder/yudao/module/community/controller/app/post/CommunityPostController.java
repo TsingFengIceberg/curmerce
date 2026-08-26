@@ -32,6 +32,11 @@ public class CommunityPostController {
     public CommonResult<Boolean> delete(@RequestParam Long id) { communityService.deletePost(getLoginUserId(), id); return success(true); }
     @GetMapping("/page") @PermitAll @Operation(summary = "查询公开帖子流")
     public CommonResult<PageResult<CommunityPostRespVO>> page(@Valid CommunityPostPageReqVO req) { return success(communityService.getFeed(getLoginUserId(), req)); }
+    @GetMapping("/popular-topics") @PermitAll @Operation(summary = "查询热门社区话题")
+    public CommonResult<java.util.List<CommunityTopicRespVO>> popularTopics(
+            @RequestParam(required = false, defaultValue = "12") Integer limit) {
+        return success(communityService.getPopularTopics(limit));
+    }
     @GetMapping("/get") @PermitAll @Operation(summary = "查询帖子详情")
     public CommonResult<CommunityPostRespVO> get(@RequestParam Long id) { return success(communityService.getPost(getLoginUserId(), id)); }
     @GetMapping("/my-page") @Operation(summary = "查询我的社区帖子")

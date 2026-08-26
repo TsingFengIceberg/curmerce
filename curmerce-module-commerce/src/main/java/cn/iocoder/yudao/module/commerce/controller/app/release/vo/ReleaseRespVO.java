@@ -20,6 +20,10 @@ public class ReleaseRespVO {
         private Long id;
         private Long productId;
         private Long skuId;
+        private String productName;
+        private String productImageUrl;
+        private String skuLabel;
+        private Long originalPrice;
         private Long campaignPrice;
         private Integer stock;
         private Integer soldCount;

@@ -5,10 +5,13 @@ import cn.iocoder.yudao.framework.common.validation.InEnum;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.hibernate.validator.constraints.Length;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class OrderPageReqVO extends PageParam {
     @InEnum(OrderStatusEnum.class)
     private Integer status;
+    @Length(max = 64)
+    private String orderNo;
 }

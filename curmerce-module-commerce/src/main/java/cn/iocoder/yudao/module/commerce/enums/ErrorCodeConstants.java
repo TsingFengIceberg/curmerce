@@ -53,6 +53,7 @@ public interface ErrorCodeConstants {
     ErrorCode CART_SKU_NOT_AVAILABLE = new ErrorCode(1_023_004_100, "商品规格当前不可购买");
     ErrorCode CART_QUANTITY_INVALID = new ErrorCode(1_023_004_101, "购物车数量超出当前库存或上限");
     ErrorCode CART_ITEM_NOT_EXISTS = new ErrorCode(1_023_004_102, "购物车项不存在");
+    ErrorCode PRODUCT_FAVORITE_PRODUCT_NOT_AVAILABLE = new ErrorCode(1_023_004_103, "商品当前不可收藏");
 
     ErrorCode ORDER_CHECKOUT_EMPTY = new ErrorCode(1_023_005_000, "没有选中的购物车商品");
     ErrorCode ORDER_CHECKOUT_MULTI_STORE = new ErrorCode(1_023_005_001, "一次下单只能包含同一店铺的商品");

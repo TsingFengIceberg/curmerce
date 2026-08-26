@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.yudao.module.commerce.controller.admin.release.vo.ReleaseCreateReqVO;
 import cn.iocoder.yudao.module.commerce.controller.admin.release.vo.ReleasePageReqVO;
+import cn.iocoder.yudao.module.commerce.controller.admin.release.vo.ReleaseUpdateReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.release.vo.ReleasePurchaseReqVO;
 import cn.iocoder.yudao.module.commerce.controller.app.release.vo.ReleasePurchaseRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.release.vo.ReleaseRespVO;
@@ -52,15 +53,7 @@ public class ReleaseServiceImpl implements ReleaseService {
     @Transactional(rollbackFor = Exception.class)
     public Long create(ReleaseCreateReqVO reqVO) {
         MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
-        if (!reqVO.getEndTime().isAfter(reqVO.getStartTime())) throw exception(RELEASE_TIME_INVALID);
-        Set<Long> skuIds = new HashSet<>();
-        for (ReleaseCreateReqVO.Item item : reqVO.getItems()) {
-            if (!skuIds.add(item.getSkuId())) throw exception(RELEASE_ITEM_INVALID);
-            ProductDO product = productMapper.selectByIdAndMerchantId(item.getProductId(), context.merchant().getId());
-            ProductSkuDO sku = product == null ? null : skuMapper.selectByIdAndProductIdForUpdate(item.getSkuId(), item.getProductId());
-            if (product == null || sku == null || !context.store().getId().equals(product.getStoreId())
-                    || !context.merchant().getId().equals(sku.getMerchantId())) throw exception(RELEASE_ITEM_INVALID);
-        }
+        validateInput(reqVO, context);
         CommerceReleaseCampaignDO campaign = new CommerceReleaseCampaignDO()
                 .setMerchantId(context.merchant().getId()).setStoreId(context.store().getId())
                 .setName(reqVO.getName().trim()).setStatus(ReleaseStatusEnum.DRAFT.getStatus())
@@ -76,10 +69,35 @@ public class ReleaseServiceImpl implements ReleaseService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void update(ReleaseUpdateReqVO reqVO) {
+        MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
+        CommerceReleaseCampaignDO campaign = requireOwnedForUpdate(reqVO.getId(), context);
+        if (!ReleaseStatusEnum.DRAFT.getStatus().equals(campaign.getStatus())) throw exception(RELEASE_STATE_INVALID);
+        validateInput(reqVO, context);
+        campaignMapper.updateById(new CommerceReleaseCampaignDO().setId(campaign.getId())
+                .setName(reqVO.getName().trim()).setStartTime(reqVO.getStartTime())
+                .setEndTime(reqVO.getEndTime()).setPerUserLimit(reqVO.getPerUserLimit()));
+        itemMapper.deleteByCampaignId(campaign.getId());
+        for (ReleaseCreateReqVO.Item item : reqVO.getItems()) {
+            itemMapper.insert(new CommerceReleaseItemDO().setCampaignId(campaign.getId()).setProductId(item.getProductId())
+                    .setSkuId(item.getSkuId()).setCampaignPrice(item.getCampaignPrice())
+                    .setStock(item.getStock()).setSoldCount(0));
+        }
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public PageResult<ReleaseRespVO> getOwnPage(ReleasePageReqVO reqVO) {
         MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
         return mapPage(campaignMapper.selectOwnPage(reqVO, context.merchant().getId()), false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReleaseRespVO getOwn(Long id) {
+        MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
+        return toResponse(requireOwned(id, context));
     }
 
     @Override
@@ -173,15 +191,44 @@ public class ReleaseServiceImpl implements ReleaseService {
                 || !context.store().getId().equals(campaign.getStoreId())) throw exception(RELEASE_NOT_FOUND);
         return campaign;
     }
+    private CommerceReleaseCampaignDO requireOwnedForUpdate(Long id, MerchantAccessContext context) {
+        CommerceReleaseCampaignDO campaign = campaignMapper.selectByIdForUpdate(id);
+        if (campaign == null || !context.merchant().getId().equals(campaign.getMerchantId())
+                || !context.store().getId().equals(campaign.getStoreId())) throw exception(RELEASE_NOT_FOUND);
+        return campaign;
+    }
+    private void validateInput(ReleaseCreateReqVO reqVO, MerchantAccessContext context) {
+        if (!reqVO.getEndTime().isAfter(reqVO.getStartTime())) throw exception(RELEASE_TIME_INVALID);
+        Set<Long> skuIds = new HashSet<>();
+        for (ReleaseCreateReqVO.Item item : reqVO.getItems()) {
+            if (!skuIds.add(item.getSkuId())) throw exception(RELEASE_ITEM_INVALID);
+            ProductDO product = productMapper.selectByIdAndMerchantId(item.getProductId(), context.merchant().getId());
+            ProductSkuDO sku = product == null ? null : skuMapper.selectByIdAndProductIdForUpdate(item.getSkuId(), item.getProductId());
+            if (product == null || sku == null || !context.store().getId().equals(product.getStoreId())
+                    || !context.merchant().getId().equals(sku.getMerchantId()) || sku.getStock() == null
+                    || item.getStock() > sku.getStock()) throw exception(RELEASE_ITEM_INVALID);
+        }
+    }
     private PageResult<ReleaseRespVO> mapPage(PageResult<CommerceReleaseCampaignDO> page, boolean publicOnly) {
         return new PageResult<>(page.getList().stream().map(this::toResponse).toList(), page.getTotal());
     }
     private ReleaseRespVO toResponse(CommerceReleaseCampaignDO campaign) {
         ReleaseRespVO response = new ReleaseRespVO().setId(campaign.getId()).setName(campaign.getName()).setStatus(campaign.getStatus())
                 .setStartTime(campaign.getStartTime()).setEndTime(campaign.getEndTime()).setPerUserLimit(campaign.getPerUserLimit());
-        response.setItems(itemMapper.selectByCampaignId(campaign.getId()).stream().map(item -> new Item().setId(item.getId())
-                .setProductId(item.getProductId()).setSkuId(item.getSkuId()).setCampaignPrice(item.getCampaignPrice())
-                .setStock(item.getStock()).setSoldCount(item.getSoldCount())).toList());
+        response.setItems(itemMapper.selectByCampaignId(campaign.getId()).stream().map(item -> {
+            ProductDO product = productMapper.selectById(item.getProductId());
+            ProductSkuDO sku = skuMapper.selectById(item.getSkuId());
+            String skuLabel = sku == null || sku.getSpecificationValues() == null || sku.getSpecificationValues().isEmpty()
+                    ? (sku == null ? "默认规格" : sku.getCode())
+                    : sku.getSpecificationValues().stream().map(value -> value.getName() + ": " + value.getValue())
+                    .reduce((left, right) -> left + " / " + right).orElse("默认规格");
+            return new Item().setId(item.getId()).setProductId(item.getProductId()).setSkuId(item.getSkuId())
+                    .setProductName(product == null ? "商品已不可用" : product.getName())
+                    .setProductImageUrl(sku != null && sku.getImageUrl() != null ? sku.getImageUrl()
+                            : product == null ? null : product.getMainImageUrl())
+                    .setSkuLabel(skuLabel).setOriginalPrice(sku == null ? null : sku.getPrice())
+                    .setCampaignPrice(item.getCampaignPrice()).setStock(item.getStock()).setSoldCount(item.getSoldCount());
+        }).toList());
         return response;
     }
 }

@@ -7,3 +7,14 @@
 # Maven build outputs
 **/target/
 **/.flattened-pom.xml
+
+# Frontend dependencies and generated artifacts
+**/node_modules/
+**/.next/
+**/out/
+**/*.tsbuildinfo
+**/playwright-report/
+**/test-results/
+**/.env
+**/.env.local
+**/npm-debug.log*

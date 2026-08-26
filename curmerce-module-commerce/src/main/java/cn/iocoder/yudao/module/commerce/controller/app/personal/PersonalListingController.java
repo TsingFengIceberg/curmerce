@@ -2,6 +2,8 @@ package cn.iocoder.yudao.module.commerce.controller.app.personal;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.product.ProductOperationLogRespVO;
 import cn.iocoder.yudao.module.commerce.controller.app.personal.vo.*;
 import cn.iocoder.yudao.module.commerce.service.personal.PersonalListingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +31,10 @@ public class PersonalListingController {
     public CommonResult<PersonalListingRespVO> get(@RequestParam Long id) { return success(listingService.get(getLoginUserId(), id)); }
     @GetMapping("/page") @Operation(summary = "查询自己的个人商品列表")
     public CommonResult<PageResult<PersonalListingRespVO>> page(@Valid PersonalListingPageReqVO req) { return success(listingService.page(getLoginUserId(), req)); }
+    @GetMapping("/operation-log") @Operation(summary = "分页查询个人商品操作记录")
+    public CommonResult<PageResult<ProductOperationLogRespVO>> operationLog(@RequestParam Long productId, @Valid PageParam pageParam) {
+        return success(listingService.getOperationLogPage(getLoginUserId(), productId, pageParam));
+    }
     @PutMapping("/submit") @Operation(summary = "提交个人商品审核")
     public CommonResult<Boolean> submit(@RequestParam Long id) { listingService.submit(getLoginUserId(), id); return success(true); }
     @PutMapping("/list") @Operation(summary = "上架个人商品")

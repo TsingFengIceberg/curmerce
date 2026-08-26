@@ -7,7 +7,10 @@ import cn.iocoder.yudao.module.community.controller.app.interaction.vo.Community
 import cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostCreateReqVO;
 import cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostUpdateReqVO;
 import cn.iocoder.yudao.module.community.controller.app.report.vo.CommunityReportCreateReqVO;
+import cn.iocoder.yudao.module.community.controller.admin.vo.CommunityReportPageReqVO;
 import cn.iocoder.yudao.module.community.dal.dataobject.post.CommunityPostDO;
+import cn.iocoder.yudao.module.community.dal.dataobject.report.CommunityReportDO;
+import cn.iocoder.yudao.module.community.dal.dataobject.topic.CommunityTopicDO;
 import cn.iocoder.yudao.module.community.dal.mysql.comment.CommunityCommentMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.interaction.CommunityFollowMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.interaction.CommunityReactionMapper;
@@ -20,6 +23,7 @@ import cn.iocoder.yudao.module.community.enums.CommunityPostStatusEnum;
 import cn.iocoder.yudao.module.commerce.controller.app.catalog.vo.PublicProductSummaryRespVO;
 import cn.iocoder.yudao.module.commerce.service.catalog.PublicCatalogService;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
+import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -34,6 +38,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.util.Collections;
+import java.util.List;
 
 @ExtendWith(MockitoExtension.class)
 class CommunityServiceImplTest {
@@ -122,6 +127,54 @@ class CommunityServiceImplTest {
         Long reportId = service.report(7L, new CommunityReportCreateReqVO().setPostId(10L).setReason("spam"));
         assertEquals(22L, reportId);
         verify(reportMapper, never()).insert(any(cn.iocoder.yudao.module.community.dal.dataobject.report.CommunityReportDO.class));
+    }
+
+    @Test
+    void getAdminReports_enrichesPostAndMemberContext() {
+        CommunityReportDO report = new CommunityReportDO().setId(22L).setPostId(10L).setReporterUserId(8L)
+                .setReason("spam").setStatus(0);
+        when(reportMapper.selectAdminPage(any())).thenReturn(new PageResult<>(List.of(report), 1L));
+        when(postMapper.selectById(10L)).thenReturn(new CommunityPostDO().setId(10L).setAuthorUserId(7L)
+                .setTitle("Post title").setContent("Post body").setMediaUrls(List.of("https://example.com/image.jpg")));
+        when(memberUserApi.getUser(7L)).thenReturn(new MemberUserRespDTO().setId(7L).setNickname("Author"));
+        when(memberUserApi.getUser(8L)).thenReturn(new MemberUserRespDTO().setId(8L).setNickname("Reporter"));
+
+        var result = service.getAdminReports(new CommunityReportPageReqVO());
+
+        assertEquals(1L, result.getTotal());
+        assertEquals("Post title", result.getList().getFirst().getPostTitle());
+        assertEquals("Post body", result.getList().getFirst().getPostContent());
+        assertEquals(List.of("https://example.com/image.jpg"), result.getList().getFirst().getPostMediaUrls());
+        assertEquals("Author", result.getList().getFirst().getPostAuthorNickname());
+        assertEquals("Reporter", result.getList().getFirst().getReporterNickname());
+    }
+
+    @Test
+    void getPopularTopics_returnsUsageCountsAndCapsRequestedLimit() {
+        when(topicMapper.selectPopularTopics(50)).thenReturn(List.of(
+                new CommunityTopicDO().setId(5L).setName("手冲咖啡").setSlug("coffee").setPostCount(12L)));
+
+        var result = service.getPopularTopics(500);
+
+        assertEquals(1, result.size());
+        assertEquals("手冲咖啡", result.getFirst().getName());
+        assertEquals(12L, result.getFirst().getPostCount());
+        verify(topicMapper).selectPopularTopics(50);
+    }
+
+    @Test
+    void getPost_enrichesAuthorAvatar() {
+        when(postMapper.selectById(10L)).thenReturn(new CommunityPostDO().setId(10L).setAuthorUserId(7L)
+                .setTitle("Post").setContent("Body").setStatus(CommunityPostStatusEnum.PUBLISHED.getStatus()));
+        when(memberUserApi.getUser(7L)).thenReturn(new MemberUserRespDTO().setId(7L)
+                .setNickname("Author").setAvatar("/avatar.png"));
+        when(postTopicMapper.selectByPostId(10L)).thenReturn(List.of());
+        when(postProductMapper.selectByPostId(10L)).thenReturn(List.of());
+
+        var result = service.getPost(null, 10L);
+
+        assertEquals("Author", result.getAuthorNickname());
+        assertEquals("/avatar.png", result.getAuthorAvatar());
     }
 
     @Test
