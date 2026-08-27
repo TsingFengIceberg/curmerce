@@ -47,7 +47,7 @@ Curmerce
 
 MySQL 是业务事实来源。Redis 当前用于框架能力和本地事件流；Kafka、Elasticsearch、Spring Cloud 与 Spring AI 尚未作为已完成功能引入。
 
-项目使用 JDK 21 构建和运行。由于当前基座父 POM 仍保留 Java 17 源码兼容级别，将编译目标完整提升到 Java 21 会作为单独的兼容性改造进行，而不会在 README 中将其误写为已经完成。
+项目使用 JDK 21 构建和运行，根 Maven 构建也统一使用 Java 21 源码与字节码目标。
 
 ## 本地运行与验证
 

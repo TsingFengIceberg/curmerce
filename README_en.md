@@ -47,7 +47,7 @@ The current design intentionally makes state machines, transaction boundaries, o
 
 MySQL is the business source of truth. Redis currently supports framework capabilities and the local event stream. Kafka, Elasticsearch, Spring Cloud, and Spring AI are not presented as completed features.
 
-The project is built and run with JDK 21. The imported parent POM still retains Java 17 source compatibility, so raising the complete compilation target to Java 21 will be handled as a dedicated compatibility change rather than being misrepresented here as finished work.
+The project is built and run with JDK 21, and the root Maven build consistently targets Java 21 source and bytecode.
 
 ## Local Setup and Verification
 
