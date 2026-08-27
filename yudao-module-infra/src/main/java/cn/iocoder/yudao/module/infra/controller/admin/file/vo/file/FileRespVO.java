@@ -12,6 +12,9 @@ public class FileRespVO {
     @Schema(description = "文件编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long id;
 
+    @Schema(description = "稳定资产标识")
+    private String assetKey;
+
     @Schema(description = "配置编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "11")
     private Long configId;
 
@@ -29,6 +32,24 @@ public class FileRespVO {
 
     @Schema(description = "文件大小", example = "2048", requiredMode = Schema.RequiredMode.REQUIRED)
     private Long size;
+
+    private String sha256;
+    private Integer assetStatus;
+    private Integer scanStatus;
+    private Integer moderationStatus;
+    private String moderationReason;
+    private Long moderatedBy;
+    private LocalDateTime moderatedAt;
+    private Integer visibility;
+    private Long ownerUserId;
+    private Integer ownerUserType;
+    private Integer width;
+    private Integer height;
+    private String variantName;
+    private Boolean boundOnce;
+    private LocalDateTime orphanedAt;
+    private LocalDateTime lastAccessTime;
+    private String failureReason;
 
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime createTime;

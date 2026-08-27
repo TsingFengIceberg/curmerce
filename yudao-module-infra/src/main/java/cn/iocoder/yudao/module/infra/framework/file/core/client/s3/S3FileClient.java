@@ -6,6 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpUtil;
 import cn.iocoder.yudao.framework.common.util.http.HttpUtils;
 import cn.iocoder.yudao.module.infra.framework.file.core.client.AbstractFileClient;
+import cn.iocoder.yudao.module.infra.framework.file.core.client.FileObjectMetadata;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -15,7 +16,10 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
@@ -106,11 +110,38 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     }
 
     @Override
+    public FileObjectMetadata getMetadata(String path) {
+        try {
+            HeadObjectResponse response = client.headObject(HeadObjectRequest.builder()
+                    .bucket(config.getBucket()).key(path).build());
+            return new FileObjectMetadata(response.contentLength(), response.contentType(), response.eTag());
+        } catch (S3Exception ex) {
+            if (ex.statusCode() == 404) return null;
+            throw ex;
+        }
+    }
+
+    @Override
     public String presignPutUrl(String path) {
         return presigner.presignPutObject(PutObjectPresignRequest.builder()
                 .signatureDuration(EXPIRATION_DEFAULT)
                 .putObjectRequest(b -> b.bucket(config.getBucket()).key(path)).build())
                 .url().toString();
+    }
+
+    @Override
+    public String presignPutUrl(String path, String contentType, long contentLength, int expirationSeconds) {
+        PutObjectRequest request = PutObjectRequest.builder()
+                .bucket(config.getBucket()).key(path)
+                .contentType(contentType).contentLength(contentLength).build();
+        return presigner.presignPutObject(PutObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofSeconds(expirationSeconds))
+                .putObjectRequest(request).build()).url().toString();
+    }
+
+    @Override
+    public boolean supportsPresignedUpload() {
+        return true;
     }
 
     @Override

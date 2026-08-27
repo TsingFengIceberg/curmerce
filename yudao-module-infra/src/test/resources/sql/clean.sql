@@ -1,5 +1,9 @@
 DELETE FROM "infra_config";
 DELETE FROM "infra_file_config";
+DELETE FROM "infra_media_upload_quota";
+DELETE FROM "infra_media_upload_ticket";
+DELETE FROM "infra_media_migration";
+DELETE FROM "infra_file_reference";
 DELETE FROM "infra_file";
 DELETE FROM "infra_job";
 DELETE FROM "infra_job_log";

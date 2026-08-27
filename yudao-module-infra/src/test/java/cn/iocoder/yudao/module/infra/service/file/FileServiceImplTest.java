@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.infra.service.file;
 
 import cn.hutool.core.io.resource.ResourceUtil;
+import cn.hutool.crypto.digest.DigestUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.ObjectUtils;
 import cn.iocoder.yudao.framework.test.core.ut.BaseDbUnitTest;
@@ -9,14 +10,22 @@ import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FileCreateReq
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FilePageReqVO;
 import cn.iocoder.yudao.module.infra.dal.dataobject.file.FileDO;
 import cn.iocoder.yudao.module.infra.dal.mysql.file.FileMapper;
+import cn.iocoder.yudao.module.infra.dal.mysql.file.FileReferenceMapper;
+import cn.iocoder.yudao.module.infra.dal.dataobject.file.FileReferenceDO;
+import cn.iocoder.yudao.framework.security.core.LoginUser;
 import cn.iocoder.yudao.module.infra.framework.file.core.client.FileClient;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static cn.iocoder.yudao.framework.common.util.date.LocalDateTimeUtils.buildTime;
@@ -24,6 +33,8 @@ import static cn.iocoder.yudao.framework.test.core.util.AssertUtils.assertServic
 import static cn.iocoder.yudao.framework.test.core.util.RandomUtils.*;
 import static cn.iocoder.yudao.module.infra.enums.ErrorCodeConstants.FILE_NOT_EXISTS;
 import static cn.iocoder.yudao.module.infra.enums.ErrorCodeConstants.FILE_PATH_INVALID;
+import static cn.iocoder.yudao.module.infra.enums.ErrorCodeConstants.FILE_ASSET_FORBIDDEN;
+import static cn.iocoder.yudao.module.infra.enums.ErrorCodeConstants.FILE_ASSET_NOT_READY;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.*;
@@ -40,11 +51,21 @@ public class FileServiceImplTest extends BaseDbUnitTest {
     @MockitoBean
     private FileConfigService fileConfigService;
 
+    @Resource private FileReferenceMapper fileReferenceMapper;
+    @MockitoBean private MediaImageInspector mediaImageInspector;
+    @MockitoBean private MediaContentScanner mediaContentScanner;
+    @MockitoBean private cn.iocoder.yudao.module.infra.framework.file.config.CurmerceMediaProperties mediaProperties;
+    @MockitoBean private ApplicationEventPublisher eventPublisher;
+    @MockitoBean private MediaMetrics mediaMetrics;
+    @MockitoBean private MediaQuotaService mediaQuotaService;
+
     @BeforeEach
     public void setUp() {
         FileServiceImpl.PATH_PREFIX_DATE_ENABLE = true;
         FileServiceImpl.PATH_SUFFIX_TIMESTAMP_ENABLE = true;
         FileServiceImpl.PATH_SUFFIX_AS_DIRECTORY = true;
+        ReflectionTestUtils.setField(fileService, "eventPublisher", eventPublisher);
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -53,6 +74,7 @@ public class FileServiceImplTest extends BaseDbUnitTest {
         FileDO dbFile = randomPojo(FileDO.class, o -> { // 等会查询到
             o.setPath("yunai");
             o.setType("image/jpg");
+            validMediaStates(o);
             o.setCreateTime(buildTime(2021, 1, 15));
         });
         fileMapper.insert(dbFile);
@@ -149,7 +171,10 @@ public class FileServiceImplTest extends BaseDbUnitTest {
     @Test
     public void testDeleteFile_success() throws Exception {
         // mock 数据
-        FileDO dbFile = randomPojo(FileDO.class, o -> o.setConfigId(10L).setPath("tudou.jpg"));
+        FileDO dbFile = randomPojo(FileDO.class, o -> {
+            o.setConfigId(10L).setPath("tudou.jpg");
+            validMediaStates(o);
+        });
         fileMapper.insert(dbFile);// @Sql: 先插入出一条存在的数据
         // mock Master 文件客户端
         FileClient client = mock(FileClient.class);
@@ -177,7 +202,10 @@ public class FileServiceImplTest extends BaseDbUnitTest {
     @Test
     public void testDeleteFile_pathInvalid() {
         // mock 数据
-        FileDO dbFile = randomPojo(FileDO.class, o -> o.setConfigId(10L).setPath("../tudou.jpg"));
+        FileDO dbFile = randomPojo(FileDO.class, o -> {
+            o.setConfigId(10L).setPath("../tudou.jpg");
+            validMediaStates(o);
+        });
         fileMapper.insert(dbFile);
 
         // 调用，并断言异常
@@ -212,9 +240,202 @@ public class FileServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
+    public void testGetFileContent_blocksQuarantinedManagedAsset() {
+        FileDO file = new FileDO().setAssetKey("34a8bdcf-570c-4b43-a9da-a69a87d126e5")
+                .setConfigId(10L).setName("quarantined.png").setPath("quarantine/test.png")
+                .setUrl("stored").setType("image/png").setSize(3L).setAssetStatus(20)
+                .setScanStatus(10).setModerationStatus(20).setVisibility(0).setBoundOnce(false);
+        fileMapper.insert(file);
+
+        assertServiceException(() -> fileService.getFileContent(10L, file.getPath()), FILE_ASSET_NOT_READY);
+        verify(fileConfigService, never()).getFileClient(10L);
+    }
+
+    @Test
+    public void testGetFileContent_blocksPrivateManagedAssetForAnonymousUser() {
+        FileDO file = new FileDO().setAssetKey("44a8bdcf-570c-4b43-a9da-a69a87d126e5")
+                .setConfigId(10L).setName("private.png").setPath("private/direct.png")
+                .setUrl("stored").setType("image/png").setSize(3L).setAssetStatus(10)
+                .setScanStatus(10).setModerationStatus(10).setVisibility(10)
+                .setOwnerUserId(77L).setOwnerUserType(1).setBoundOnce(false);
+        fileMapper.insert(file);
+
+        assertServiceException(() -> fileService.getFileContent(10L, file.getPath()), FILE_ASSET_FORBIDDEN);
+        verify(fileConfigService, never()).getFileClient(10L);
+    }
+
+    @Test
+    public void testGetPrivateAsset_requiresOwnerOrAdmin() {
+        FileDO file = new FileDO().setAssetKey("14a8bdcf-570c-4b43-a9da-a69a87d126e5")
+                .setConfigId(10L).setName("private.png").setPath("private/test.png")
+                .setUrl("stored").setType("image/png").setSize(3L).setSha256("abc")
+                .setAssetStatus(10).setScanStatus(10).setModerationStatus(10)
+                .setVisibility(10).setOwnerUserId(77L).setOwnerUserType(1).setBoundOnce(false);
+        fileMapper.insert(file);
+
+        assertServiceException(() -> fileService.getMediaAsset(file.getAssetKey(), null), FILE_ASSET_FORBIDDEN);
+    }
+
+    @Test
+    public void testGetPrivateAsset_ownerCanRead() throws Exception {
+        byte[] content = new byte[]{1, 2, 3};
+        FileDO file = new FileDO().setAssetKey("24a8bdcf-570c-4b43-a9da-a69a87d126e5")
+                .setConfigId(10L).setName("private.png").setPath("private/test.png")
+                .setUrl("stored").setType("image/png").setSize(3L).setSha256("abc")
+                .setAssetStatus(10).setScanStatus(10).setModerationStatus(10)
+                .setVisibility(10).setOwnerUserId(77L).setOwnerUserType(1).setBoundOnce(false);
+        fileMapper.insert(file);
+        FileClient client = mock(FileClient.class);
+        when(fileConfigService.getFileClient(10L)).thenReturn(client);
+        when(client.getContent(file.getPath())).thenReturn(content);
+        LoginUser loginUser = new LoginUser().setId(77L).setUserType(1);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(loginUser, null, List.of()));
+
+        assertArrayEquals(content, fileService.getMediaAsset(file.getAssetKey(), null).content());
+    }
+
+    @Test
+    public void testGetManagedAsset_canPreviewQuarantinedVariant() throws Exception {
+        byte[] content = new byte[]{4, 5, 6};
+        FileDO original = new FileDO().setAssetKey("74a8bdcf-570c-4b43-a9da-a69a87d126e5")
+                .setConfigId(10L).setName("quarantined.png").setPath("quarantine/original.png")
+                .setUrl("stored").setType("image/png").setSize(3L).setAssetStatus(20)
+                .setScanStatus(10).setModerationStatus(20).setVisibility(0).setBoundOnce(false);
+        fileMapper.insert(original);
+        FileDO variant = new FileDO().setAssetKey("84a8bdcf-570c-4b43-a9da-a69a87d126e5")
+                .setConfigId(10L).setName("thumb.webp").setPath("quarantine/thumb.webp")
+                .setUrl("stored-thumb").setType("image/webp").setSize(3L).setAssetStatus(20)
+                .setScanStatus(10).setModerationStatus(20).setVisibility(0).setBoundOnce(true)
+                .setOriginalFileId(original.getId()).setVariantName("thumb-webp");
+        fileMapper.insert(variant);
+        FileClient client = mock(FileClient.class);
+        when(fileConfigService.getFileClient(10L)).thenReturn(client);
+        when(client.getContent(variant.getPath())).thenReturn(content);
+
+        MediaAssetContent result = fileService.getManagedMediaAsset(original.getId(), "thumb-webp");
+
+        assertEquals(variant.getId(), result.file().getId());
+        assertArrayEquals(content, result.content());
+    }
+
+    @Test
+    public void testReplaceReferences_allowsOwnerToBindProcessingAsset() {
+        FileDO file = new FileDO().setAssetKey("94a8bdcf-570c-4b43-a9da-a69a87d126e5")
+                .setConfigId(10L).setName("processing.png").setPath("processing/test.png")
+                .setUrl("stored").setType("image/png").setSize(3L).setAssetStatus(0)
+                .setScanStatus(10).setModerationStatus(0).setVisibility(0)
+                .setOwnerUserId(77L).setOwnerUserType(1).setBoundOnce(false);
+        fileMapper.insert(file);
+        LoginUser loginUser = new LoginUser().setId(77L).setUserType(1);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(loginUser, null, List.of()));
+
+        fileService.replaceFileReferences("community_post", "100", "media",
+                List.of(FileServiceImpl.stableAssetUrl(file.getAssetKey())));
+
+        assertEquals(1, fileReferenceMapper.countActiveByFileId(file.getId()));
+        assertTrue(fileMapper.selectById(file.getId()).getBoundOnce());
+    }
+
+    @Test
+    public void testCreateImage_reusesProcessingDuplicateWithoutUploading() throws Exception {
+        byte[] content = new byte[]{1, 2, 3};
+        MediaQuotaReservation reservation = new MediaQuotaReservation(77L, 1,
+                java.time.LocalDate.of(2026, 8, 27), content.length);
+        String dedupKey = FileServiceImpl.dedupKey(DigestUtil.sha256Hex(content), 0, 77L, 1);
+        FileDO duplicate = new FileDO().setAssetKey("64a8bdcf-570c-4b43-a9da-a69a87d126e5")
+                .setConfigId(10L).setName("duplicate.png").setPath("duplicate/test.png")
+                .setUrl("stored").setType("image/png").setSize(3L).setSha256(DigestUtil.sha256Hex(content))
+                .setDedupKey(dedupKey).setAssetStatus(0).setScanStatus(10).setModerationStatus(0)
+                .setVisibility(0).setOwnerUserId(77L).setOwnerUserType(1).setBoundOnce(false);
+        fileMapper.insert(duplicate);
+        when(mediaImageInspector.inspect(content, "test.png"))
+                .thenReturn(new MediaImageMetadata("image/png", "png", 2, 2));
+        when(mediaContentScanner.scan(content)).thenReturn(MediaScanResult.clean());
+        when(mediaQuotaService.reserve(content.length)).thenReturn(reservation);
+
+        assertEquals(FileServiceImpl.stableAssetUrl(duplicate.getAssetKey()),
+                fileService.createImage(content, "test.png", "community"));
+
+        verify(mediaQuotaService).commitStorage(reservation);
+        verifyNoInteractions(fileConfigService);
+        verify(mediaMetrics).deduplicated(content.length);
+    }
+
+    @Test
+    public void testCreateImage_releasesQuotaWhenStorageFails() throws Exception {
+        byte[] content = new byte[]{4, 5, 6};
+        MediaQuotaReservation reservation = new MediaQuotaReservation(77L, 1,
+                java.time.LocalDate.of(2026, 8, 27), content.length);
+        FileClient client = mock(FileClient.class);
+        when(mediaImageInspector.inspect(content, "test.png"))
+                .thenReturn(new MediaImageMetadata("image/png", "png", 2, 2));
+        when(mediaContentScanner.scan(content)).thenReturn(MediaScanResult.clean());
+        when(mediaQuotaService.reserve(content.length)).thenReturn(reservation);
+        when(fileConfigService.getMasterFileClient()).thenReturn(client);
+        when(client.upload(same(content), anyString(), eq("image/png")))
+                .thenThrow(new IllegalStateException("storage unavailable"));
+
+        assertThrows(IllegalStateException.class,
+                () -> fileService.createImage(content, "test.png", "community"));
+
+        verify(mediaQuotaService).release(reservation);
+        verify(mediaQuotaService, never()).commitStorage(reservation);
+    }
+
+    @Test
+    public void testCreateImage_persistsProcessingAssetAndPublishesEvent() throws Exception {
+        byte[] content = new byte[]{7, 8, 9};
+        MediaQuotaReservation reservation = new MediaQuotaReservation(77L, 1,
+                java.time.LocalDate.of(2026, 8, 27), content.length);
+        FileClient client = mock(FileClient.class);
+        when(mediaImageInspector.inspect(content, "test.png"))
+                .thenReturn(new MediaImageMetadata("image/png", "png", 2, 3));
+        when(mediaContentScanner.scan(content)).thenReturn(MediaScanResult.clean());
+        when(mediaQuotaService.reserve(content.length)).thenReturn(reservation);
+        when(fileConfigService.getMasterFileClient()).thenReturn(client);
+        when(client.getId()).thenReturn(10L);
+        when(client.upload(same(content), anyString(), eq("image/png"))).thenReturn("stored");
+
+        String url = fileService.createImage(content, "test.png", "community");
+
+        FileDO stored = fileMapper.selectOne(FileDO::getUrl, "stored");
+        assertNotNull(stored);
+        assertEquals(0, stored.getAssetStatus());
+        assertEquals(2, stored.getWidth());
+        assertEquals(3, stored.getHeight());
+        assertEquals(url, FileServiceImpl.stableAssetUrl(stored.getAssetKey()));
+        verify(mediaQuotaService).commitStorage(reservation);
+        verify(eventPublisher).publishEvent(new MediaAssetIngestedEvent(stored.getId()));
+        verify(mediaMetrics).stored(content.length);
+    }
+
+    @Test
+    public void testReplaceReferences_marksDetachedAssetOrphaned() {
+        FileDO file = new FileDO().setAssetKey("34a8bdcf-570c-4b43-a9da-a69a87d126e5")
+                .setConfigId(10L).setName("product.png").setPath("product/test.png")
+                .setUrl("stored").setType("image/png").setSize(3L).setSha256("def")
+                .setAssetStatus(10).setScanStatus(10).setModerationStatus(10)
+                .setVisibility(0).setOwnerUserId(77L).setOwnerUserType(1).setBoundOnce(false);
+        fileMapper.insert(file);
+
+        fileService.replaceFileReferences("product", "100", "images",
+                List.of(FileServiceImpl.stableAssetUrl(file.getAssetKey())));
+        assertEquals(1, fileReferenceMapper.selectList(FileReferenceDO::getFileId, file.getId()).size());
+        assertTrue(fileMapper.selectById(file.getId()).getBoundOnce());
+
+        fileService.replaceFileReferences("product", "100", "images", List.of());
+        assertNotNull(fileMapper.selectById(file.getId()).getOrphanedAt());
+    }
+
+    @Test
     public void testGetFileByConfigIdAndPath() {
         // mock 数据
-        FileDO dbFile = randomPojo(FileDO.class, o -> o.setConfigId(10L).setPath("avatar/中文 100%+文件.jpg"));
+        FileDO dbFile = randomPojo(FileDO.class, o -> {
+            o.setConfigId(10L).setPath("avatar/中文 100%+文件.jpg");
+            validMediaStates(o);
+        });
         fileMapper.insert(dbFile);
         FileDO latestFile = ObjectUtils.cloneIgnoreId(dbFile, o -> o.setName("最新文件名.jpg"));
         fileMapper.insert(latestFile);
@@ -355,6 +576,12 @@ public class FileServiceImplTest extends BaseDbUnitTest {
         // 格式为：avatar/yyyyMMdd/{时间戳+随机数}/test
         assertTrue(path.startsWith(directory + "/"));
         assertTrue(path.matches(directory + "/\\d{8}/\\d+/test"));
+    }
+
+    private static void validMediaStates(FileDO file) {
+        file.setAssetStatus(10).setScanStatus(10).setModerationStatus(50)
+                .setVisibility(0).setOwnerUserType(1).setDedupKey(null)
+                .setOriginalFileId(null).setVariantName(null);
     }
 
     @Test

@@ -5,6 +5,8 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.Collection;
+
 /**
  * 文件 API 实现类
  *
@@ -20,6 +22,12 @@ public class FileApiImpl implements FileApi {
     @Override
     public String createFile(byte[] content, String name, String directory, String type) {
         return fileService.createFile(content, name, directory, type);
+    }
+
+    @Override
+    public void replaceFileReferences(String businessType, String businessId, String fieldName,
+                                      Collection<String> urls) {
+        fileService.replaceFileReferences(businessType, businessId, fieldName, urls);
     }
 
     @Override

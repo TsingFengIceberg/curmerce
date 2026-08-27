@@ -15,6 +15,7 @@ import {
   Gavel,
   LayoutDashboard,
   MessageSquareWarning,
+  Images,
   PackageCheck,
   ReceiptText,
   RotateCcw,
@@ -73,6 +74,7 @@ const workspaceMeta = {
       { href: "/admin/orders", label: "平台订单", icon: ReceiptText },
       { href: "/admin/refunds", label: "退款审核", icon: RotateCcw },
       { href: "/admin/community", label: "社区治理", icon: MessageSquareWarning },
+      { href: "/admin/media", label: "媒体治理", icon: Images },
     ],
   },
   merchant: {

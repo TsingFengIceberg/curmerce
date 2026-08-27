@@ -16,6 +16,7 @@ import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.product.ProductOperationLogService;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ public class PersonalListingServiceImpl implements PersonalListingService {
     @Resource private ProductMapper productMapper;
     @Resource private ProductSkuMapper skuMapper;
     @Resource private ProductOperationLogService operationLogService;
+    @Resource private FileApi fileApi;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -54,6 +56,7 @@ public class PersonalListingServiceImpl implements PersonalListingService {
                 .setCode(code + "-sku").setPrice(req.getPrice()).setStock(1)
                 .setStatus(CommonStatusEnum.ENABLE.getStatus()).setSort(0);
         skuMapper.insert(sku);
+        bindMedia(product);
         operationLogService.record(product.getId(), userId, ProductOperationLogService.OPERATOR_PERSONAL,
                 "CREATE", null, product.getAuditStatus(), null, product.getSaleStatus(), "创建闲置商品草稿");
         return product.getId();
@@ -81,8 +84,16 @@ public class PersonalListingServiceImpl implements PersonalListingService {
                 || skuMapper.updatePersonalPrice(sku.getId(), current.getId(), req.getPrice()) != 1) {
             throw exception(PERSONAL_LISTING_STATE_INVALID);
         }
+        bindMedia(update);
         operationLogService.record(current.getId(), userId, ProductOperationLogService.OPERATOR_PERSONAL,
                 "UPDATE", current.getAuditStatus(), current.getAuditStatus(), current.getSaleStatus(), current.getSaleStatus(), "更新闲置商品资料");
+    }
+
+    private void bindMedia(ProductDO product) {
+        List<String> urls = new java.util.ArrayList<>();
+        if (StrUtil.isNotBlank(product.getMainImageUrl())) urls.add(product.getMainImageUrl());
+        if (product.getImageUrls() != null) urls.addAll(product.getImageUrls());
+        fileApi.replaceFileReferences("commerce_product", product.getId().toString(), "images", urls);
     }
 
     @Override @Transactional(readOnly = true)

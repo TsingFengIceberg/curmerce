@@ -45,6 +45,7 @@ import cn.iocoder.yudao.module.member.api.address.MemberAddressApi;
 import cn.iocoder.yudao.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -79,6 +80,7 @@ class OrderServiceImplTest {
     @Mock private CommerceReleaseItemMapper releaseItemMapper;
     @Mock private CommerceReleasePurchaseMapper releasePurchaseMapper;
     @Mock private CommerceOutboxEventAppender outboxEventAppender;
+    @Mock private FileApi fileApi;
     @InjectMocks private OrderServiceImpl service;
 
     @Test

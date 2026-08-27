@@ -2,6 +2,8 @@ package cn.iocoder.yudao.module.infra.api.file;
 
 import jakarta.validation.constraints.NotEmpty;
 
+import java.util.Collection;
+
 /**
  * 文件 API 接口
  *
@@ -41,6 +43,9 @@ public interface FileApi {
      */
     String createFile(@NotEmpty(message = "文件内容不能为空") byte[] content,
                       String name, String directory, String type);
+
+    void replaceFileReferences(String businessType, String businessId, String fieldName,
+                               Collection<String> urls);
 
     /**
      * 生成文件预签名地址，用于读取

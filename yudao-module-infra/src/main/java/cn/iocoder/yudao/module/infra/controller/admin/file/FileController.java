@@ -9,8 +9,14 @@ import cn.iocoder.yudao.framework.common.util.http.HttpUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.*;
+import cn.iocoder.yudao.module.infra.controller.app.file.vo.MediaUploadCapabilitiesRespVO;
+import cn.iocoder.yudao.module.infra.controller.app.file.vo.MediaUploadTicketReqVO;
+import cn.iocoder.yudao.module.infra.controller.app.file.vo.MediaUploadTicketRespVO;
 import cn.iocoder.yudao.module.infra.dal.dataobject.file.FileDO;
 import cn.iocoder.yudao.module.infra.service.file.FileService;
+import cn.iocoder.yudao.module.infra.service.file.MediaUploadService;
+import cn.iocoder.yudao.framework.ratelimiter.core.annotation.RateLimiter;
+import cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl.UserRateLimiterKeyResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
@@ -29,6 +35,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.module.infra.framework.file.core.utils.FileTypeUtils.writeAttachment;
@@ -43,6 +50,9 @@ public class FileController {
     @Resource
     private FileService fileService;
 
+    @Resource
+    private MediaUploadService mediaUploadService;
+
     @PostMapping("/upload")
     @Operation(summary = "上传文件", description = "模式一：后端上传文件")
     @Parameter(name = "file", description = "文件附件", required = true,
@@ -55,7 +65,7 @@ public class FileController {
     }
 
     @GetMapping("/presigned-url")
-    @Operation(summary = "获取文件预签名地址（上传）", description = "模式二：前端上传文件：用于前端直接上传七牛、阿里云 OSS 等文件存储器")
+    @Operation(summary = "获取文件预签名地址（上传）", description = "模式二：前端上传文件：用于前端直接上传文件存储器")
     @Parameters({
             @Parameter(name = "name", description = "文件名称", required = true),
             @Parameter(name = "directory", description = "文件目录")
@@ -67,9 +77,42 @@ public class FileController {
     }
 
     @PostMapping("/create")
-    @Operation(summary = "创建文件", description = "模式二：前端上传文件：配合 presigned-url 接口，记录上传了上传的文件")
+    @Operation(summary = "创建文件", description = "模式二：前端直传后登记文件元数据")
     public CommonResult<Long> createFile(@Valid @RequestBody FileCreateReqVO createReqVO) {
         return success(fileService.createFile(createReqVO));
+    }
+
+    @PostMapping("/media/upload")
+    @Operation(summary = "上传媒体图片")
+    @Parameter(name = "file", description = "图片附件", required = true,
+            schema = @Schema(type = "string", format = "binary"))
+    @RateLimiter(count = 40, time = 1, timeUnit = TimeUnit.MINUTES,
+            keyResolver = UserRateLimiterKeyResolver.class, message = "图片上传过于频繁，请稍后再试")
+    public CommonResult<String> uploadImage(@Valid FileUploadReqVO uploadReqVO) throws Exception {
+        MultipartFile file = uploadReqVO.getFile();
+        byte[] content = IoUtil.readBytes(file.getInputStream());
+        return success(fileService.createImage(content, file.getOriginalFilename(), uploadReqVO.getDirectory()));
+    }
+
+    @GetMapping("/media/upload-capabilities")
+    @Operation(summary = "获取媒体上传能力")
+    public CommonResult<MediaUploadCapabilitiesRespVO> getUploadCapabilities() {
+        return success(mediaUploadService.getCapabilities());
+    }
+
+    @PostMapping("/media/upload-ticket")
+    @Operation(summary = "申请媒体预签名直传票据")
+    @RateLimiter(count = 40, time = 1, timeUnit = TimeUnit.MINUTES,
+            keyResolver = UserRateLimiterKeyResolver.class, message = "图片上传过于频繁，请稍后再试")
+    public CommonResult<MediaUploadTicketRespVO> issueUploadTicket(
+            @Valid @RequestBody MediaUploadTicketReqVO request) {
+        return success(mediaUploadService.issueTicket(request));
+    }
+
+    @PostMapping("/media/upload-ticket/{ticketKey}/finalize")
+    @Operation(summary = "确认媒体预签名直传")
+    public CommonResult<String> finalizeUploadTicket(@PathVariable("ticketKey") String ticketKey) {
+        return success(mediaUploadService.finalizeTicket(ticketKey));
     }
 
     @GetMapping("/get")

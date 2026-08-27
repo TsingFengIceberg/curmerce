@@ -1,25 +1,37 @@
 package cn.iocoder.yudao.module.infra.controller.app.file;
 
 import cn.hutool.core.io.IoUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.crypto.digest.DigestUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
-import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FileCreateReqVO;
-import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FilePresignedUrlRespVO;
 import cn.iocoder.yudao.module.infra.controller.app.file.vo.AppFileUploadReqVO;
+import cn.iocoder.yudao.module.infra.controller.app.file.vo.MediaUploadCapabilitiesRespVO;
+import cn.iocoder.yudao.module.infra.controller.app.file.vo.MediaUploadTicketReqVO;
+import cn.iocoder.yudao.module.infra.controller.app.file.vo.MediaUploadTicketRespVO;
 import cn.iocoder.yudao.module.infra.service.file.FileService;
+import cn.iocoder.yudao.module.infra.service.file.MediaAssetContent;
+import cn.iocoder.yudao.module.infra.service.file.MediaUploadService;
+import cn.iocoder.yudao.framework.ratelimiter.core.annotation.RateLimiter;
+import cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl.UserRateLimiterKeyResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
 
 @Tag(name = "用户 App - 文件存储")
 @RestController
@@ -31,35 +43,69 @@ public class AppFileController {
     @Resource
     private FileService fileService;
 
+    @Resource
+    private MediaUploadService mediaUploadService;
+
     @PostMapping("/upload")
     @Operation(summary = "上传文件")
     @Parameter(name = "file", description = "文件附件", required = true,
             schema = @Schema(type = "string", format = "binary"))
-    @PermitAll
+    @RateLimiter(count = 20, time = 1, timeUnit = TimeUnit.MINUTES,
+            keyResolver = UserRateLimiterKeyResolver.class, message = "图片上传过于频繁，请稍后再试")
     public CommonResult<String> uploadFile(@Valid AppFileUploadReqVO uploadReqVO) throws Exception {
         MultipartFile file = uploadReqVO.getFile();
         byte[] content = IoUtil.readBytes(file.getInputStream());
-        return success(fileService.createFile(content, file.getOriginalFilename(),
-                uploadReqVO.getDirectory(), file.getContentType()));
+        return success(fileService.createImage(content, file.getOriginalFilename(), uploadReqVO.getDirectory()));
     }
 
-    @GetMapping("/presigned-url")
-    @Operation(summary = "获取文件预签名地址（上传）", description = "模式二：前端上传文件：用于前端直接上传七牛、阿里云 OSS 等文件存储器")
-    @Parameters({
-            @Parameter(name = "name", description = "文件名称", required = true),
-            @Parameter(name = "directory", description = "文件目录")
-    })
-    public CommonResult<FilePresignedUrlRespVO> getFilePresignedUrl(
-            @RequestParam("name") String name,
-            @RequestParam(value = "directory", required = false) String directory) {
-        return success(fileService.presignPutUrl(name, directory));
+    @GetMapping("/upload-capabilities")
+    @Operation(summary = "获取媒体上传能力")
+    public CommonResult<MediaUploadCapabilitiesRespVO> getUploadCapabilities() {
+        return success(mediaUploadService.getCapabilities());
     }
 
-    @PostMapping("/create")
-    @Operation(summary = "创建文件", description = "模式二：前端上传文件：配合 presigned-url 接口，记录上传了上传的文件")
+    @PostMapping("/upload-ticket")
+    @Operation(summary = "申请媒体预签名直传票据")
+    @RateLimiter(count = 20, time = 1, timeUnit = TimeUnit.MINUTES,
+            keyResolver = UserRateLimiterKeyResolver.class, message = "图片上传过于频繁，请稍后再试")
+    public CommonResult<MediaUploadTicketRespVO> issueUploadTicket(
+            @Valid @RequestBody MediaUploadTicketReqVO request) {
+        return success(mediaUploadService.issueTicket(request));
+    }
+
+    @PostMapping("/upload-ticket/{ticketKey}/finalize")
+    @Operation(summary = "确认媒体预签名直传")
+    public CommonResult<String> finalizeUploadTicket(@PathVariable("ticketKey") String ticketKey) {
+        return success(mediaUploadService.finalizeTicket(ticketKey));
+    }
+
+    @GetMapping("/assets/{assetKey}")
     @PermitAll
-    public CommonResult<Long> createFile(@Valid @RequestBody FileCreateReqVO createReqVO) {
-        return success(fileService.createFile(createReqVO));
+    @Operation(summary = "读取稳定媒体资产")
+    public void getMediaAsset(HttpServletRequest request, HttpServletResponse response,
+                              @PathVariable("assetKey") String assetKey,
+                              @RequestParam(value = "variant", required = false) String variant) throws Exception {
+        MediaAssetContent asset = fileService.getMediaAsset(assetKey, variant);
+        String sha256 = StrUtil.blankToDefault(asset.file().getSha256(), DigestUtil.sha256Hex(asset.content()));
+        String etag = '"' + sha256 + '"';
+        if (etag.equals(request.getHeader("If-None-Match"))) {
+            response.setStatus(HttpServletResponse.SC_NOT_MODIFIED);
+            return;
+        }
+        response.setContentType(asset.file().getType());
+        response.setContentLengthLong(asset.content().length);
+        response.setHeader("ETag", etag);
+        if (Integer.valueOf(10).equals(asset.file().getVisibility())) {
+            response.setHeader("Cache-Control", "private, no-store");
+            response.setHeader("Vary", "Authorization");
+        } else {
+            response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        String filename = StrUtil.blankToDefault(asset.file().getName(), asset.file().getAssetKey());
+        String encodedName = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
+        response.setHeader("Content-Disposition", "inline; filename*=UTF-8''" + encodedName);
+        response.getOutputStream().write(asset.content());
     }
 
 }

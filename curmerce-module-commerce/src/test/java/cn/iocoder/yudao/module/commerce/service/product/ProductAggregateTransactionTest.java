@@ -19,6 +19,7 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
 import cn.iocoder.yudao.module.commerce.enums.merchant.MerchantAuditStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Import;
@@ -45,6 +46,7 @@ class ProductAggregateTransactionTest extends BaseDbUnitTest {
     @MockitoBean private MerchantAccessService merchantAccessService;
     @MockitoBean private ProductCategoryService categoryService;
     @MockitoBean private ProductOperationLogService operationLogService;
+    @MockitoBean private FileApi fileApi;
 
     private MerchantDO merchant;
     private StoreDO store;

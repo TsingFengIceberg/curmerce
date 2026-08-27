@@ -54,7 +54,27 @@ management:
     web:
       base-path: /actuator
       exposure:
-        include: health,info
+        include: health,info,metrics
+
+curmerce:
+  media:
+    max-upload-size: ${CURMERCE_MEDIA_MAX_UPLOAD_SIZE:10MB}
+    derivatives-enabled: ${CURMERCE_MEDIA_DERIVATIVES_ENABLED:true}
+    clam-av:
+      enabled: ${CURMERCE_MEDIA_CLAMAV_ENABLED:false}
+      fail-closed: ${CURMERCE_MEDIA_CLAMAV_FAIL_CLOSED:true}
+      host: ${CURMERCE_MEDIA_CLAMAV_HOST:127.0.0.1}
+      port: ${CURMERCE_MEDIA_CLAMAV_PORT:53310}
+    imgproxy:
+      enabled: ${CURMERCE_MEDIA_IMGPROXY_ENABLED:false}
+      endpoint: ${CURMERCE_MEDIA_IMGPROXY_ENDPOINT:http://127.0.0.1:58081}
+      key-hex: ${CURMERCE_MEDIA_IMGPROXY_KEY:}
+      salt-hex: ${CURMERCE_MEDIA_IMGPROXY_SALT:}
+    moderation:
+      enabled: ${CURMERCE_MEDIA_MODERATION_ENABLED:false}
+      endpoint: ${CURMERCE_MEDIA_MODERATION_ENDPOINT:}
+      bearer-token: ${CURMERCE_MEDIA_MODERATION_TOKEN:}
+      fail-closed: ${CURMERCE_MEDIA_MODERATION_FAIL_CLOSED:true}
 
 logging:
   file:

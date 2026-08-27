@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.infra.dal.dataobject.file.FileDO;
 import jakarta.validation.constraints.NotEmpty;
 
 import java.util.List;
+import java.util.Collection;
 
 /**
  * 文件 Service 接口
@@ -36,6 +37,10 @@ public interface FileService {
     String createFile(@NotEmpty(message = "文件内容不能为空") byte[] content,
                       String name, String directory, String type);
 
+    /** Validates and stores a user-facing image, returning a storage-independent asset URL. */
+    String createImage(@NotEmpty(message = "文件内容不能为空") byte[] content,
+                       String name, String directory);
+
     /**
      * 生成文件预签名地址信息，用于上传
      *
@@ -62,6 +67,15 @@ public interface FileService {
      */
     Long createFile(FileCreateReqVO createReqVO);
     FileDO getFile(Long id);
+
+    MediaAssetContent getMediaAsset(String assetKey, String variantName) throws Exception;
+
+    MediaAssetContent getManagedMediaAsset(Long id, String variantName) throws Exception;
+
+    void replaceFileReferences(String businessType, String businessId, String fieldName,
+                               Collection<String> urls);
+
+    int cleanOrphanAssets();
 
     /**
      * 删除文件

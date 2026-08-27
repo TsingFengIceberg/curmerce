@@ -15,6 +15,7 @@ import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
 import cn.iocoder.yudao.module.commerce.service.product.ProductOperationLogService;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -39,6 +40,7 @@ class PersonalListingServiceImplTest {
     @Mock private ProductMapper productMapper;
     @Mock private ProductSkuMapper skuMapper;
     @Mock private ProductOperationLogService operationLogService;
+    @Mock private FileApi fileApi;
     @InjectMocks private PersonalListingServiceImpl service;
 
     @Test

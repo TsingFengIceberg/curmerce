@@ -40,6 +40,11 @@ public interface FileClient {
      */
     byte[] getContent(String path) throws Exception;
 
+    default FileObjectMetadata getMetadata(String path) throws Exception {
+        byte[] content = getContent(path);
+        return content == null ? null : new FileObjectMetadata(content.length, null, null);
+    }
+
     // ========== 文件签名，目前仅 S3 支持 ==========
 
     /**
@@ -50,6 +55,14 @@ public interface FileClient {
      */
     default String presignPutUrl(String path) {
         throw new UnsupportedOperationException("不支持的操作");
+    }
+
+    default String presignPutUrl(String path, String contentType, long contentLength, int expirationSeconds) {
+        throw new UnsupportedOperationException("不支持的操作");
+    }
+
+    default boolean supportsPresignedUpload() {
+        return false;
     }
 
     /**

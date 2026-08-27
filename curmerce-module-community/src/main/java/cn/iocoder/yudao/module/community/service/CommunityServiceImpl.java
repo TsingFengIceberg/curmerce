@@ -29,6 +29,7 @@ import cn.iocoder.yudao.module.commerce.controller.app.catalog.vo.PublicProductS
 import cn.iocoder.yudao.module.commerce.service.catalog.PublicCatalogService;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
@@ -54,6 +55,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Resource(name = "communityReportMapper") private CommunityReportMapper reportMapper;
     @Resource private MemberUserApi memberUserApi;
     @Resource private PublicCatalogService catalogService;
+    @Resource private FileApi fileApi;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -65,6 +67,7 @@ public class CommunityServiceImpl implements CommunityService {
                 .setContent(content.content()).setMediaUrls(content.mediaUrls())
                 .setStatus(CommunityPostStatusEnum.DRAFT.getStatus()).setLikeCount(0).setFavoriteCount(0).setCommentCount(0);
         postMapper.insert(post);
+        fileApi.replaceFileReferences("community_post", post.getId().toString(), "media", content.mediaUrls());
         replaceRelations(post.getId(), products, req.getTopics());
         return post.getId();
     }
@@ -85,6 +88,7 @@ public class CommunityServiceImpl implements CommunityService {
             throw exception(POST_STATE_INVALID);
         }
         replaceRelations(req.getId(), products, req.getTopics());
+        fileApi.replaceFileReferences("community_post", req.getId().toString(), "media", content.mediaUrls());
     }
 
     @Override

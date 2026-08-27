@@ -27,6 +27,7 @@ import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -55,6 +56,7 @@ public class ProductServiceImpl implements ProductService {
     @Resource private ProductCategoryService categoryService;
     @Resource private MerchantAccessService merchantAccessService;
     @Resource private ProductOperationLogService operationLogService;
+    @Resource private FileApi fileApi;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -83,6 +85,7 @@ public class ProductServiceImpl implements ProductService {
             throw exception(PRODUCT_CODE_DUPLICATE);
         }
         insertSkus(product, context.merchant().getId(), reqVO.getSkus());
+        bindProductMedia(product.getId(), product.getMainImageUrl(), product.getImageUrls());
         operationLogService.record(product.getId(), getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
                 "CREATE", null, product.getAuditStatus(), null, product.getSaleStatus(), "创建商品草稿");
         return product.getId();
@@ -155,10 +158,13 @@ public class ProductServiceImpl implements ProductService {
             } catch (DuplicateKeyException ex) {
                 throw exception(PRODUCT_SKU_CODE_DUPLICATE);
             }
+            bindSkuMedia(sku);
         }
         List<Long> omittedIds = currentSkus.stream().map(ProductSkuDO::getId)
                 .filter(id -> !retainedIds.contains(id)).toList();
         skuMapper.deleteByIdsAndOwnership(omittedIds, current.getId(), context.merchant().getId());
+        omittedIds.forEach(id -> fileApi.replaceFileReferences("commerce_product_sku", id.toString(), "image", List.of()));
+        bindProductMedia(current.getId(), update.getMainImageUrl(), update.getImageUrls());
         operationLogService.record(current.getId(), getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
                 "UPDATE", current.getAuditStatus(), current.getAuditStatus(), current.getSaleStatus(), current.getSaleStatus(), "更新商品资料与 SKU");
     }
@@ -418,11 +424,25 @@ public class ProductServiceImpl implements ProductService {
     private void insertSkus(ProductDO product, Long merchantId, List<ProductSkuSaveReqVO> requests) {
         for (ProductSkuSaveReqVO request : requests) {
             try {
-                skuMapper.insert(toSku(request, product.getId(), merchantId));
+                ProductSkuDO sku = toSku(request, product.getId(), merchantId);
+                skuMapper.insert(sku);
+                bindSkuMedia(sku);
             } catch (DuplicateKeyException ex) {
                 throw exception(PRODUCT_SKU_CODE_DUPLICATE);
             }
         }
+    }
+
+    private void bindProductMedia(Long productId, String mainImageUrl, List<String> imageUrls) {
+        List<String> urls = new ArrayList<>();
+        if (StrUtil.isNotBlank(mainImageUrl)) urls.add(mainImageUrl);
+        if (imageUrls != null) urls.addAll(imageUrls);
+        fileApi.replaceFileReferences("commerce_product", productId.toString(), "images", urls);
+    }
+
+    private void bindSkuMedia(ProductSkuDO sku) {
+        fileApi.replaceFileReferences("commerce_product_sku", sku.getId().toString(), "image",
+                StrUtil.isBlank(sku.getImageUrl()) ? List.of() : List.of(sku.getImageUrl()));
     }
 
     private ProductSkuDO toSku(ProductSkuSaveReqVO request, Long productId, Long merchantId) {

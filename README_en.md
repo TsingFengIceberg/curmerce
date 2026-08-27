@@ -27,6 +27,7 @@ The project has moved beyond foundation evaluation into a **runnable modular-mon
 - **Basic auctions**: session lifecycle, starting price and minimum increments, idempotent bidding, winner settlement, single-order creation, payment-timeout failure, and reuse of the standard fulfillment and refund lifecycle.
 - **Community foundation**: text posts with optional images, drafts and publishing, topics, search, comments and replies, likes, favorites, following feeds, reports and administrator moderation, plus optional post-product associations.
 - **Reliability baseline**: database constraints, idempotency keys for critical operations, duplicate payment and refund callback protection, order-state guards, inventory restoration, reconciliation queries, and local event delivery through Transactional Outbox and Redis Stream.
+- **Media asset foundation**: authenticated uploads, real-image validation, rate limits and user quotas, SHA-256 deduplication, stable asset URLs, business references and delayed orphan cleanup, private access, antivirus scanning, asynchronous WebP/AVIF variants, content moderation, administrator governance, and resumable object-storage migration.
 - **Acceptance frontend**: basic operational pages for buyers, individual sellers, merchants, and platform administrators across the current primary workflows.
 
 ## Current Architecture
@@ -56,11 +57,13 @@ The local environment requires JDK 21, Maven, Node.js/npm, MySQL, and Redis. Fol
 - [Local basic demo](./docs/local-basic-demo.md)
 - [Basic acceptance checklist](./docs/basic-acceptance-checklist.md)
 - [Order and refund contract](./docs/commerce-order-refund-contract.md)
+- [Media architecture and runbook](./docs/media-architecture.md)
+- [Local MinIO, ClamAV, and imgproxy deployment](./deploy/media/README.md)
 
 Core backend tests:
 
 ```bash
-mvn -pl curmerce-module-commerce,curmerce-module-community -am -Dtest='*Test' -Dsurefire.failIfNoSpecifiedTests=false test
+mvn -pl yudao-module-infra,curmerce-module-commerce,curmerce-module-community -am -Dtest='*Test' -Dsurefire.failIfNoSpecifiedTests=false test
 ```
 
 Frontend production build:
@@ -79,6 +82,7 @@ Do not run `next dev` and `next build` against the same `.next` directory concur
 - The buyer-side limited-release page currently purchases one item and does not yet provide multi-SKU or quantity selection; the merchant side already uses product and SKU selectors.
 - Community posts may be published without images or products. Product association still uses identifier input and needs a user-facing search selector.
 - The community currently provides a basic chronological feed without recommendation algorithms, a notification center, deeply nested comments, or large-scale asynchronous counters.
+- Media content moderation is disabled by default and requires an explicitly configured compatible HTTP moderation service. ClamAV, imgproxy, and MinIO are also optional local capabilities. Database file storage remains the minimum runnable mode, while large files and production-like deployments should use private object storage.
 - Agent capabilities, Kafka, Elasticsearch, Spring Cloud service extraction, and production-grade observability remain future work.
 
 ## Next Directions

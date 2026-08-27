@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.member.controller.admin.user.vo.MemberUserPageReq
 import cn.iocoder.yudao.module.member.controller.app.user.vo.MemberProfileUpdateReqVO;
 import cn.iocoder.yudao.module.member.dal.dataobject.user.MemberUserDO;
 import cn.iocoder.yudao.module.member.dal.mysql.user.MemberUserMapper;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.member.enums.ErrorCodeConstants.*;
@@ -23,6 +25,7 @@ import static cn.iocoder.yudao.module.member.enums.ErrorCodeConstants.*;
 public class MemberUserServiceImpl implements MemberUserService {
     @Resource private MemberUserMapper userMapper;
     @Resource private PasswordEncoder passwordEncoder;
+    @Resource private FileApi fileApi;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -59,9 +62,14 @@ public class MemberUserServiceImpl implements MemberUserService {
         return encodedPassword != null && passwordEncoder.matches(rawPassword, encodedPassword);
     }
     @Override public void updateLogin(Long id, String loginIp) { userMapper.updateLogin(id, loginIp, LocalDateTime.now()); }
-    @Override public void updateProfile(Long id, MemberProfileUpdateReqVO reqVO) {
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateProfile(Long id, MemberProfileUpdateReqVO reqVO) {
         requireActiveUser(id);
-        if (userMapper.updateProfile(id, StrUtil.trim(reqVO.getNickname()), StrUtil.trim(reqVO.getAvatar()),
+        String avatar = StrUtil.trim(reqVO.getAvatar());
+        if (userMapper.updateProfile(id, StrUtil.trim(reqVO.getNickname()), avatar,
                 StrUtil.trim(reqVO.getEmail()), reqVO.getSex()) != 1) throw exception(USER_NOT_EXISTS);
+        fileApi.replaceFileReferences("member_user", id.toString(), "avatar",
+                StrUtil.isBlank(avatar) ? List.of() : List.of(avatar));
     }
 }

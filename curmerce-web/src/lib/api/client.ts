@@ -124,6 +124,18 @@ export async function adminMultipartApi<T>(path: string, formData: FormData): Pr
   return adminApi<T>(path, { method: "POST", body: formData });
 }
 
+export async function adminBlobApi(path: string): Promise<Blob> {
+  const headers = new Headers({ Accept: "image/avif,image/webp,image/*,*/*", "tenant-id": TENANT_ID });
+  const accessToken = getAdminAccessToken();
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  const response = await fetch(toAbsoluteUrl(`${ADMIN_API_PREFIX}${path}`), { headers, cache: "no-store" });
+  if (!response.ok) {
+    if (response.status === 401) rememberUnauthorizedReturnTo("admin");
+    throw new CurmerceApiError(`图片预览失败（HTTP ${response.status}）`, response.status);
+  }
+  return response.blob();
+}
+
 export function jsonBody(value: unknown): BodyInit {
   return JSON.stringify(value);
 }

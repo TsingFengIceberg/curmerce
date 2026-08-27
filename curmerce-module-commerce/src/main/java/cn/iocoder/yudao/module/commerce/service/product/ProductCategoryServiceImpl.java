@@ -9,6 +9,7 @@ import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.category.Pro
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductCategoryDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductCategoryMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
 
     @Resource private ProductCategoryMapper categoryMapper;
     @Resource private ProductMapper productMapper;
+    @Resource private FileApi fileApi;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -50,6 +52,7 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
                     .setSort(reqVO.getSort() == null ? 0 : reqVO.getSort())
                     .setStatus(CommonStatusEnum.DISABLE.getStatus());
             categoryMapper.insert(category);
+            bindCategoryImage(category.getId(), category.getImageUrl());
             return category.getId();
         } catch (DuplicateKeyException ex) {
             throw exception(PRODUCT_CATEGORY_CODE_DUPLICATE);
@@ -73,6 +76,12 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
         if (updated != 1) {
             throw exception(PRODUCT_CATEGORY_STATE_CONFLICT);
         }
+        bindCategoryImage(reqVO.getId(), reqVO.getImageUrl());
+    }
+
+    private void bindCategoryImage(Long categoryId, String imageUrl) {
+        fileApi.replaceFileReferences("commerce_product_category", categoryId.toString(), "image",
+                StrUtil.isBlank(imageUrl) ? List.of() : List.of(imageUrl.trim()));
     }
 
     @Override

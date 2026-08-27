@@ -70,6 +70,26 @@ public class S3FileClientTest {
     }
 
     @Test
+    public void testPresignPutUrl_constrainsContentHeadersAndExpiry() {
+        S3FileClientConfig config = new S3FileClientConfig();
+        config.setAccessKey("test-access");
+        config.setAccessSecret("test-secret");
+        config.setBucket("curmerce-media");
+        config.setDomain("http://127.0.0.1:59000/curmerce-media");
+        config.setEndpoint("http://127.0.0.1:59000");
+        config.setEnablePathStyleAccess(true);
+        config.setEnablePublicAccess(false);
+        S3FileClient client = new S3FileClient(1L, config);
+        client.init();
+
+        String result = client.presignPutUrl("uploads/test.png", "image/png", 1234, 300);
+
+        assertTrue(result.contains("X-Amz-Expires=300"));
+        assertTrue(result.contains("X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost"));
+        assertTrue(client.supportsPresignedUpload());
+    }
+
+    @Test
     @Disabled // MinIO，如果要集成测试，可以注释本行
     public void testMinIO() throws Exception {
         S3FileClientConfig config = new S3FileClientConfig();
@@ -122,10 +142,8 @@ public class S3FileClientTest {
     public void testQiniu() throws Exception {
         S3FileClientConfig config = new S3FileClientConfig();
         // 配置成你自己的
-//        config.setAccessKey(System.getenv("QINIU_ACCESS_KEY"));
-//        config.setAccessSecret(System.getenv("QINIU_SECRET_KEY"));
-        config.setAccessKey("b7yvuhBSAGjmtPhMFcn9iMOxUOY_I06cA_p0ZUx8");
-        config.setAccessSecret("kXM1l5ia1RvSX3QaOEcwI3RLz3Y2rmNszWonKZtP");
+        config.setAccessKey(System.getenv("QINIU_ACCESS_KEY"));
+        config.setAccessSecret(System.getenv("QINIU_SECRET_KEY"));
         config.setBucket("ruoyi-vue-pro");
         config.setDomain("http://test.yudao.iocoder.cn"); // 如果有自定义域名，则可以设置。http://static.yudao.iocoder.cn
         config.setEnablePathStyleAccess(false);
@@ -141,10 +159,8 @@ public class S3FileClientTest {
     public void testQiniu_privateGet() {
         S3FileClientConfig config = new S3FileClientConfig();
         // 配置成你自己的
-//        config.setAccessKey(System.getenv("QINIU_ACCESS_KEY"));
-//        config.setAccessSecret(System.getenv("QINIU_SECRET_KEY"));
-        config.setAccessKey("b7yvuhBSAGjmtPhMFcn9iMOxUOY_I06cA_p0ZUx8");
-        config.setAccessSecret("kXM1l5ia1RvSX3QaOEcwI3RLz3Y2rmNszWonKZtP");
+        config.setAccessKey(System.getenv("QINIU_ACCESS_KEY"));
+        config.setAccessSecret(System.getenv("QINIU_SECRET_KEY"));
         config.setBucket("ruoyi-vue-pro-private");
         config.setDomain("http://t151glocd.hn-bkt.clouddn.com"); // 如果有自定义域名，则可以设置。http://static.yudao.iocoder.cn
         config.setEnablePathStyleAccess(false);

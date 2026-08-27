@@ -53,3 +53,23 @@ statements. Do not run it for normal development or after a partial migration;
 MySQL DDL auto-commits. If a statement fails after earlier statements applied,
 inspect the live schema and prepare a forward repair after review instead of
 rerunning or dropping tables.
+
+## Media asset migration
+
+`migrations/20260826-22-media-asset-foundation.sql` adds stable asset metadata,
+business references, upload quotas, direct-upload tickets, moderation state,
+and the persistent object-storage migration ledger. Back up both `infra_file`
+and `infra_file_content` before running it. All four preflight table names and
+all listed `infra_file` columns must be absent; a returned row is a stop
+condition because MySQL DDL auto-commits.
+
+Apply every prior numbered migration first, then run the post-apply column and
+index queries in the same session. The rollback companion is only a review aid
+for a disposable database. It deliberately leaves destructive statements
+commented and requires references, derived variants, quota usage, upload
+tickets, and migration audit records to be empty.
+
+Object bytes are migrated separately through the authenticated media
+administration API described in `docs/media-architecture.md`. That workflow is
+dry-run and non-destructive by default, verifies SHA-256 after copying, and
+never removes the database source automatically.

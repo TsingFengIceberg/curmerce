@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.commerce.controller.admin.product.vo.category.Pro
 import cn.iocoder.yudao.module.commerce.dal.dataobject.product.ProductCategoryDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductCategoryMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -28,6 +29,7 @@ class ProductCategoryServiceImplTest {
 
     @Mock private ProductCategoryMapper categoryMapper;
     @Mock private ProductMapper productMapper;
+    @Mock private FileApi fileApi;
     @InjectMocks private ProductCategoryServiceImpl service;
 
     @Test

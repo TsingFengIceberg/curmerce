@@ -24,6 +24,7 @@ import cn.iocoder.yudao.module.commerce.controller.app.catalog.vo.PublicProductS
 import cn.iocoder.yudao.module.commerce.service.catalog.PublicCatalogService;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -52,6 +53,7 @@ class CommunityServiceImplTest {
     @Mock private CommunityReportMapper reportMapper;
     @Mock private MemberUserApi memberUserApi;
     @Mock private PublicCatalogService catalogService;
+    @Mock private FileApi fileApi;
     @InjectMocks private CommunityServiceImpl service;
 
     @Test

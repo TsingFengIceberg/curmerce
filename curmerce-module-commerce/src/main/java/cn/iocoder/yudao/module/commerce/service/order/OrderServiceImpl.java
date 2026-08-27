@@ -45,6 +45,7 @@ import cn.iocoder.yudao.module.member.api.address.MemberAddressApi;
 import cn.iocoder.yudao.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,6 +80,7 @@ public class OrderServiceImpl implements OrderService {
     @Resource private CommerceReleaseItemMapper releaseItemMapper;
     @Resource private CommerceReleasePurchaseMapper releasePurchaseMapper;
     @Resource private CommerceOutboxEventAppender outboxEventAppender;
+    @Resource private FileApi fileApi;
     @org.springframework.beans.factory.annotation.Value("${curmerce.order.payment-timeout-minutes:30}")
     private long paymentTimeoutMinutes = DEFAULT_PAYMENT_TIMEOUT_MINUTES;
 
@@ -175,6 +177,12 @@ public class OrderServiceImpl implements OrderService {
                     .setQuantity(line.cartItem().getQuantity()).setTotalAmount(line.lineTotal());
             orderItemMapper.insert(item);
         }
+        List<String> orderMedia = new ArrayList<>();
+        for (CheckoutLine line : lines) {
+            if (StrUtil.isNotBlank(line.product().getMainImageUrl())) orderMedia.add(line.product().getMainImageUrl());
+            if (StrUtil.isNotBlank(line.sku().getImageUrl())) orderMedia.add(line.sku().getImageUrl());
+        }
+        fileApi.replaceFileReferences("commerce_order", order.getId().toString(), "item_images", orderMedia);
         cartItemMapper.deleteOwned(userId, lines.stream().map(line -> line.cartItem().getId()).toList());
         return toCreateResponse(order);
     }
@@ -230,6 +238,10 @@ public class OrderServiceImpl implements OrderService {
                 .setProductName(product.getName()).setProductImageUrl(product.getMainImageUrl()).setSkuCode(sku.getCode())
                 .setSpecificationValues(sku.getSpecificationValues()).setSkuImageUrl(sku.getImageUrl())
                 .setPrice(amount).setQuantity(quantity).setTotalAmount(multiplyAmount(amount, quantity)));
+        List<String> orderMedia = new ArrayList<>();
+        if (StrUtil.isNotBlank(product.getMainImageUrl())) orderMedia.add(product.getMainImageUrl());
+        if (StrUtil.isNotBlank(sku.getImageUrl())) orderMedia.add(sku.getImageUrl());
+        fileApi.replaceFileReferences("commerce_order", order.getId().toString(), "item_images", orderMedia);
         return toCreateResponse(order);
     }
 

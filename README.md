@@ -27,6 +27,7 @@ Curmerce 是一个面向兴趣消费场景的社区内容驱动型多模式交�
 - **基础拍卖**：场次状态、起拍价和最小加价、出价幂等、胜者结算、唯一订单、支付超时失败，以及复用普通订单履约和退款流程。
 - **社区基础**：可选图片的文字帖子、草稿与发布、话题、搜索、评论与回复、点赞、收藏、关注内容流、举报和管理员审核，以及可选的帖子商品关联。
 - **可靠性基础**：数据库约束、关键操作幂等键、支付和退款重复回调保护、订单状态约束、库存恢复、对账查询，以及基于 Transactional Outbox 和 Redis Stream 的本地事件投递。
+- **媒体资产基础**：认证上传、真实图片校验、限流与用户配额、SHA-256 去重、稳定资产地址、业务引用和延迟孤立清理、私有访问、病毒扫描、异步 WebP/AVIF 衍生图、内容审核、管理员治理，以及可恢复的对象存储迁移。
 - **验收前端**：买家、个人卖家、商家和平台管理员的基础操作页面，覆盖当前主要业务闭环。
 
 ## 当前架构
@@ -56,11 +57,13 @@ MySQL 是业务事实来源。Redis 当前用于框架能力和本地事件流�
 - [本地基础演示](./docs/local-basic-demo.md)
 - [基础验收清单](./docs/basic-acceptance-checklist.md)
 - [订单与退款契约](./docs/commerce-order-refund-contract.md)
+- [媒体架构与运行手册](./docs/media-architecture.md)
+- [MinIO、ClamAV 与 imgproxy 本地部署](./deploy/media/README.md)
 
 后端核心测试：
 
 ```bash
-mvn -pl curmerce-module-commerce,curmerce-module-community -am -Dtest='*Test' -Dsurefire.failIfNoSpecifiedTests=false test
+mvn -pl yudao-module-infra,curmerce-module-commerce,curmerce-module-community -am -Dtest='*Test' -Dsurefire.failIfNoSpecifiedTests=false test
 ```
 
 前端生产构建：
@@ -79,6 +82,7 @@ npm run build
 - 限时发售买家端当前固定购买一件，尚未提供多 SKU 和数量选择；商家端已经使用商品与 SKU 选择器。
 - 社区帖子允许不带图片和商品发布；商品关联暂时使用编号输入，后续需要改为面向用户的搜索选择器。
 - 社区目前提供基础时间流，不包含推荐算法、通知中心、复杂楼中楼或大规模异步计数。
+- 媒体内容审核默认关闭，需要显式配置兼容的 HTTP 审核服务；ClamAV、imgproxy 和 MinIO 也是可选的本地部署能力。数据库文件存储仍可作为最低运行方式，但大文件和正式环境应使用私有对象存储。
 - Agent、Kafka、Elasticsearch、Spring Cloud 服务拆分和生产级可观测性仍属于后续阶段。
 
 ## 后续方向

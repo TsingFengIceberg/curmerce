@@ -34,6 +34,26 @@ public interface ErrorCodeConstants {
     ErrorCode FILE_NOT_EXISTS = new ErrorCode(1_001_003_001, "文件不存在");
     ErrorCode FILE_IS_EMPTY = new ErrorCode(1_001_003_002, "文件为空");
     ErrorCode FILE_PATH_INVALID = new ErrorCode(1_001_003_003, "文件路径不正确");
+    ErrorCode FILE_TYPE_NOT_ALLOWED = new ErrorCode(1_001_003_004, "仅允许上传真实的 JPEG、PNG 或 WebP 图片");
+    ErrorCode FILE_UPLOAD_TOO_LARGE = new ErrorCode(1_001_003_005, "图片不能超过 {} MB");
+    ErrorCode FILE_IMAGE_DIMENSIONS_INVALID = new ErrorCode(1_001_003_006,
+            "图片尺寸不能超过 {}x{}，且总像素不能超过 {}");
+    ErrorCode FILE_SCAN_REJECTED = new ErrorCode(1_001_003_007, "图片安全扫描未通过");
+    ErrorCode FILE_ASSET_NOT_READY = new ErrorCode(1_001_003_008, "图片尚未处理完成或已被隔离");
+    ErrorCode FILE_ASSET_FORBIDDEN = new ErrorCode(1_001_003_009, "无权访问该图片");
+    ErrorCode FILE_ASSET_IN_USE = new ErrorCode(1_001_003_010, "图片仍被业务数据引用，不能删除");
+    ErrorCode FILE_UPLOAD_LOGIN_REQUIRED = new ErrorCode(1_001_003_011, "登录后才能上传图片");
+    ErrorCode FILE_UPLOAD_QUOTA_EXCEEDED = new ErrorCode(1_001_003_012,
+            "图片上传额度不足，请检查每日上传次数、流量或总存储空间");
+    ErrorCode FILE_DIRECT_UPLOAD_UNAVAILABLE = new ErrorCode(1_001_003_013, "当前文件存储不支持预签名直传");
+    ErrorCode FILE_UPLOAD_TICKET_NOT_FOUND = new ErrorCode(1_001_003_014, "上传票据不存在");
+    ErrorCode FILE_UPLOAD_TICKET_FORBIDDEN = new ErrorCode(1_001_003_015, "无权使用该上传票据");
+    ErrorCode FILE_UPLOAD_TICKET_EXPIRED = new ErrorCode(1_001_003_016, "上传票据已过期，请重新选择图片");
+    ErrorCode FILE_UPLOAD_TICKET_STATE_INVALID = new ErrorCode(1_001_003_017, "上传票据当前状态不允许确认");
+    ErrorCode FILE_DIRECT_UPLOAD_MISSING = new ErrorCode(1_001_003_018, "尚未检测到已上传对象，请完成上传后重试");
+    ErrorCode FILE_DIRECT_UPLOAD_MISMATCH = new ErrorCode(1_001_003_019, "实际上传图片与申请的大小或类型不一致");
+    ErrorCode FILE_SCAN_UNAVAILABLE = new ErrorCode(1_001_003_020, "图片安全扫描暂时不可用，请稍后重试");
+    ErrorCode FILE_ASSET_STATE_INVALID = new ErrorCode(1_001_003_021, "图片当前状态不允许执行该操作");
 
     // ========== 代码生成器 1-001-004-000 ==========
     ErrorCode CODEGEN_TABLE_EXISTS = new ErrorCode(1_001_004_002, "表定义已经存在");

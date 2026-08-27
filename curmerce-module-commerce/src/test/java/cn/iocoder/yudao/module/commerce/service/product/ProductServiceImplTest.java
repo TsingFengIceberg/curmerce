@@ -23,6 +23,7 @@ import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -50,6 +51,7 @@ class ProductServiceImplTest {
     @Mock private ProductCategoryService categoryService;
     @Mock private MerchantAccessService merchantAccessService;
     @Mock private ProductOperationLogService operationLogService;
+    @Mock private FileApi fileApi;
     @InjectMocks private ProductServiceImpl service;
 
     @Test
@@ -63,7 +65,11 @@ class ProductServiceImplTest {
             product.setId(10L);
             return 1;
         });
-        when(skuMapper.insert((ProductSkuDO) any(ProductSkuDO.class))).thenAnswer(invocation -> 1);
+        when(skuMapper.insert((ProductSkuDO) any(ProductSkuDO.class))).thenAnswer(invocation -> {
+            ProductSkuDO sku = invocation.getArgument(0);
+            sku.setId(11L);
+            return 1;
+        });
 
         ProductCreateOwnReqVO request = productRequest().setCode("product_one");
         assertEquals(10L, service.createOwnProduct(request));
