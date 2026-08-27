@@ -14,4 +14,5 @@ public interface ErrorCodeConstants {
     ErrorCode FOLLOW_SELF_INVALID = new ErrorCode(1_024_001_009, "不能关注自己");
     ErrorCode REPORT_INVALID = new ErrorCode(1_024_001_010, "举报内容无效");
     ErrorCode REPORT_STATE_INVALID = new ErrorCode(1_024_001_011, "举报状态无效");
+    ErrorCode CORE_SERVICE_UNAVAILABLE = new ErrorCode(1_024_001_012, "核心服务暂时不可用，请稍后重试");
 }

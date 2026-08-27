@@ -1,0 +1,105 @@
+spring:
+  application:
+    name: curmerce-community-service
+  main:
+    allow-circular-references: true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        ip: ${NACOS_DISCOVERY_IP:127.0.0.1}
+        register-enabled: ${NACOS_DISCOVERY_ENABLED:true}
+  datasource:
+    dynamic:
+      primary: master
+      strict: true
+      druid:
+        initial-size: 1
+        min-idle: 1
+        max-active: 8
+        max-wait: 60000
+        validation-query: SELECT 1
+        test-while-idle: true
+      datasource:
+        master:
+          name: ${MYSQL_DATABASE:curmerce}
+          url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:13306}/${MYSQL_DATABASE:curmerce}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+          username: ${MYSQL_USER:curmerce}
+          password: ${MYSQL_PASSWORD}
+
+server:
+  address: 127.0.0.1
+  port: ${CURMERCE_COMMUNITY_PORT:48083}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: NONE
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+    banner: false
+  type-aliases-package: cn.iocoder.yudao.module.community.dal.dataobject
+
+mybatis-plus-join:
+  banner: false
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+
+knife4j:
+  enable: true
+
+yudao:
+  info:
+    version: 0.2.0-SNAPSHOT
+    base-package: cn.iocoder.yudao
+  security:
+    mock-enable: false
+    permit-all-urls:
+      - /actuator/health
+  web:
+    admin-ui:
+      url: http://127.0.0.1:48082
+  access-log:
+    enable: false
+  api-encrypt:
+    enable: false
+  tenant:
+    enable: false
+  swagger:
+    title: Curmerce Community API
+    description: Independently deployable community service
+    author: Curmerce
+    version: ${yudao.info.version}
+    url: http://127.0.0.1:48083
+    email: devnull@localhost
+    license: MIT
+    license-url: https://opensource.org/licenses/MIT
+
+curmerce:
+  cloud:
+    core:
+      base-url: ${CURMERCE_CORE_BASE_URL:http://127.0.0.1:48080}
+      internal-token: ${CURMERCE_INTERNAL_TOKEN:${CURMERCE_OAUTH_CLIENT_SECRET:}}
+      connect-timeout: ${CURMERCE_CORE_CONNECT_TIMEOUT:1s}
+      read-timeout: ${CURMERCE_CORE_READ_TIMEOUT:2s}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  file:
+    name: ${CURMERCE_COMMUNITY_LOG_FILE:${user.home}/.local/state/curmerce/community-service.log}
+  pattern:
+    level: "%5p [traceId=%X{traceId:-}]"

@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: curmerce-agent-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        ip: ${NACOS_DISCOVERY_IP:127.0.0.1}
+        register-enabled: ${NACOS_DISCOVERY_ENABLED:true}
+
+server:
+  address: 127.0.0.1
+  port: ${CURMERCE_AGENT_PORT:48084}
+
+curmerce:
+  agent:
+    core-base-url: ${CURMERCE_CORE_BASE_URL:http://127.0.0.1:48080}
+    community-base-url: ${CURMERCE_COMMUNITY_BASE_URL:http://127.0.0.1:48083}
+    connect-timeout: ${CURMERCE_AGENT_CONNECT_TIMEOUT:1s}
+    read-timeout: ${CURMERCE_AGENT_READ_TIMEOUT:2s}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  file:
+    name: ${CURMERCE_AGENT_LOG_FILE:${user.home}/.local/state/curmerce/agent-service.log}

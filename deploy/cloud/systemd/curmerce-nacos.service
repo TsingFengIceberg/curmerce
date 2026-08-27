@@ -1,0 +1,20 @@
+[Unit]
+Description=Curmerce user-level Nacos registry
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/wugang/.local/share/curmerce-toolchains/nacos-3.0.3/nacos
+Environment=NACOS_HOME=/home/wugang/.local/share/curmerce-toolchains/nacos-3.0.3/nacos
+ExecStart=/home/wugang/.local/share/curmerce-toolchains/jdk-21/bin/java -Xms256m -Xmx512m -Xmn128m -Dnacos.standalone=true -Dnacos.member.list= -Dnacos.home=/home/wugang/.local/share/curmerce-toolchains/nacos-3.0.3/nacos -Dnacos.inetutils.ip-address=127.0.0.1 -Dnacos.remote.grpc.listen.ip=127.0.0.1 -Dnacos.server.main.port=8848 -Dnacos.deployment.type=server -Dnacos.core.auth.server.identity.key=curmerce-local-node -Dnacos.core.auth.server.identity.value=curmerce-loopback-registry -Dnacos.core.auth.admin.enabled=false -Dnacos.core.auth.console.enabled=false -jar /home/wugang/.local/share/curmerce-toolchains/nacos-3.0.3/nacos/target/nacos-server.jar --spring.config.additional-location=file:/home/wugang/.local/share/curmerce-toolchains/nacos-3.0.3/nacos/conf/ --logging.config=/home/wugang/.local/share/curmerce-toolchains/nacos-3.0.3/nacos/conf/nacos-logback.xml --server.address=127.0.0.1 --server.max-http-request-header-size=524288
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=60
+LimitNOFILE=65535
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

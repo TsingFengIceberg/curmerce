@@ -25,11 +25,10 @@ import cn.iocoder.yudao.module.community.dal.mysql.report.CommunityReportMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.topic.CommunityPostTopicMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.topic.CommunityTopicMapper;
 import cn.iocoder.yudao.module.community.enums.*;
-import cn.iocoder.yudao.module.commerce.controller.app.catalog.vo.PublicProductSummaryRespVO;
-import cn.iocoder.yudao.module.commerce.service.catalog.PublicCatalogService;
-import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
-import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
-import cn.iocoder.yudao.module.infra.api.file.FileApi;
+import cn.iocoder.yudao.module.community.service.integration.CommunityMediaClient;
+import cn.iocoder.yudao.module.community.service.integration.CommunityMemberClient;
+import cn.iocoder.yudao.module.community.service.integration.CommunityMemberProfile;
+import cn.iocoder.yudao.module.community.service.integration.CommunityProductClient;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
@@ -53,21 +52,21 @@ public class CommunityServiceImpl implements CommunityService {
     @Resource(name = "communityReactionMapper") private CommunityReactionMapper reactionMapper;
     @Resource(name = "communityFollowMapper") private CommunityFollowMapper followMapper;
     @Resource(name = "communityReportMapper") private CommunityReportMapper reportMapper;
-    @Resource private MemberUserApi memberUserApi;
-    @Resource private PublicCatalogService catalogService;
-    @Resource private FileApi fileApi;
+    @Resource private CommunityMemberClient memberClient;
+    @Resource private CommunityProductClient productClient;
+    @Resource private CommunityMediaClient mediaClient;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createPost(Long userId, CommunityPostCreateReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(userId);
+        memberClient.validateActiveUserForUpdate(userId);
         NormalizedContent content = normalize(req.getTitle(), req.getContent(), req.getMediaUrls());
         List<Long> products = validateProducts(req.getProductIds());
         CommunityPostDO post = new CommunityPostDO().setAuthorUserId(userId).setTitle(content.title())
                 .setContent(content.content()).setMediaUrls(content.mediaUrls())
                 .setStatus(CommunityPostStatusEnum.DRAFT.getStatus()).setLikeCount(0).setFavoriteCount(0).setCommentCount(0);
         postMapper.insert(post);
-        fileApi.replaceFileReferences("community_post", post.getId().toString(), "media", content.mediaUrls());
+        mediaClient.replaceFileReferences("community_post", post.getId().toString(), "media", content.mediaUrls());
         replaceRelations(post.getId(), products, req.getTopics());
         return post.getId();
     }
@@ -75,7 +74,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updatePost(Long userId, CommunityPostUpdateReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(userId);
+        memberClient.validateActiveUserForUpdate(userId);
         CommunityPostDO current = requireOwnedForUpdate(userId, req.getId());
         if (!Objects.equals(current.getStatus(), CommunityPostStatusEnum.DRAFT.getStatus())
                 && !Objects.equals(current.getStatus(), CommunityPostStatusEnum.HIDDEN.getStatus())) {
@@ -88,13 +87,13 @@ public class CommunityServiceImpl implements CommunityService {
             throw exception(POST_STATE_INVALID);
         }
         replaceRelations(req.getId(), products, req.getTopics());
-        fileApi.replaceFileReferences("community_post", req.getId().toString(), "media", content.mediaUrls());
+        mediaClient.replaceFileReferences("community_post", req.getId().toString(), "media", content.mediaUrls());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void submitPost(Long userId, Long id) {
-        memberUserApi.validateActiveUserForUpdate(userId);
+        memberClient.validateActiveUserForUpdate(userId);
         CommunityPostDO post = requireOwnedForUpdate(userId, id);
         if (!Objects.equals(post.getStatus(), CommunityPostStatusEnum.DRAFT.getStatus())
                 && !Objects.equals(post.getStatus(), CommunityPostStatusEnum.HIDDEN.getStatus())) {
@@ -108,7 +107,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deletePost(Long userId, Long id) {
-        memberUserApi.validateActiveUserForUpdate(userId);
+        memberClient.validateActiveUserForUpdate(userId);
         CommunityPostDO post = requireOwnedForUpdate(userId, id);
         if (postMapper.updateStatus(id, post.getStatus(), CommunityPostStatusEnum.HIDDEN.getStatus()) != 1) {
             throw exception(POST_STATE_INVALID);
@@ -141,7 +140,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<CommunityPostRespVO> getOwnerPosts(Long userId, CommunityPostOwnerPageReqVO req) {
-        memberUserApi.validateActiveUser(userId);
+        memberClient.validateActiveUser(userId);
         PageResult<CommunityPostDO> page = postMapper.selectOwnerPage(userId,
                 new CommunityPostPageReqVO().setKeyword(req.getKeyword()));
         return new PageResult<>(page.getList().stream().map(post -> toPostResponse(post, userId)).toList(), page.getTotal());
@@ -150,7 +149,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<CommunityPostRespVO> getFavoritePosts(Long userId, CommunityPostOwnerPageReqVO req) {
-        memberUserApi.validateActiveUser(userId);
+        memberClient.validateActiveUser(userId);
         PageResult<CommunityPostDO> page = postMapper.selectFavoritePage(userId, req);
         return new PageResult<>(page.getList().stream().map(post -> toPostResponse(post, userId)).toList(), page.getTotal());
     }
@@ -158,7 +157,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<CommunityPostRespVO> getFollowingPosts(Long userId, CommunityPostOwnerPageReqVO req) {
-        memberUserApi.validateActiveUser(userId);
+        memberClient.validateActiveUser(userId);
         PageResult<CommunityPostDO> page = postMapper.selectFollowingPage(userId, req);
         return new PageResult<>(page.getList().stream().map(post -> toPostResponse(post, userId)).toList(), page.getTotal());
     }
@@ -166,7 +165,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createComment(Long userId, CommunityCommentCreateReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(userId);
+        memberClient.validateActiveUserForUpdate(userId);
         CommunityPostDO post = requirePublished(req.getPostId());
         Long parentId = req.getParentId();
         if (parentId != null) {
@@ -196,7 +195,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void setReaction(Long userId, CommunityReactionReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(userId);
+        memberClient.validateActiveUserForUpdate(userId);
         requirePublished(req.getPostId());
         if (!isReactionType(req.getType())) throw exception(REACTION_TYPE_INVALID);
         CommunityReactionDO existing = reactionMapper.selectOne(req.getPostId(), userId, req.getType());
@@ -218,8 +217,8 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void setFollow(Long userId, CommunityFollowReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(userId);
-        if (Objects.equals(userId, req.getUserId()) || memberUserApi.getUser(req.getUserId()) == null) {
+        memberClient.validateActiveUserForUpdate(userId);
+        if (Objects.equals(userId, req.getUserId()) || memberClient.getUser(req.getUserId()) == null) {
             throw exception(FOLLOW_SELF_INVALID);
         }
         CommunityFollowDO existing = followMapper.selectOne(userId, req.getUserId());
@@ -234,7 +233,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long report(Long userId, CommunityReportCreateReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(userId);
+        memberClient.validateActiveUserForUpdate(userId);
         CommunityPostDO post = requirePublished(req.getPostId());
         String reason = StrUtil.trim(req.getReason());
         if (StrUtil.isBlank(reason)) throw exception(REPORT_INVALID);
@@ -257,7 +256,6 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void setPostStatus(Long adminUserId, CommunityPostStatusReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(adminUserId);
         if (req.getStatus() < CommunityPostStatusEnum.DRAFT.getStatus()
                 || req.getStatus() > CommunityPostStatusEnum.HIDDEN.getStatus()) throw exception(POST_STATE_INVALID);
         CommunityPostDO post = postMapper.selectByIdForUpdate(req.getId());
@@ -276,7 +274,6 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void reviewReport(Long adminUserId, CommunityReportReviewReqVO req) {
-        memberUserApi.validateActiveUserForUpdate(adminUserId);
         if (!Objects.equals(req.getStatus(), CommunityReportStatusEnum.RESOLVED.getStatus())
                 && !Objects.equals(req.getStatus(), CommunityReportStatusEnum.REJECTED.getStatus())) throw exception(REPORT_STATE_INVALID);
         CommunityReportDO report = reportMapper.selectById(req.getId());
@@ -309,7 +306,7 @@ public class CommunityServiceImpl implements CommunityService {
     private List<Long> validateProducts(List<Long> ids) {
         if (ids == null) return List.of();
         List<Long> distinct = ids.stream().filter(Objects::nonNull).distinct().toList();
-        for (Long id : distinct) if (catalogService.getVisibleSummary(id, null) == null) throw exception(POST_PRODUCT_INVALID);
+        for (Long id : distinct) if (productClient.getVisibleSummary(id) == null) throw exception(POST_PRODUCT_INVALID);
         return distinct;
     }
     private void replaceRelations(Long postId, List<Long> productIds, List<String> topicNames) {
@@ -344,11 +341,13 @@ public class CommunityServiceImpl implements CommunityService {
                 .setStatus(post.getStatus()).setLikeCount(Optional.ofNullable(post.getLikeCount()).orElse(0))
                 .setFavoriteCount(Optional.ofNullable(post.getFavoriteCount()).orElse(0))
                 .setCommentCount(Optional.ofNullable(post.getCommentCount()).orElse(0)).setCreateTime(post.getCreateTime()).setUpdateTime(post.getUpdateTime());
-        MemberUserRespDTO author = memberUserApi.getUser(post.getAuthorUserId());
+        CommunityMemberProfile author = memberClient.getUser(post.getAuthorUserId());
         if (author != null) response.setAuthorNickname(author.getNickname()).setAuthorAvatar(author.getAvatar());
         List<CommunityPostTopicDO> postTopics = postTopicMapper.selectByPostId(post.getId());
         response.setTopics(postTopics.stream().map(item -> topicMapper.selectById(item.getTopicId())).filter(Objects::nonNull).map(this::toTopic).toList());
-        response.setProducts(postProductMapper.selectByPostId(post.getId()).stream().map(item -> catalogService.getVisibleSummary(item.getProductId(), null)).filter(Objects::nonNull).toList());
+        response.setProducts(postProductMapper.selectByPostId(post.getId()).stream()
+                .map(item -> productClient.getVisibleSummary(item.getProductId()))
+                .filter(Objects::nonNull).toList());
         boolean logged = viewerId != null;
         response.setLiked(logged && reactionMapper.selectOne(post.getId(), viewerId, 1) != null)
                 .setFavorited(logged && reactionMapper.selectOne(post.getId(), viewerId, 2) != null)
@@ -358,7 +357,7 @@ public class CommunityServiceImpl implements CommunityService {
     private CommunityTopicRespVO toTopic(CommunityTopicDO topic) { return new CommunityTopicRespVO().setId(topic.getId()).setName(topic.getName()).setSlug(topic.getSlug()).setPostCount(topic.getPostCount()); }
     private CommunityCommentRespVO toCommentResponse(CommunityCommentDO comment) {
         CommunityCommentRespVO response = new CommunityCommentRespVO().setId(comment.getId()).setPostId(comment.getPostId()).setParentId(comment.getParentId()).setAuthorUserId(comment.getAuthorUserId()).setContent(comment.getContent()).setStatus(comment.getStatus()).setCreateTime(comment.getCreateTime());
-        MemberUserRespDTO author = memberUserApi.getUser(comment.getAuthorUserId());
+        CommunityMemberProfile author = memberClient.getUser(comment.getAuthorUserId());
         if (author != null) response.setAuthorNickname(author.getNickname()).setAuthorAvatar(author.getAvatar());
         return response;
     }
@@ -371,10 +370,10 @@ public class CommunityServiceImpl implements CommunityService {
         if (post != null) {
             response.setPostTitle(post.getTitle()).setPostContent(post.getContent()).setPostMediaUrls(post.getMediaUrls())
                     .setPostAuthorUserId(post.getAuthorUserId());
-            MemberUserRespDTO author = memberUserApi.getUser(post.getAuthorUserId());
+            CommunityMemberProfile author = memberClient.getUser(post.getAuthorUserId());
             if (author != null) response.setPostAuthorNickname(author.getNickname());
         }
-        MemberUserRespDTO reporter = memberUserApi.getUser(report.getReporterUserId());
+        CommunityMemberProfile reporter = memberClient.getUser(report.getReporterUserId());
         if (reporter != null) response.setReporterNickname(reporter.getNickname());
         return response;
     }

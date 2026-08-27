@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.community.controller.app.interaction.vo.CommunityFollowReqVO;
 import cn.iocoder.yudao.module.community.controller.app.interaction.vo.CommunityReactionReqVO;
 import cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostCreateReqVO;
+import cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityProductSummaryRespVO;
 import cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostUpdateReqVO;
 import cn.iocoder.yudao.module.community.controller.app.report.vo.CommunityReportCreateReqVO;
 import cn.iocoder.yudao.module.community.controller.admin.vo.CommunityReportPageReqVO;
@@ -20,11 +21,10 @@ import cn.iocoder.yudao.module.community.dal.mysql.report.CommunityReportMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.topic.CommunityPostTopicMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.topic.CommunityTopicMapper;
 import cn.iocoder.yudao.module.community.enums.CommunityPostStatusEnum;
-import cn.iocoder.yudao.module.commerce.controller.app.catalog.vo.PublicProductSummaryRespVO;
-import cn.iocoder.yudao.module.commerce.service.catalog.PublicCatalogService;
-import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
-import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
-import cn.iocoder.yudao.module.infra.api.file.FileApi;
+import cn.iocoder.yudao.module.community.service.integration.CommunityMediaClient;
+import cn.iocoder.yudao.module.community.service.integration.CommunityMemberClient;
+import cn.iocoder.yudao.module.community.service.integration.CommunityMemberProfile;
+import cn.iocoder.yudao.module.community.service.integration.CommunityProductClient;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -51,9 +51,9 @@ class CommunityServiceImplTest {
     @Mock private CommunityReactionMapper reactionMapper;
     @Mock private CommunityFollowMapper followMapper;
     @Mock private CommunityReportMapper reportMapper;
-    @Mock private MemberUserApi memberUserApi;
-    @Mock private PublicCatalogService catalogService;
-    @Mock private FileApi fileApi;
+    @Mock private CommunityMemberClient memberClient;
+    @Mock private CommunityProductClient productClient;
+    @Mock private CommunityMediaClient mediaClient;
     @InjectMocks private CommunityServiceImpl service;
 
     @Test
@@ -71,21 +71,21 @@ class CommunityServiceImplTest {
     @Test
     void createPost_validatesAndPersistsVisibleProductAssociations() {
         doAnswer(invocation -> { ((CommunityPostDO) invocation.getArgument(0)).setId(11L); return 1; }).when(postMapper).insert(any(CommunityPostDO.class));
-        PublicProductSummaryRespVO product = new PublicProductSummaryRespVO();
+        CommunityProductSummaryRespVO product = new CommunityProductSummaryRespVO();
         product.setId(201L);
-        when(catalogService.getVisibleSummary(201L, null)).thenReturn(product);
+        when(productClient.getVisibleSummary(201L)).thenReturn(product);
 
         service.createPost(7L, new CommunityPostCreateReqVO().setTitle("Tea review").setContent("Body")
                 .setProductIds(java.util.List.of(201L)));
 
-        verify(catalogService).getVisibleSummary(201L, null);
+        verify(productClient).getVisibleSummary(201L);
         verify(postProductMapper).insert(argThat((cn.iocoder.yudao.module.community.dal.dataobject.post.CommunityPostProductDO relation) ->
                 relation.getPostId().equals(11L) && relation.getProductId().equals(201L) && relation.getSort().equals(0)));
     }
 
     @Test
     void createPost_rejectsHiddenOrMissingProductAssociation() {
-        when(catalogService.getVisibleSummary(201L, null)).thenReturn(null);
+        when(productClient.getVisibleSummary(201L)).thenReturn(null);
 
         assertThrows(ServiceException.class, () -> service.createPost(7L,
                 new CommunityPostCreateReqVO().setTitle("Tea review").setContent("Body")
@@ -138,8 +138,8 @@ class CommunityServiceImplTest {
         when(reportMapper.selectAdminPage(any())).thenReturn(new PageResult<>(List.of(report), 1L));
         when(postMapper.selectById(10L)).thenReturn(new CommunityPostDO().setId(10L).setAuthorUserId(7L)
                 .setTitle("Post title").setContent("Post body").setMediaUrls(List.of("https://example.com/image.jpg")));
-        when(memberUserApi.getUser(7L)).thenReturn(new MemberUserRespDTO().setId(7L).setNickname("Author"));
-        when(memberUserApi.getUser(8L)).thenReturn(new MemberUserRespDTO().setId(8L).setNickname("Reporter"));
+        when(memberClient.getUser(7L)).thenReturn(new CommunityMemberProfile().setId(7L).setNickname("Author"));
+        when(memberClient.getUser(8L)).thenReturn(new CommunityMemberProfile().setId(8L).setNickname("Reporter"));
 
         var result = service.getAdminReports(new CommunityReportPageReqVO());
 
@@ -168,7 +168,7 @@ class CommunityServiceImplTest {
     void getPost_enrichesAuthorAvatar() {
         when(postMapper.selectById(10L)).thenReturn(new CommunityPostDO().setId(10L).setAuthorUserId(7L)
                 .setTitle("Post").setContent("Body").setStatus(CommunityPostStatusEnum.PUBLISHED.getStatus()));
-        when(memberUserApi.getUser(7L)).thenReturn(new MemberUserRespDTO().setId(7L)
+        when(memberClient.getUser(7L)).thenReturn(new CommunityMemberProfile().setId(7L)
                 .setNickname("Author").setAvatar("/avatar.png"));
         when(postTopicMapper.selectByPostId(10L)).thenReturn(List.of());
         when(postProductMapper.selectByPostId(10L)).thenReturn(List.of());
@@ -189,8 +189,8 @@ class CommunityServiceImplTest {
         service.getFavoritePosts(7L, new cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostOwnerPageReqVO());
         service.getFollowingPosts(7L, new cn.iocoder.yudao.module.community.controller.app.post.vo.CommunityPostOwnerPageReqVO());
 
-        verify(memberUserApi, times(3)).validateActiveUser(7L);
-        verify(memberUserApi, never()).validateActiveUserForUpdate(anyLong());
+        verify(memberClient, times(3)).validateActiveUser(7L);
+        verify(memberClient, never()).validateActiveUserForUpdate(anyLong());
     }
 
     private PageResult<CommunityPostDO> emptyPostPage() {

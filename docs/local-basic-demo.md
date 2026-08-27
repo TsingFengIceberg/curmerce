@@ -2,31 +2,31 @@
 
 ## 服务端
 
-先加载本机私有环境文件，不要把文件内容复制到终端记录或仓库：
+当前本地演示使用第一次服务拆分后的混合拓扑，浏览器和前端只访问 Gateway：
 
-```bash
-set -a
-source /home/wugang/.config/curmerce-services/credentials.env
-set +a
-export CURMERCE_SERVER_PORT=48082
-export CURMERCE_LOG_FILE=/tmp/curmerce-yudao-server-48082.log
-java -jar yudao-server/target/yudao-server.jar --spring.profiles.active=local
+```text
+Gateway :48082
+├── Core :48080
+├── Community :48083
+└── Agent :48084
+        |
+    Nacos :8848
 ```
 
-初始化全新数据库时，将 `foundation-seed.sql` 中的 `__CURMERCE_FILE_BASE_URL__` 替换为这里实际使用的回环 API 地址，例如 `http://127.0.0.1:48082`。如果 `48082` 已被占用，换用其他大于 `1024` 的本地端口，并同步设置文件存储地址和前端 `NEXT_PUBLIC_API_BASE_URL`。不要终止其他用户已经启动的后端进程。
+先按 [`../deploy/cloud/README.md`](../deploy/cloud/README.md) 构建并启动 Nacos、Core、Community、Agent 和 Gateway。服务使用 `/home/wugang/.config/curmerce-services/credentials.env`，不要把文件内容复制到终端记录或仓库。初始化全新数据库时，将 `foundation-seed.sql` 中的 `__CURMERCE_FILE_BASE_URL__` 替换为 Gateway 回环地址 `http://127.0.0.1:48082`。如果端口冲突，必须同步修改服务注册、Gateway 路由、文件地址和前端 API 地址；不要终止来源不明的其他用户进程。
 
 ## 前端
 
 ```bash
 cd curmerce-web
 export NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:48082
-npm run dev -- --port 3002
+npm run dev -- --hostname 127.0.0.1 --port 3003
 ```
 
-打开 `http://127.0.0.1:3002`。前端只绑定本机；服务器没有开放公网 HTTP 端口时，使用 SSH 隧道：
+打开 `http://127.0.0.1:3003`。前端与服务端都只绑定本机；服务器没有开放公网 HTTP 端口时，使用 SSH 隧道。SSH 命令保持单行：
 
 ```bash
-ssh -p 2002 -L 3002:127.0.0.1:3002 -L 48082:127.0.0.1:48082 user@47.99.117.47
+ssh -p 2002 -L 3003:127.0.0.1:3003 -L 48082:127.0.0.1:48082 wugang@47.99.117.47
 ```
 
 ## 演示数据顺序
@@ -49,9 +49,11 @@ ssh -p 2002 -L 3002:127.0.0.1:3002 -L 48082:127.0.0.1:48082 user@47.99.117.47
 ## 验证命令
 
 ```bash
-mvn -pl curmerce-module-commerce,curmerce-module-community -am \
-  -Dtest='*Test' -Dsurefire.failIfNoSpecifiedTests=false test
+mvn clean test
+mvn -DskipTests package
 cd curmerce-web && npm run build
 ```
+
+运行验收、故障隔离和恢复发现命令见 [`../deploy/cloud/README.md`](../deploy/cloud/README.md)。所有 `curl` 命令都应设置超时，避免服务异常时验收脚本无限等待。
 
 数据库迁移按 `script/db/README.md` 和文件名顺序执行。17、18、19 号迁移可以重复执行；19 号迁移为拍卖胜者支付超时增加结算失败状态和失败元数据。回滚脚本只用于一次性本地数据库，不要在包含重要演示数据的库上执行。

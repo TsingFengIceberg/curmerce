@@ -1,0 +1,22 @@
+[Unit]
+Description=Curmerce Spring Cloud Gateway
+After=curmerce-nacos.service curmerce-yudao-server.service curmerce-community.service curmerce-agent.service
+Requires=curmerce-nacos.service
+Wants=curmerce-yudao-server.service curmerce-community.service curmerce-agent.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/wugang/Data/Projects/curmerce
+Environment=NACOS_SERVER_ADDR=127.0.0.1:8848
+ExecStart=/home/wugang/.local/share/curmerce-toolchains/jdk-21/bin/java -Xms128m -Xmx384m -jar /home/wugang/Data/Projects/curmerce/curmerce-services/curmerce-gateway/target/curmerce-gateway.jar
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=30
+LimitNOFILE=65535
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

@@ -1,6 +1,6 @@
 spring:
   application:
-    name: curmerce-server
+    name: curmerce-core-service
   profiles:
     active: local
   main:
@@ -23,6 +23,13 @@ spring:
     redis:
       repositories:
         enabled: false
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        ip: ${NACOS_DISCOVERY_IP:127.0.0.1}
+        register-enabled: ${NACOS_DISCOVERY_ENABLED:true}
 
 server:
   servlet:
@@ -123,6 +130,10 @@ yudao:
     enable: false
   tracer:
     enable: false
+
+curmerce:
+  cloud:
+    internal-token: ${CURMERCE_INTERNAL_TOKEN:${CURMERCE_OAUTH_CLIENT_SECRET:}}
 
 justauth:
   enabled: false

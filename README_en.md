@@ -15,7 +15,7 @@ English | [中文](./README.md)
 
 Curmerce is a community-content-driven, multi-mode commerce platform for interest-based consumption. It is also an autumn-recruiting portfolio project designed to demonstrate modern Java backend development, complex business modeling, transactional reliability, and architectural evolution.
 
-The project has moved beyond foundation evaluation into a **runnable modular-monolith baseline**. Standard commerce, individual listings, basic limited releases, basic auctions, and community content now have usable end-to-end flows, with a Next.js acceptance interface for buyers, merchants, and platform administrators.
+The project has completed its runnable `v0.1-modular-monolith` baseline and entered its first service-extraction stage. Standard commerce, individual listings, basic limited releases, basic auctions, and community content have usable end-to-end flows. Core commerce remains together, while Community and a read-only Agent now run as independently deployable and failure-isolated services.
 
 ## Implemented Capabilities
 
@@ -33,19 +33,17 @@ The project has moved beyond foundation evaluation into a **runnable modular-mon
 ## Current Architecture
 
 ```text
-Curmerce
-├── yudao-server                  Single Spring Boot runtime
-│   ├── yudao-module-system       Authentication, authorization, and system foundation
-│   ├── yudao-module-infra        Files, configuration, and shared infrastructure
-│   ├── curmerce-module-member    Members, profiles, and addresses
-│   ├── curmerce-module-commerce  Merchants, products, trade, releases, and auctions
-│   └── curmerce-module-community Community content and interactions
-└── curmerce-web                  Next.js acceptance frontend
+curmerce-web :3003 -> Spring Cloud Gateway :48082
+                            |-> Core :48080      system, infra, member, commerce
+                            |-> Community :48083 community-owned data and APIs
+                            `-> Agent :48084     read-only retrieval and source degradation
+                                      |
+                                  Nacos :8848
 ```
 
-The current design intentionally makes state machines, transaction boundaries, ownership rules, and database constraints correct inside one process and one MySQL instance first. A module must not directly modify data owned by another module; cross-module behavior is expressed through application interfaces and events so the boundaries remain extractable later.
+Core product, inventory, order, payment, and refund behavior remains in `yudao-server` to avoid prematurely introducing distributed transaction failures. Community no longer depends on Commerce, Member, or Infra persistence modules and reaches required core capabilities through an internal-key-protected HTTP contract. Agent requires no model credentials at this stage and provides a failure-isolated read-only retrieval and source-degradation skeleton.
 
-MySQL is the business source of truth. Redis currently supports framework capabilities and the local event stream. Kafka, Elasticsearch, Spring Cloud, and Spring AI are not presented as completed features.
+MySQL remains the business source of truth, Redis supports framework capabilities and the local event stream, and Spring Cloud Gateway plus Nacos now support the first service extraction. Kafka, Elasticsearch, Spring AI model integration, and production-grade observability are not presented as completed features.
 
 The project is built and run with JDK 21, and the root Maven build consistently targets Java 21 source and bytecode.
 
@@ -59,6 +57,8 @@ The local environment requires JDK 21, Maven, Node.js/npm, MySQL, and Redis. Fol
 - [Order and refund contract](./docs/commerce-order-refund-contract.md)
 - [Media architecture and runbook](./docs/media-architecture.md)
 - [Local MinIO, ClamAV, and imgproxy deployment](./deploy/media/README.md)
+- [First service extraction architecture](./docs/microservice-architecture.md)
+- [Cloud local runtime and failure verification](./deploy/cloud/README.md)
 
 Core backend tests:
 
@@ -83,14 +83,17 @@ Do not run `next dev` and `next build` against the same `.next` directory concur
 - Community posts may be published without images or products. Product association still uses identifier input and needs a user-facing search selector.
 - The community currently provides a basic chronological feed without recommendation algorithms, a notification center, deeply nested comments, or large-scale asynchronous counters.
 - Media content moderation is disabled by default and requires an explicitly configured compatible HTTP moderation service. ClamAV, imgproxy, and MinIO are also optional local capabilities. Database file storage remains the minimum runnable mode, while large files and production-like deployments should use private object storage.
-- Agent capabilities, Kafka, Elasticsearch, Spring Cloud service extraction, and production-grade observability remain future work.
+- Agent is currently a model-free read-only retrieval skeleton, not a complete Spring AI or RAG product capability.
+- Community and Core still share one MySQL server and schema, with code dependencies and table ownership enforcing separation; dedicated database credentials and schemas remain a hardening step.
+- Community media references use a retryable remote write without cross-service atomicity; stale references after a remote success and local rollback still require an Outbox and reconciliation job.
+- Kafka, Elasticsearch, distributed compensation, a multi-node registry, and production-grade observability remain future work.
 
 ## Next Directions
 
-1. Close the remaining UI gaps, automated-test gaps, and reproducible-environment gaps in the existing baseline workflows.
+1. Harden Community ownership with dedicated database credentials and schemas, then extend remote contracts, timeouts, metrics, and tracing.
 2. Use orders, inventory, limited releases, and auctions to progressively study concurrency control, reliable messaging, compensation, and reconciliation.
-3. After monolith behavioral contracts are stable, evaluate extraction in the order of Agent, community, search projections, and auctions.
-4. Finally add retrieval, comparison, rule explanation, and controlled read-only Agent tools grounded in product and community experience.
+3. Introduce Kafka and rebuildable Elasticsearch search projections, then evaluate Auction extraction.
+4. Build Spring AI, RAG, rule explanation, and permission-controlled domain tools on the current read-only Agent skeleton.
 
 ## Foundation and References
 

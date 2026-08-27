@@ -15,7 +15,7 @@
 
 Curmerce 是一个面向兴趣消费场景的社区内容驱动型多模式交易平台，也是一个用于展示现代 Java 后端、复杂业务建模、事务可靠性与架构演进能力的秋招项目。
 
-项目当前已经从基座审查阶段进入**可运行的模块化单体基础版本**：普通商城、个人闲置、基础限时发售、基础拍卖和社区内容均已形成可操作闭环，并提供面向买家、商家和平台管理员的 Next.js 验收界面。
+项目已经完成 `v0.1-modular-monolith` 可运行基线，并进入第一次服务拆分阶段：普通商城、个人闲置、基础限时发售、基础拍卖和社区内容均已形成可操作闭环；核心交易继续保留在一个进程中，社区与只读 Agent 已成为可独立部署和失败隔离的服务。
 
 ## 已实现能力
 
@@ -33,19 +33,17 @@ Curmerce 是一个面向兴趣消费场景的社区内容驱动型多模式交�
 ## 当前架构
 
 ```text
-Curmerce
-├── yudao-server                  单个 Spring Boot 启动进程
-│   ├── yudao-module-system       认证、权限和系统管理基座
-│   ├── yudao-module-infra        文件、配置和通用基础设施
-│   ├── curmerce-module-member    会员、资料和地址
-│   ├── curmerce-module-commerce  商家、商品、交易、限时发售和拍卖
-│   └── curmerce-module-community 社区内容和互动
-└── curmerce-web                  Next.js 验收前端
+curmerce-web :3003 -> Spring Cloud Gateway :48082
+                            ├── Core :48080      system、infra、member、commerce
+                            ├── Community :48083 community_* 数据与社区接口
+                            └── Agent :48084     只读商品/社区检索与故障降级
+                                      |
+                                  Nacos :8848
 ```
 
-当前坚持先在一个进程和一个 MySQL 实例内做对状态机、事务边界、所有权和数据库约束。模块不应直接修改其他模块拥有的数据；跨模块行为通过应用接口和事件表达，为后续服务拆分保留边界。
+核心商品、库存、订单、支付和退款仍保留在 `yudao-server`，避免过早制造分布式交易一致性问题。Community 已移除对 Commerce、Member 和 Infra 持久化模块的依赖，通过受内部密钥保护的 HTTP 契约访问核心能力。Agent 当前不依赖模型凭据，只提供可独立失败的只读检索与来源降级骨架。
 
-MySQL 是业务事实来源。Redis 当前用于框架能力和本地事件流；Kafka、Elasticsearch、Spring Cloud 与 Spring AI 尚未作为已完成功能引入。
+MySQL 是业务事实来源，Redis 用于框架能力和本地事件流，Spring Cloud Gateway 和 Nacos 已用于本次服务拆分。Kafka、Elasticsearch、Spring AI 模型接入与生产级可观测性尚未作为已完成功能引入。
 
 项目使用 JDK 21 构建和运行，根 Maven 构建也统一使用 Java 21 源码与字节码目标。
 
@@ -59,6 +57,8 @@ MySQL 是业务事实来源。Redis 当前用于框架能力和本地事件流�
 - [订单与退款契约](./docs/commerce-order-refund-contract.md)
 - [媒体架构与运行手册](./docs/media-architecture.md)
 - [MinIO、ClamAV 与 imgproxy 本地部署](./deploy/media/README.md)
+- [第一次服务拆分架构](./docs/microservice-architecture.md)
+- [Cloud 本地运行与故障验收](./deploy/cloud/README.md)
 
 后端核心测试：
 
@@ -83,14 +83,17 @@ npm run build
 - 社区帖子允许不带图片和商品发布；商品关联暂时使用编号输入，后续需要改为面向用户的搜索选择器。
 - 社区目前提供基础时间流，不包含推荐算法、通知中心、复杂楼中楼或大规模异步计数。
 - 媒体内容审核默认关闭，需要显式配置兼容的 HTTP 审核服务；ClamAV、imgproxy 和 MinIO 也是可选的本地部署能力。数据库文件存储仍可作为最低运行方式，但大文件和正式环境应使用私有对象存储。
-- Agent、Kafka、Elasticsearch、Spring Cloud 服务拆分和生产级可观测性仍属于后续阶段。
+- Agent 当前只是无模型凭据也可运行的只读检索骨架，不是完整的 Spring AI/RAG 产品能力。
+- Community 与 Core 当前仍共享一个 MySQL 服务和 Schema，依靠代码依赖与表所有权隔离；独立数据库账号和 Schema 尚待后续硬化。
+- Community 的媒体引用通过可重试的远程写入同步，但尚无跨服务原子性；远程成功后本地回滚的失效引用需要后续 Outbox 与对账任务修复。
+- Kafka、Elasticsearch、分布式补偿、多节点注册中心和生产级可观测性仍属于后续阶段。
 
 ## 后续方向
 
-1. 收敛现有基础闭环的 UI 缺口、自动化测试和可重复环境初始化。
+1. 用独立数据库账号和 Schema 硬化 Community 所有权，并完善远程契约、超时、指标和链路追踪。
 2. 以订单、库存、限时发售和拍卖为学习载体，逐步实现并发控制、可靠消息、补偿和对账。
-3. 在单体行为契约稳定后，按 Agent、社区、搜索投影、拍卖的顺序评估服务拆分。
-4. 最后接入基于商品和社区经验的检索、比较、规则解释与受控只读 Agent 工具。
+3. 引入 Kafka 与可重建的 Elasticsearch 搜索投影，再评估拍卖服务拆分。
+4. 在当前只读 Agent 骨架上接入 Spring AI、RAG、规则解释和受权限控制的领域工具。
 
 ## 基座与参考项目
 

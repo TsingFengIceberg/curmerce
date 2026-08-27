@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: curmerce-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        ip: ${NACOS_DISCOVERY_IP:127.0.0.1}
+        register-enabled: ${NACOS_DISCOVERY_ENABLED:true}
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: community-service
+              order: -30
+              uri: lb://curmerce-community-service
+              predicates:
+                - Path=/app-api/community/**,/admin-api/community/**
+            - id: agent-service
+              order: -20
+              uri: lb://curmerce-agent-service
+              predicates:
+                - Path=/app-api/agent/**
+            - id: core-service
+              order: 0
+              uri: lb://curmerce-core-service
+              predicates:
+                - Path=/app-api/**,/admin-api/**
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origin-patterns:
+                  - "http://127.0.0.1:*"
+                  - "http://localhost:*"
+                allowed-methods: "*"
+                allowed-headers: "*"
+                exposed-headers:
+                  - X-Curmerce-Trace-Id
+                allow-credentials: true
+
+server:
+  address: 127.0.0.1
+  port: ${CURMERCE_GATEWAY_PORT:48082}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway,metrics
+
+logging:
+  file:
+    name: ${CURMERCE_GATEWAY_LOG_FILE:${user.home}/.local/state/curmerce/gateway.log}

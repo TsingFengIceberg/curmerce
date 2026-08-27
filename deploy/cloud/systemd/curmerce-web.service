@@ -1,0 +1,20 @@
+[Unit]
+Description=Curmerce Next.js web application
+After=curmerce-gateway.service
+Wants=curmerce-gateway.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/wugang/Data/Projects/curmerce/curmerce-web
+Environment=NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:48082
+ExecStart=/usr/bin/npm run start -- --hostname 127.0.0.1 --port 3003
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=60
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,23 @@
+[Unit]
+Description=Curmerce core commerce service
+After=curmerce-mysql.service curmerce-redis.service curmerce-nacos.service
+Requires=curmerce-mysql.service curmerce-redis.service curmerce-nacos.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/wugang/Data/Projects/curmerce
+EnvironmentFile=/home/wugang/.config/curmerce-services/credentials.env
+Environment=CURMERCE_SERVER_PORT=48080
+Environment=NACOS_SERVER_ADDR=127.0.0.1:8848
+ExecStart=/home/wugang/.local/share/curmerce-toolchains/jdk-21/bin/java -Xms256m -Xmx1024m -jar /home/wugang/Data/Projects/curmerce/yudao-server/target/yudao-server.jar
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=60
+LimitNOFILE=65535
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
