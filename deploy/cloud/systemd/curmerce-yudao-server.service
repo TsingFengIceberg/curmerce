@@ -7,6 +7,7 @@ Requires=curmerce-mysql.service curmerce-redis.service curmerce-nacos.service
 Type=simple
 WorkingDirectory=/home/wugang/Data/Projects/curmerce
 EnvironmentFile=/home/wugang/.config/curmerce-services/credentials.env
+EnvironmentFile=-/home/wugang/.config/curmerce-services/runtime.env
 Environment=CURMERCE_SERVER_PORT=48080
 Environment=NACOS_SERVER_ADDR=127.0.0.1:8848
 ExecStart=/home/wugang/.local/share/curmerce-toolchains/jdk-21/bin/java -Xms256m -Xmx1024m -jar /home/wugang/Data/Projects/curmerce/yudao-server/target/yudao-server.jar

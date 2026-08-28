@@ -7,6 +7,7 @@ Wants=curmerce-yudao-server.service curmerce-community.service curmerce-agent.se
 [Service]
 Type=simple
 WorkingDirectory=/home/wugang/Data/Projects/curmerce
+EnvironmentFile=-/home/wugang/.config/curmerce-services/runtime.env
 Environment=NACOS_SERVER_ADDR=127.0.0.1:8848
 ExecStart=/home/wugang/.local/share/curmerce-toolchains/jdk-21/bin/java -Xms128m -Xmx384m -jar /home/wugang/Data/Projects/curmerce/curmerce-services/curmerce-gateway/target/curmerce-gateway.jar
 Restart=on-failure

@@ -1,0 +1,51 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "curmerce-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0},
+      "id": 1,
+      "title": "Community media outbox unfinished",
+      "type": "stat",
+      "targets": [{"expr": "curmerce_community_media_outbox_unfinished", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "curmerce-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0},
+      "id": 2,
+      "title": "HTTP request rate",
+      "type": "timeseries",
+      "targets": [{"expr": "sum by (application) (rate(http_server_requests_seconds_count[5m]))", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "curmerce-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0},
+      "id": 3,
+      "title": "Circuit breaker state",
+      "type": "timeseries",
+      "targets": [{"expr": "resilience4j_circuitbreaker_state", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "tempo", "uid": "curmerce-tempo"},
+      "gridPos": {"h": 7, "w": 24, "x": 0, "y": 6},
+      "id": 4,
+      "title": "Trace search",
+      "type": "traces",
+      "targets": [{"queryType": "nativeSearch", "refId": "A"}]
+    }
+  ],
+  "schemaVersion": 41,
+  "style": "dark",
+  "tags": ["curmerce", "runtime"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Curmerce Runtime Overview",
+  "version": 1
+}

@@ -28,9 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.*;
@@ -196,10 +198,23 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private void restoreRefundStock(Long orderId) {
-        for (CommerceOrderItemDO item : orderItemMapper.selectListByOrderId(orderId)) {
+        List<CommerceOrderItemDO> items = orderItemMapper.selectListByOrderId(orderId);
+        for (CommerceOrderItemDO item : items) {
             if (productSkuMapper.restoreStock(item.getSkuId(), item.getQuantity()) != 1) {
                 throw exception(ORDER_STOCK_RESTORE_FAILED);
             }
+        }
+        if (!items.isEmpty()) {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("orderId", orderId);
+            payload.put("lines", items.stream().map(item -> {
+                Map<String, Object> line = new HashMap<>();
+                line.put("skuId", item.getSkuId());
+                line.put("productId", item.getProductId());
+                line.put("quantity", item.getQuantity());
+                return line;
+            }).collect(Collectors.toList()));
+            outboxEventAppender.append(CommerceOutboxEventTypeEnum.INVENTORY_RELEASED, orderId, payload);
         }
     }
 

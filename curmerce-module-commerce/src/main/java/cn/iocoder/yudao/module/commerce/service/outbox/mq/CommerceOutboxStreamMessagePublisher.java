@@ -2,12 +2,15 @@ package cn.iocoder.yudao.module.commerce.service.outbox.mq;
 
 import cn.iocoder.yudao.framework.mq.redis.core.RedisMQTemplate;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.outbox.CommerceOutboxEventDO;
+import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxMessagePublisher;
 import lombok.AllArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
 @AllArgsConstructor
-public class CommerceOutboxStreamMessagePublisher {
+@ConditionalOnProperty(prefix = "curmerce.outbox", name = "transport", havingValue = "redis", matchIfMissing = true)
+public class CommerceOutboxStreamMessagePublisher implements CommerceOutboxMessagePublisher {
 
     private final RedisMQTemplate redisMQTemplate;
 

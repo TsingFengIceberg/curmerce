@@ -165,6 +165,7 @@ public class OrderServiceImpl implements OrderService {
                 .setReceiverAreaId(address.getAreaId()).setReceiverAreaName(address.getAreaName())
                 .setReceiverDetailAddress(address.getDetailAddress());
         orderMapper.insert(order);
+        List<Map<String, Object>> inventoryLines = new ArrayList<>();
         for (CheckoutLine line : lines) {
             if (productSkuMapper.deductStock(line.sku().getId(), line.cartItem().getQuantity()) != 1) {
                 throw exception(ORDER_STOCK_INSUFFICIENT);
@@ -176,7 +177,10 @@ public class OrderServiceImpl implements OrderService {
                     .setSkuImageUrl(line.sku().getImageUrl()).setPrice(line.sku().getPrice())
                     .setQuantity(line.cartItem().getQuantity()).setTotalAmount(line.lineTotal());
             orderItemMapper.insert(item);
+            inventoryLines.add(inventoryLine(item));
         }
+        outboxEventAppender.append(CommerceOutboxEventTypeEnum.INVENTORY_RESERVED, order.getId(),
+                Map.of("orderId", order.getId(), "lines", inventoryLines));
         List<String> orderMedia = new ArrayList<>();
         for (CheckoutLine line : lines) {
             if (StrUtil.isNotBlank(line.product().getMainImageUrl())) orderMedia.add(line.product().getMainImageUrl());
@@ -234,10 +238,13 @@ public class OrderServiceImpl implements OrderService {
                 .setReceiverDetailAddress(address.getDetailAddress());
         orderMapper.insert(order);
         if (productSkuMapper.deductStock(skuId, quantity) != 1) throw exception(ORDER_STOCK_INSUFFICIENT);
-        orderItemMapper.insert(new CommerceOrderItemDO().setOrderId(order.getId()).setProductId(productId).setSkuId(skuId)
+        CommerceOrderItemDO orderItem = new CommerceOrderItemDO().setOrderId(order.getId()).setProductId(productId).setSkuId(skuId)
                 .setProductName(product.getName()).setProductImageUrl(product.getMainImageUrl()).setSkuCode(sku.getCode())
                 .setSpecificationValues(sku.getSpecificationValues()).setSkuImageUrl(sku.getImageUrl())
-                .setPrice(amount).setQuantity(quantity).setTotalAmount(multiplyAmount(amount, quantity)));
+                .setPrice(amount).setQuantity(quantity).setTotalAmount(multiplyAmount(amount, quantity));
+        orderItemMapper.insert(orderItem);
+        outboxEventAppender.append(CommerceOutboxEventTypeEnum.INVENTORY_RESERVED, order.getId(),
+                Map.of("orderId", order.getId(), "lines", List.of(inventoryLine(orderItem))));
         List<String> orderMedia = new ArrayList<>();
         if (StrUtil.isNotBlank(product.getMainImageUrl())) orderMedia.add(product.getMainImageUrl());
         if (StrUtil.isNotBlank(sku.getImageUrl())) orderMedia.add(sku.getImageUrl());
@@ -354,10 +361,15 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void restoreOrderStock(Long orderId) {
-        for (CommerceOrderItemDO item : orderItemMapper.selectListByOrderId(orderId)) {
+        List<CommerceOrderItemDO> items = orderItemMapper.selectListByOrderId(orderId);
+        for (CommerceOrderItemDO item : items) {
             if (productSkuMapper.restoreStock(item.getSkuId(), item.getQuantity()) != 1) {
                 throw exception(ORDER_STOCK_RESTORE_FAILED);
             }
+        }
+        if (!items.isEmpty()) {
+            outboxEventAppender.append(CommerceOutboxEventTypeEnum.INVENTORY_RELEASED, orderId,
+                    Map.of("orderId", orderId, "lines", items.stream().map(this::inventoryLine).toList()));
         }
     }
 
@@ -486,6 +498,14 @@ public class OrderServiceImpl implements OrderService {
         payload.put("status", order.getStatus());
         payload.put("refundStatus", order.getRefundStatus());
         return payload;
+    }
+
+    private Map<String, Object> inventoryLine(CommerceOrderItemDO item) {
+        Map<String, Object> line = new HashMap<>();
+        line.put("skuId", item.getSkuId());
+        line.put("productId", item.getProductId());
+        line.put("quantity", item.getQuantity());
+        return line;
     }
 
     private boolean isSellable(ProductDO product, ProductSkuDO sku) {

@@ -3,7 +3,6 @@ package cn.iocoder.yudao.module.commerce.service.outbox;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.outbox.CommerceOutboxEventDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.outbox.CommerceOutboxMapper;
-import cn.iocoder.yudao.module.commerce.service.outbox.mq.CommerceOutboxStreamMessagePublisher;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,7 +23,7 @@ public class CommerceOutboxPublisherServiceImpl implements CommerceOutboxPublish
     @Resource
     private CommerceOutboxMapper outboxMapper;
     @Resource
-    private CommerceOutboxStreamMessagePublisher messagePublisher;
+    private CommerceOutboxMessagePublisher messagePublisher;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
