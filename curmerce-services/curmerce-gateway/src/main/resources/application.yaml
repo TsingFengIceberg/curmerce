@@ -43,6 +43,10 @@ spring:
                 exposed-headers:
                   - X-Curmerce-Trace-Id
                 allow-credentials: true
+          # The downstream Spring MVC services also emit CORS headers. Remove
+          # duplicates after proxying so browsers receive one origin value.
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin RETAIN_FIRST
 
 server:
   address: 127.0.0.1
