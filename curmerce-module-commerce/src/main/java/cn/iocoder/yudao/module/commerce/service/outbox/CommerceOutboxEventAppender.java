@@ -9,6 +9,9 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 /**
  * 事务性 Outbox 事件追加器。
@@ -46,5 +49,40 @@ public class CommerceOutboxEventAppender {
                 .setStatus(CommerceOutboxStatusEnum.PENDING.getStatus())
                 .setAttempts(0);
         outboxMapper.insert(event);
+    }
+
+    /**
+     * Append a deterministic state snapshot. A changed snapshot gets a new
+     * event id, while a retried transaction with the same snapshot is ignored.
+     * The aggregate id remains the Kafka key so a projection sees one ordered
+     * partition per aggregate.
+     */
+    public void appendState(CommerceOutboxEventTypeEnum type, Long aggregateId, Map<String, Object> payload) {
+        if (type == null || aggregateId == null) {
+            return;
+        }
+        String serialized = payload == null ? "{}" : JsonUtils.toJsonString(payload);
+        String eventKey = type.name() + ":" + aggregateId + ":" + sha256(serialized);
+        if (outboxMapper.selectByTypeAndKey(type.name(), eventKey) != null) {
+            return;
+        }
+        outboxMapper.insert(new CommerceOutboxEventDO()
+                .setEventType(type.name()).setEventKey(eventKey)
+                .setAggregateType(type.getAggregateType()).setAggregateId(aggregateId)
+                .setPayload(serialized).setStatus(CommerceOutboxStatusEnum.PENDING.getStatus())
+                .setAttempts(0));
+    }
+
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder(digest.length * 2);
+            for (byte item : digest) {
+                result.append(String.format("%02x", item));
+            }
+            return result.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is unavailable", ex);
+        }
     }
 }

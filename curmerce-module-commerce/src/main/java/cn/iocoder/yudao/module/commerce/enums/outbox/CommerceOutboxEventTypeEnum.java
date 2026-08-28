@@ -12,6 +12,7 @@ public enum CommerceOutboxEventTypeEnum {
     ORDER_CANCELED("commerce_order", "订单取消或超时关闭"),
     INVENTORY_RESERVED("commerce_inventory", "库存预留"),
     INVENTORY_RELEASED("commerce_inventory", "库存释放"),
+    PRODUCT_CHANGED("commerce_product", "商品状态或资料变更"),
     REFUND_SUCCESS("commerce_refund", "退款成功"),
     REFUND_FAILED("commerce_refund", "退款失败");
 

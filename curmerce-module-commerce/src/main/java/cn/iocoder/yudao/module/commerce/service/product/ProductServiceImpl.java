@@ -25,10 +25,13 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.store.StoreMapper;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductAuditStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSaleStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
+import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
+import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxEventAppender;
 import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +60,7 @@ public class ProductServiceImpl implements ProductService {
     @Resource private MerchantAccessService merchantAccessService;
     @Resource private ProductOperationLogService operationLogService;
     @Resource private FileApi fileApi;
+    @Autowired(required = false) private CommerceOutboxEventAppender outboxEventAppender;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -85,6 +89,7 @@ public class ProductServiceImpl implements ProductService {
             throw exception(PRODUCT_CODE_DUPLICATE);
         }
         insertSkus(product, context.merchant().getId(), reqVO.getSkus());
+        publishSearchState(product.getId());
         bindProductMedia(product.getId(), product.getMainImageUrl(), product.getImageUrls());
         operationLogService.record(product.getId(), getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
                 "CREATE", null, product.getAuditStatus(), null, product.getSaleStatus(), "创建商品草稿");
@@ -165,6 +170,7 @@ public class ProductServiceImpl implements ProductService {
         skuMapper.deleteByIdsAndOwnership(omittedIds, current.getId(), context.merchant().getId());
         omittedIds.forEach(id -> fileApi.replaceFileReferences("commerce_product_sku", id.toString(), "image", List.of()));
         bindProductMedia(current.getId(), update.getMainImageUrl(), update.getImageUrls());
+        publishSearchState(current.getId());
         operationLogService.record(current.getId(), getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
                 "UPDATE", current.getAuditStatus(), current.getAuditStatus(), current.getSaleStatus(), current.getSaleStatus(), "更新商品资料与 SKU");
     }
@@ -227,6 +233,7 @@ public class ProductServiceImpl implements ProductService {
         operationLogService.record(id, getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
                 "SUBMIT_REVIEW", product.getAuditStatus(), ProductAuditStatusEnum.PENDING.getStatus(),
                 product.getSaleStatus(), product.getSaleStatus(), "提交平台审核");
+        publishSearchState(id);
     }
 
     @Override
@@ -253,6 +260,7 @@ public class ProductServiceImpl implements ProductService {
         operationLogService.record(id, getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
                 "LIST", product.getAuditStatus(), product.getAuditStatus(), ProductSaleStatusEnum.OFF_SHELF.getStatus(),
                 ProductSaleStatusEnum.ON_SALE.getStatus(), "商品上架");
+        publishSearchState(id);
     }
 
     @Override
@@ -271,6 +279,7 @@ public class ProductServiceImpl implements ProductService {
         operationLogService.record(id, getLoginUserId(), ProductOperationLogService.OPERATOR_MERCHANT,
                 "DELIST", product.getAuditStatus(), product.getAuditStatus(), ProductSaleStatusEnum.ON_SALE.getStatus(),
                 ProductSaleStatusEnum.OFF_SHELF.getStatus(), "商品下架");
+        publishSearchState(id);
     }
 
     @Override
@@ -312,6 +321,7 @@ public class ProductServiceImpl implements ProductService {
         operationLogService.record(id, reviewerId, ProductOperationLogService.OPERATOR_ADMIN, "APPROVE",
                 ProductAuditStatusEnum.PENDING.getStatus(), ProductAuditStatusEnum.APPROVED.getStatus(),
                 product.getSaleStatus(), product.getSaleStatus(), "平台审核通过");
+        publishSearchState(id);
     }
 
     @Override
@@ -334,6 +344,7 @@ public class ProductServiceImpl implements ProductService {
         operationLogService.record(reqVO.getId(), reviewerId, ProductOperationLogService.OPERATOR_ADMIN, "REJECT",
                 ProductAuditStatusEnum.PENDING.getStatus(), ProductAuditStatusEnum.REJECTED.getStatus(),
                 product.getSaleStatus(), product.getSaleStatus(), reason);
+        publishSearchState(reqVO.getId());
     }
 
     private MerchantAccessContext requireEnabledStore(Long requestedStoreId) {
@@ -353,6 +364,47 @@ public class ProductServiceImpl implements ProductService {
         var category = product.getCategoryId() == null ? null : categoryMapper.selectById(product.getCategoryId());
         return new ProductAggregate(product, skus, merchant == null ? null : merchant.getName(),
                 store == null ? null : store.getName(), category == null ? null : category.getName());
+    }
+
+    private void publishSearchState(Long productId) {
+        if (outboxEventAppender == null) {
+            return;
+        }
+        ProductDO product = productMapper.selectById(productId);
+        if (product == null) {
+            return;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("productId", product.getId());
+        payload.put("merchantId", product.getMerchantId());
+        payload.put("storeId", product.getStoreId());
+        payload.put("sellerType", product.getSellerType());
+        payload.put("sellerUserId", product.getSellerUserId());
+        payload.put("categoryId", product.getCategoryId());
+        payload.put("code", product.getCode());
+        payload.put("name", product.getName());
+        payload.put("subtitle", product.getSubtitle());
+        payload.put("condition", product.getCondition());
+        payload.put("mainImageUrl", product.getMainImageUrl());
+        payload.put("imageUrls", product.getImageUrls());
+        payload.put("description", product.getDescription());
+        payload.put("auditStatus", product.getAuditStatus());
+        payload.put("saleStatus", product.getSaleStatus());
+        payload.put("sort", product.getSort());
+        payload.put("updatedAt", product.getUpdateTime());
+        payload.put("skus", skuMapper.selectListByProductId(productId).stream().map(sku -> {
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", sku.getId());
+            item.put("code", sku.getCode());
+            item.put("price", sku.getPrice());
+            item.put("marketPrice", sku.getMarketPrice());
+            item.put("stock", sku.getStock());
+            item.put("status", sku.getStatus());
+            item.put("specificationValues", sku.getSpecificationValues());
+            item.put("imageUrl", sku.getImageUrl());
+            return item;
+        }).toList());
+        outboxEventAppender.appendState(CommerceOutboxEventTypeEnum.PRODUCT_CHANGED, productId, payload);
     }
 
     private ProductDO requireOwnedProductForUpdate(Long id, MerchantAccessContext context) {

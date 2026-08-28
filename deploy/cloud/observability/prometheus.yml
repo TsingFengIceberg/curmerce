@@ -12,6 +12,9 @@ scrape_configs:
   - job_name: curmerce-agent
     static_configs:
       - targets: ["127.0.0.1:48084"]
+  - job_name: curmerce-search
+    static_configs:
+      - targets: ["127.0.0.1:48085"]
   - job_name: curmerce-gateway
     static_configs:
       - targets: ["127.0.0.1:48082"]

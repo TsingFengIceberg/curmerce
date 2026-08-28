@@ -92,3 +92,13 @@ monotonic version and processing token prevent an old worker from completing a
 newer update. Do not remove the table while unfinished rows exist. The rollback
 companions are review aids for a stopped disposable runtime, not normal rollback
 automation.
+
+## Search projection Outbox migration
+
+Migration 25 (`20260828-25-kafka-consumer-receipt.sql`) creates the Core-side
+Kafka consumer receipt ledger. Migration 26 (`20260828-26-community-search-outbox.sql`)
+creates the Community-owned transactional Outbox for product and post search
+projection events. Apply both after the earlier numbered migrations and verify
+the schema name, unique event keys, status checks, and retry indexes. The
+rollback files only support a stopped disposable local database after pending
+events have been reviewed; they are not routine application rollback.

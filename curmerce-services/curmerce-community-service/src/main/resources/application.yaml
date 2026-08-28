@@ -27,6 +27,11 @@ spring:
           url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:13306}/${COMMUNITY_MYSQL_DATABASE:curmerce_community}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
           username: ${COMMUNITY_MYSQL_USER:curmerce_community}
           password: ${COMMUNITY_MYSQL_PASSWORD:${MYSQL_PASSWORD}}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:19092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 server:
   address: 127.0.0.1
@@ -85,6 +90,11 @@ yudao:
     license-url: https://opensource.org/licenses/MIT
 
 curmerce:
+  search:
+    events-enabled: ${CURMERCE_SEARCH_EVENTS_ENABLED:false}
+    kafka-topic: ${CURMERCE_SEARCH_KAFKA_TOPIC:curmerce.events.v1}
+    publish-delay-ms: ${CURMERCE_SEARCH_PUBLISH_DELAY_MS:2000}
+    max-attempts: ${CURMERCE_SEARCH_MAX_ATTEMPTS:5}
   cloud:
     core:
       base-url: ${CURMERCE_CORE_BASE_URL:http://127.0.0.1:48080}

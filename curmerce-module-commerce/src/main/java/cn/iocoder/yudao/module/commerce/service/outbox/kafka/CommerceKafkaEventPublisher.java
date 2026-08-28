@@ -35,7 +35,7 @@ public class CommerceKafkaEventPublisher implements CommerceOutboxMessagePublish
                 .setEventKey(event.getEventKey()).setAggregateType(event.getAggregateType())
                 .setAggregateId(event.getAggregateId()).setPayload(event.getPayload());
         try {
-            kafkaTemplate.send(topic, event.getEventKey(), JsonUtils.toJsonString(message))
+            kafkaTemplate.send(topic, String.valueOf(event.getAggregateId()), JsonUtils.toJsonString(message))
                     .get(publishTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();

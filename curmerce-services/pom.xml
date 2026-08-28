@@ -17,5 +17,6 @@
         <module>curmerce-gateway</module>
         <module>curmerce-community-service</module>
         <module>curmerce-agent-service</module>
+        <module>curmerce-search-service</module>
     </modules>
 </project>

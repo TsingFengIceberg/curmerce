@@ -29,6 +29,7 @@ import cn.iocoder.yudao.module.community.service.integration.CommunityMemberClie
 import cn.iocoder.yudao.module.community.service.integration.CommunityMemberProfile;
 import cn.iocoder.yudao.module.community.service.integration.CommunityProductClient;
 import cn.iocoder.yudao.module.community.service.outbox.CommunityMediaOutboxService;
+import cn.iocoder.yudao.module.community.service.search.CommunitySearchEventAppender;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
@@ -55,6 +56,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Resource private CommunityMemberClient memberClient;
     @Resource private CommunityProductClient productClient;
     @Resource private CommunityMediaOutboxService mediaOutboxService;
+    @Resource private CommunitySearchEventAppender searchEventAppender;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -68,6 +70,7 @@ public class CommunityServiceImpl implements CommunityService {
         postMapper.insert(post);
         mediaOutboxService.recordDesiredState("community_post", post.getId().toString(), "media", content.mediaUrls());
         replaceRelations(post.getId(), products, req.getTopics());
+        publishSearchState(post.getId());
         return post.getId();
     }
 
@@ -88,6 +91,7 @@ public class CommunityServiceImpl implements CommunityService {
         }
         replaceRelations(req.getId(), products, req.getTopics());
         mediaOutboxService.recordDesiredState("community_post", req.getId().toString(), "media", content.mediaUrls());
+        publishSearchState(req.getId());
     }
 
     @Override
@@ -102,6 +106,7 @@ public class CommunityServiceImpl implements CommunityService {
         if (postMapper.updateStatus(id, post.getStatus(), CommunityPostStatusEnum.PUBLISHED.getStatus()) != 1) {
             throw exception(POST_STATE_INVALID);
         }
+        publishSearchState(id);
     }
 
     @Override
@@ -112,6 +117,7 @@ public class CommunityServiceImpl implements CommunityService {
         if (postMapper.updateStatus(id, post.getStatus(), CommunityPostStatusEnum.HIDDEN.getStatus()) != 1) {
             throw exception(POST_STATE_INVALID);
         }
+        publishSearchState(id);
     }
 
     @Override
@@ -262,6 +268,7 @@ public class CommunityServiceImpl implements CommunityService {
         if (post == null || postMapper.updateStatus(req.getId(), post.getStatus(), req.getStatus()) != 1) {
             throw exception(POST_STATE_INVALID);
         }
+        publishSearchState(req.getId());
     }
 
     @Override
@@ -282,7 +289,10 @@ public class CommunityServiceImpl implements CommunityService {
                 .setReviewerUserId(adminUserId).setReviewRemark(StrUtil.trim(req.getRemark())).setReviewTime(LocalDateTime.now()));
         if (Objects.equals(req.getStatus(), CommunityReportStatusEnum.RESOLVED.getStatus())) {
             CommunityPostDO post = postMapper.selectById(report.getPostId());
-            if (post != null) postMapper.updateStatus(post.getId(), post.getStatus(), CommunityPostStatusEnum.HIDDEN.getStatus());
+            if (post != null) {
+                postMapper.updateStatus(post.getId(), post.getStatus(), CommunityPostStatusEnum.HIDDEN.getStatus());
+                publishSearchState(post.getId());
+            }
         }
     }
 
@@ -290,6 +300,30 @@ public class CommunityServiceImpl implements CommunityService {
         CommunityPostDO post = postMapper.selectByIdForUpdate(id);
         if (post == null || !Objects.equals(post.getAuthorUserId(), userId)) throw exception(POST_NOT_FOUND);
         return post;
+    }
+
+    private void publishSearchState(Long postId) {
+        if (searchEventAppender == null) return;
+        CommunityPostDO post = postMapper.selectById(postId);
+        if (post == null) return;
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("postId", post.getId());
+        payload.put("authorUserId", post.getAuthorUserId());
+        payload.put("title", post.getTitle());
+        payload.put("content", post.getContent());
+        payload.put("mediaUrls", post.getMediaUrls());
+        payload.put("status", post.getStatus());
+        payload.put("likeCount", post.getLikeCount());
+        payload.put("favoriteCount", post.getFavoriteCount());
+        payload.put("commentCount", post.getCommentCount());
+        payload.put("createTime", post.getCreateTime());
+        payload.put("updateTime", post.getUpdateTime());
+        payload.put("productIds", postProductMapper.selectByPostId(postId).stream()
+                .map(CommunityPostProductDO::getProductId).toList());
+        payload.put("topics", postTopicMapper.selectByPostId(postId).stream()
+                .map(item -> topicMapper.selectById(item.getTopicId()))
+                .filter(Objects::nonNull).map(topic -> Map.of("id", topic.getId(), "name", topic.getName(), "slug", topic.getSlug())).toList());
+        searchEventAppender.appendState(postId, payload);
     }
     private CommunityPostDO requirePublished(Long id) {
         CommunityPostDO post = postMapper.selectById(id);

@@ -22,6 +22,11 @@ spring:
               uri: lb://curmerce-agent-service
               predicates:
                 - Path=/app-api/agent/**
+            - id: search-service
+              order: -15
+              uri: lb://curmerce-search-service
+              predicates:
+                - Path=/app-api/search/**
             - id: core-service
               order: 0
               uri: lb://curmerce-core-service

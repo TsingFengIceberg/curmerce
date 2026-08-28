@@ -37,14 +37,15 @@ The project has completed its runnable `v0.1-modular-monolith` baseline and ente
 curmerce-web :3003 -> Spring Cloud Gateway :48082
                             |-> Core :48080      system, infra, member, commerce
                             |-> Community :48083 curmerce_community schema and APIs
-                            `-> Agent :48084     read-only retrieval and source degradation
+                            |-> Agent :48084     read-only retrieval and source degradation
+                            `-> Search :48085    Kafka-driven Elasticsearch product/post projections
                                       |
                                   Nacos :8848
 ```
 
 Core product, inventory, order, payment, and refund behavior remains in `yudao-server` to avoid prematurely introducing distributed transaction failures. Community no longer depends on Commerce, Member, or Infra persistence modules and reaches required core capabilities through an internal-key-protected HTTP contract. Agent requires no model credentials at this stage and provides a failure-isolated read-only retrieval and source-degradation skeleton.
 
-MySQL remains the business source of truth. Core and Community share one local MySQL process but use separate `curmerce` and `curmerce_community` schemas with mutually restricted accounts. Redis supports framework capabilities and the local event stream, while Spring Cloud Gateway and Nacos support the first extraction. Kafka, Elasticsearch, Spring AI model integration, and external telemetry storage, dashboards, and alerts are not presented as completed features.
+MySQL remains the business source of truth. Core and Community share one local MySQL process but use separate `curmerce` and `curmerce_community` schemas with mutually restricted accounts. Redis supports framework capabilities and the local event stream, while Spring Cloud Gateway and Nacos support the first extraction. Kafka and Elasticsearch are now available as optional search-event transport and asynchronous projections. Spring AI model integration is not complete; the local Compose runtime provides optional telemetry, metrics, and tracing infrastructure rather than production alerting or SLOs.
 
 The project is built and run with JDK 21, and the root Maven build consistently targets Java 21 source and bytecode.
 
@@ -87,14 +88,14 @@ Do not run `next dev` and `next build` against the same `.next` directory concur
 - Agent is currently a model-free read-only retrieval skeleton, not a complete Spring AI or RAG product capability.
 - Community and Core still share one local MySQL process to control runtime cost, but now use separate schemas and least-privilege accounts. Local configuration may temporarily fall back to the same password; production-like environments must set a distinct `COMMUNITY_MYSQL_PASSWORD`.
 - Community media references converge through a latest-desired-state Outbox with leases, unbounded retries, and scheduled full reconciliation. This is eventual consistency, not cross-service atomicity; prolonged Core outages accumulate visible pending work.
-- OTLP export is disabled by default. Local metrics, circuit-breaker state, and W3C trace propagation are available, but no telemetry collector, persistent backend, dashboard, alerting, or SLO has been deployed.
-- Kafka, Elasticsearch, distributed compensation, and a multi-node registry remain future work.
+- OTLP export is disabled by default. The local Compose runtime provides a Collector, Tempo, Prometheus, and Grafana when enabled, but this is not a production alerting or SLO claim.
+- Search projection is disabled by default. When enabled, product and post transaction Outboxes publish Kafka events; the Search service ignores duplicate and out-of-order older event IDs, retries failures before dead-letter routing, and can rebuild indexes from the Core and Community APIs.
 
 ## Next Directions
 
-1. Add containerized dependencies, unified configuration, automated fault regression, and a real OpenTelemetry Collector, metrics backend, and dashboard to the current four-process topology.
+1. Continue validating Kafka, Elasticsearch, Collector, metrics, and tracing on the local Compose runtime and expand automated fault regression.
 2. Use orders, inventory, limited releases, and auctions to progressively study concurrency control, reliable messaging, compensation, and reconciliation.
-3. Introduce Kafka and rebuildable Elasticsearch search projections, then evaluate Auction extraction.
+3. Evaluate independent deployment boundaries for Search and Auction, including index rebuilds, message dead letters, and cross-service reconciliation scenarios.
 4. Build Spring AI, RAG, rule explanation, and permission-controlled domain tools on the current read-only Agent skeleton.
 
 ## Foundation and References

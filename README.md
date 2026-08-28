@@ -37,14 +37,15 @@ Curmerce 是一个面向兴趣消费场景的社区内容驱动型多模式交�
 curmerce-web :3003 -> Spring Cloud Gateway :48082
                             ├── Core :48080      system、infra、member、commerce
                             ├── Community :48083 curmerce_community Schema 与社区接口
-                            └── Agent :48084     只读商品/社区检索与故障降级
+                            ├── Agent :48084     只读商品/社区检索与故障降级
+                            └── Search :48085    Kafka 驱动的 Elasticsearch 商品/帖子投影
                                       |
                                   Nacos :8848
 ```
 
 核心商品、库存、订单、支付和退款仍保留在 `yudao-server`，避免过早制造分布式交易一致性问题。Community 已移除对 Commerce、Member 和 Infra 持久化模块的依赖，通过受内部密钥保护的 HTTP 契约访问核心能力。Agent 当前不依赖模型凭据，只提供可独立失败的只读检索与来源降级骨架。
 
-MySQL 是业务事实来源；Core 与 Community 共用一个本地 MySQL 实例，但分别使用 `curmerce` 与 `curmerce_community` Schema 和互相不可越权的账号。Redis 用于框架能力和本地事件流，Spring Cloud Gateway 和 Nacos 已用于本次服务拆分。Kafka、Elasticsearch、Spring AI 模型接入，以及外部遥测存储、仪表盘和告警仍未作为已完成功能引入。
+MySQL 是业务事实来源；Core 与 Community 共用一个本地 MySQL 实例，但分别使用 `curmerce` 与 `curmerce_community` Schema 和互相不可越权的账号。Redis 用于框架能力和本地事件流，Spring Cloud Gateway 和 Nacos 已用于本次服务拆分。Kafka 与 Elasticsearch 已作为可选的搜索事件总线和异步投影引入；Spring AI 模型接入仍未完成，外部遥测存储、仪表盘和告警通过本地 Compose 提供可选运行底座。
 
 项目使用 JDK 21 构建和运行，根 Maven 构建也统一使用 Java 21 源码与字节码目标。
 
@@ -87,14 +88,14 @@ npm run build
 - Agent 当前只是无模型凭据也可运行的只读检索骨架，不是完整的 Spring AI/RAG 产品能力。
 - Community 与 Core 仍共享一个本地 MySQL 进程以控制运行成本，但已使用独立 Schema 和最小权限账号；本地配置可暂时回退到同一密码，正式环境必须提供独立的 `COMMUNITY_MYSQL_PASSWORD`。
 - Community 媒体引用使用“最新期望状态”Outbox、租约领取、无限重试和定时全量对账实现最终一致；它不声称提供跨服务强原子性，Core 长时间不可用时任务会持续积压并通过指标暴露。
-- OTLP 导出默认关闭；当前已提供本地指标、断路器状态和 W3C Trace 传播，但尚未部署遥测 Collector、持久存储、仪表盘、告警或 SLO。
-- Kafka、Elasticsearch、分布式补偿和多节点注册中心仍属于后续阶段。
+- OTLP 导出默认关闭；本地 Compose 提供 Collector、Tempo、Prometheus 和 Grafana，是否启用由运行环境决定，尚未宣称生产级告警或 SLO。
+- 搜索投影默认关闭；启用后由商品/帖子事务 Outbox 发布 Kafka 事件，Search 服务以事件 ID 忽略重复和乱序旧事件，失败经过重试后进入死信主题，并支持从 Core/Community API 重建索引。
 
 ## 后续方向
 
-1. 为当前四进程拓扑补齐容器化依赖、统一配置和自动化故障回归，并接入实际 OpenTelemetry Collector、指标存储与仪表盘。
+1. 在本地 Compose 运行底座之上继续验证 Kafka、Elasticsearch、Collector、指标和追踪链路，并完善自动化故障回归。
 2. 以订单、库存、限时发售和拍卖为学习载体，逐步实现并发控制、可靠消息、补偿和对账。
-3. 引入 Kafka 与可重建的 Elasticsearch 搜索投影，再评估拍卖服务拆分。
+3. 评估 Search 与 Auction 的独立部署边界，补齐索引重建、消息死信和跨服务对账场景。
 4. 在当前只读 Agent 骨架上接入 Spring AI、RAG、规则解释和受权限控制的领域工具。
 
 ## 基座与参考项目
