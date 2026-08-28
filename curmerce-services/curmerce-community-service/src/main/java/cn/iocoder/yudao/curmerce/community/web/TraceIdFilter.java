@@ -26,12 +26,12 @@ public class TraceIdFilter extends OncePerRequestFilter {
         String candidate = request.getHeader(CloudHeaders.TRACE_ID);
         String traceId = candidate != null && SAFE_TRACE_ID.matcher(candidate).matches()
                 ? candidate : UUID.randomUUID().toString().replace("-", "");
-        MDC.put("traceId", traceId);
+        MDC.put("correlationId", traceId);
         response.setHeader(CloudHeaders.TRACE_ID, traceId);
         try {
             chain.doFilter(request, response);
         } finally {
-            MDC.remove("traceId");
+            MDC.remove("correlationId");
         }
     }
 }

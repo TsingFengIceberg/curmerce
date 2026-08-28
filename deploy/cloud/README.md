@@ -13,7 +13,7 @@ This directory contains the reproducible user-level runtime layout for Curmerce'
 | `curmerce-gateway` | `127.0.0.1:48082` | Stable frontend entry point, routing, CORS, and trace IDs |
 | `curmerce-web` | `127.0.0.1:3003` | Next.js acceptance frontend |
 
-MySQL and Redis remain user-level loopback services. The current extraction intentionally shares one MySQL instance, but the community process accesses only community-owned tables. Cross-boundary member, product, permission, token, and media operations use the core service's internal HTTP contract.
+MySQL and Redis remain user-level loopback services. Core and Community intentionally share one MySQL process but use separate `curmerce` and `curmerce_community` schemas and mutually restricted accounts. Cross-boundary member, product, permission, token, and media operations use the core service's internal HTTP contract.
 
 ## Build
 
@@ -38,9 +38,14 @@ Keep `/home/wugang/.config/curmerce-services/credentials.env` mode `0600`. In ad
 
 ```text
 CURMERCE_INTERNAL_TOKEN=<random value with at least 32 characters>
+COMMUNITY_MYSQL_DATABASE=curmerce_community
+COMMUNITY_MYSQL_USER=curmerce_community
+COMMUNITY_MYSQL_PASSWORD=<distinct Community database password>
 ```
 
 The temporary fallback to `CURMERCE_OAUTH_CLIENT_SECRET` exists only for migration compatibility. A dedicated token is preferred because it can be rotated independently. Never expose the internal core API through the Gateway.
+
+Prometheus endpoints are available on each loopback service. W3C tracing is enabled locally, but OTLP export is off by default. Configure `OTEL_TRACING_ENABLED=true` and `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` only after a reachable, authenticated Collector is available.
 
 ## Nacos installation
 
@@ -99,9 +104,9 @@ The expected failure response is HTTP `503` with the supplied trace ID. The Agen
 
 本目录记录 Curmerce 第一次服务拆分阶段的可重复用户级运行方式。所有开发端口只监听回环地址，私有凭据始终保留在 Git 外部。
 
-运行拓扑、端口和职责以文档开头的表格为准。MySQL 与 Redis 继续使用当前用户级回环服务。社区进程暂时与核心进程共享同一个 MySQL 实例，但只能访问自己拥有的 `community_*` 表；会员、商品、权限、Token 与媒体操作必须通过核心服务的内部 HTTP 契约完成。
+运行拓扑、端口和职责以文档开头的表格为准。MySQL 与 Redis 继续使用当前用户级回环服务。Community 与 Core 共用一个 MySQL 进程，但分别使用 `curmerce_community` 与 `curmerce` Schema 和互相不可越权的账号；会员、商品、权限、Token 与媒体操作必须通过核心服务的内部 HTTP 契约完成。
 
-使用 JDK 21 执行 `mvn -DskipTests package` 生成四个后端 JAR。私有配置继续放在权限为 `0600` 的 `/home/wugang/.config/curmerce-services/credentials.env` 中，并增加至少 32 字符的随机 `CURMERCE_INTERNAL_TOKEN`。兼容性的 OAuth 密钥回退仅用于迁移，内部 Token 应独立配置和轮换，内部核心接口不得经过 Gateway 暴露。
+使用 JDK 21 执行 `mvn -DskipTests package` 生成四个后端 JAR。私有配置继续放在权限为 `0600` 的 `/home/wugang/.config/curmerce-services/credentials.env` 中，并增加至少 32 字符的随机 `CURMERCE_INTERNAL_TOKEN` 以及独立的 `COMMUNITY_MYSQL_PASSWORD`。兼容性的密钥和数据库密码回退仅用于本地迁移，正式环境必须独立配置。各服务暴露回环 Prometheus 端点并传播 W3C Trace；OTLP 默认关闭，只有 Collector 可用时才显式启用。
 
 Nacos 3.0.3 安装包必须使用上方 SHA-256 校验，解压到 `/home/wugang/.local/share/curmerce-toolchains/nacos-3.0.3`，以 standalone server-only 模式运行，不启动 Console，并确保监听和注册地址均为 `127.0.0.1`。将 [`systemd/`](./systemd/) 模板安装到 `~/.config/systemd/user/` 后，使用上方命令统一启动、检查和停止服务。
 

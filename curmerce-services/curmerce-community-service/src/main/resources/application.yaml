@@ -23,10 +23,10 @@ spring:
         test-while-idle: true
       datasource:
         master:
-          name: ${MYSQL_DATABASE:curmerce}
-          url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:13306}/${MYSQL_DATABASE:curmerce}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
-          username: ${MYSQL_USER:curmerce}
-          password: ${MYSQL_PASSWORD}
+          name: ${COMMUNITY_MYSQL_DATABASE:curmerce_community}
+          url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:13306}/${COMMUNITY_MYSQL_DATABASE:curmerce_community}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+          username: ${COMMUNITY_MYSQL_USER:curmerce_community}
+          password: ${COMMUNITY_MYSQL_PASSWORD:${MYSQL_PASSWORD}}
 
 server:
   address: 127.0.0.1
@@ -91,15 +91,42 @@ curmerce:
       internal-token: ${CURMERCE_INTERNAL_TOKEN:${CURMERCE_OAUTH_CLIENT_SECRET:}}
       connect-timeout: ${CURMERCE_CORE_CONNECT_TIMEOUT:1s}
       read-timeout: ${CURMERCE_CORE_READ_TIMEOUT:2s}
+  community-media-outbox:
+    publish-delay-ms: ${COMMUNITY_MEDIA_OUTBOX_PUBLISH_DELAY_MS:2000}
+    reconcile-delay-ms: ${COMMUNITY_MEDIA_OUTBOX_RECONCILE_DELAY_MS:60000}
+    batch-size: ${COMMUNITY_MEDIA_OUTBOX_BATCH_SIZE:50}
+    lease-duration: ${COMMUNITY_MEDIA_OUTBOX_LEASE_DURATION:30s}
+    max-backoff: ${COMMUNITY_MEDIA_OUTBOX_MAX_BACKOFF:5m}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      coreService:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
+  tracing:
+    enabled: true
+    sampling:
+      probability: ${OTEL_TRACES_SAMPLER_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      export:
+        enabled: ${OTEL_TRACING_ENABLED:false}
+      endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://127.0.0.1:4318/v1/traces}
 
 logging:
   file:
     name: ${CURMERCE_COMMUNITY_LOG_FILE:${user.home}/.local/state/curmerce/community-service.log}
   pattern:
-    level: "%5p [traceId=%X{traceId:-}]"
+    level: "%5p [correlationId=%X{correlationId:-},traceId=%X{traceId:-},spanId=%X{spanId:-}]"

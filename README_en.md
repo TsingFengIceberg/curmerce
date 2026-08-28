@@ -26,7 +26,8 @@ The project has completed its runnable `v0.1-modular-monolith` baseline and ente
 - **Limited releases**: campaign and SKU configuration, time-based states, campaign inventory, per-user limits, order creation, payment, inventory restoration after cancellation or timeout, and automatic opening and ending.
 - **Basic auctions**: session lifecycle, starting price and minimum increments, idempotent bidding, winner settlement, single-order creation, payment-timeout failure, and reuse of the standard fulfillment and refund lifecycle.
 - **Community foundation**: text posts with optional images, drafts and publishing, topics, search, comments and replies, likes, favorites, following feeds, reports and administrator moderation, plus optional post-product associations.
-- **Reliability baseline**: database constraints, idempotency keys for critical operations, duplicate payment and refund callback protection, order-state guards, inventory restoration, reconciliation queries, and local event delivery through Transactional Outbox and Redis Stream.
+- **Reliability baseline**: database constraints, idempotency keys for critical operations, duplicate payment and refund callback protection, order-state guards, inventory restoration, reconciliation queries, commerce event Outbox delivery, and a leased, exponentially retried, reconciled Community media desired-state Outbox.
+- **Service resilience and observability**: Resilience4j circuit breakers for Core, Community, and Agent downstream calls; Prometheus metrics for Gateway, Core, Community, and Agent; and locally sampled OpenTelemetry W3C tracing with opt-in export.
 - **Media asset foundation**: authenticated uploads, real-image validation, rate limits and user quotas, SHA-256 deduplication, stable asset URLs, business references and delayed orphan cleanup, private access, antivirus scanning, asynchronous WebP/AVIF variants, content moderation, administrator governance, and resumable object-storage migration.
 - **Acceptance frontend**: basic operational pages for buyers, individual sellers, merchants, and platform administrators across the current primary workflows.
 
@@ -35,7 +36,7 @@ The project has completed its runnable `v0.1-modular-monolith` baseline and ente
 ```text
 curmerce-web :3003 -> Spring Cloud Gateway :48082
                             |-> Core :48080      system, infra, member, commerce
-                            |-> Community :48083 community-owned data and APIs
+                            |-> Community :48083 curmerce_community schema and APIs
                             `-> Agent :48084     read-only retrieval and source degradation
                                       |
                                   Nacos :8848
@@ -43,7 +44,7 @@ curmerce-web :3003 -> Spring Cloud Gateway :48082
 
 Core product, inventory, order, payment, and refund behavior remains in `yudao-server` to avoid prematurely introducing distributed transaction failures. Community no longer depends on Commerce, Member, or Infra persistence modules and reaches required core capabilities through an internal-key-protected HTTP contract. Agent requires no model credentials at this stage and provides a failure-isolated read-only retrieval and source-degradation skeleton.
 
-MySQL remains the business source of truth, Redis supports framework capabilities and the local event stream, and Spring Cloud Gateway plus Nacos now support the first service extraction. Kafka, Elasticsearch, Spring AI model integration, and production-grade observability are not presented as completed features.
+MySQL remains the business source of truth. Core and Community share one local MySQL process but use separate `curmerce` and `curmerce_community` schemas with mutually restricted accounts. Redis supports framework capabilities and the local event stream, while Spring Cloud Gateway and Nacos support the first extraction. Kafka, Elasticsearch, Spring AI model integration, and external telemetry storage, dashboards, and alerts are not presented as completed features.
 
 The project is built and run with JDK 21, and the root Maven build consistently targets Java 21 source and bytecode.
 
@@ -84,13 +85,14 @@ Do not run `next dev` and `next build` against the same `.next` directory concur
 - The community currently provides a basic chronological feed without recommendation algorithms, a notification center, deeply nested comments, or large-scale asynchronous counters.
 - Media content moderation is disabled by default and requires an explicitly configured compatible HTTP moderation service. ClamAV, imgproxy, and MinIO are also optional local capabilities. Database file storage remains the minimum runnable mode, while large files and production-like deployments should use private object storage.
 - Agent is currently a model-free read-only retrieval skeleton, not a complete Spring AI or RAG product capability.
-- Community and Core still share one MySQL server and schema, with code dependencies and table ownership enforcing separation; dedicated database credentials and schemas remain a hardening step.
-- Community media references use a retryable remote write without cross-service atomicity; stale references after a remote success and local rollback still require an Outbox and reconciliation job.
-- Kafka, Elasticsearch, distributed compensation, a multi-node registry, and production-grade observability remain future work.
+- Community and Core still share one local MySQL process to control runtime cost, but now use separate schemas and least-privilege accounts. Local configuration may temporarily fall back to the same password; production-like environments must set a distinct `COMMUNITY_MYSQL_PASSWORD`.
+- Community media references converge through a latest-desired-state Outbox with leases, unbounded retries, and scheduled full reconciliation. This is eventual consistency, not cross-service atomicity; prolonged Core outages accumulate visible pending work.
+- OTLP export is disabled by default. Local metrics, circuit-breaker state, and W3C trace propagation are available, but no telemetry collector, persistent backend, dashboard, alerting, or SLO has been deployed.
+- Kafka, Elasticsearch, distributed compensation, and a multi-node registry remain future work.
 
 ## Next Directions
 
-1. Harden Community ownership with dedicated database credentials and schemas, then extend remote contracts, timeouts, metrics, and tracing.
+1. Add containerized dependencies, unified configuration, automated fault regression, and a real OpenTelemetry Collector, metrics backend, and dashboard to the current four-process topology.
 2. Use orders, inventory, limited releases, and auctions to progressively study concurrency control, reliable messaging, compensation, and reconciliation.
 3. Introduce Kafka and rebuildable Elasticsearch search projections, then evaluate Auction extraction.
 4. Build Spring AI, RAG, rule explanation, and permission-controlled domain tools on the current read-only Agent skeleton.

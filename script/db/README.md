@@ -73,3 +73,22 @@ Object bytes are migrated separately through the authenticated media
 administration API described in `docs/media-architecture.md`. That workflow is
 dry-run and non-destructive by default, verifies SHA-256 after copying, and
 never removes the database source automatically.
+
+## Community schema isolation and media Outbox
+
+Migration 23 atomically moves the eight Community-owned tables from `curmerce`
+to `curmerce_community` with one cross-schema `RENAME TABLE`. Stop Community,
+take a protected backup, record exact row counts, and confirm the target schema
+contains no tables before applying it through the local administrative Unix
+socket. Create `curmerce_community@127.0.0.1` separately and grant only
+`SELECT`, `INSERT`, `UPDATE`, and `DELETE` on `curmerce_community.*`; never put
+its password in a migration file. Verify both directions: the Community account
+must not read `curmerce`, and the Core account must not read
+`curmerce_community`.
+
+Migration 24 creates `community_media_outbox` in the Community schema. Its
+unique business key stores the latest desired media-reference payload, while a
+monotonic version and processing token prevent an old worker from completing a
+newer update. Do not remove the table while unfinished rows exist. The rollback
+companions are review aids for a stopped disposable runtime, not normal rollback
+automation.

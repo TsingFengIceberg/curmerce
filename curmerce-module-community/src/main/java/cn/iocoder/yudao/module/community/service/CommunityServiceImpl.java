@@ -25,10 +25,10 @@ import cn.iocoder.yudao.module.community.dal.mysql.report.CommunityReportMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.topic.CommunityPostTopicMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.topic.CommunityTopicMapper;
 import cn.iocoder.yudao.module.community.enums.*;
-import cn.iocoder.yudao.module.community.service.integration.CommunityMediaClient;
 import cn.iocoder.yudao.module.community.service.integration.CommunityMemberClient;
 import cn.iocoder.yudao.module.community.service.integration.CommunityMemberProfile;
 import cn.iocoder.yudao.module.community.service.integration.CommunityProductClient;
+import cn.iocoder.yudao.module.community.service.outbox.CommunityMediaOutboxService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
@@ -54,7 +54,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Resource(name = "communityReportMapper") private CommunityReportMapper reportMapper;
     @Resource private CommunityMemberClient memberClient;
     @Resource private CommunityProductClient productClient;
-    @Resource private CommunityMediaClient mediaClient;
+    @Resource private CommunityMediaOutboxService mediaOutboxService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -66,7 +66,7 @@ public class CommunityServiceImpl implements CommunityService {
                 .setContent(content.content()).setMediaUrls(content.mediaUrls())
                 .setStatus(CommunityPostStatusEnum.DRAFT.getStatus()).setLikeCount(0).setFavoriteCount(0).setCommentCount(0);
         postMapper.insert(post);
-        mediaClient.replaceFileReferences("community_post", post.getId().toString(), "media", content.mediaUrls());
+        mediaOutboxService.recordDesiredState("community_post", post.getId().toString(), "media", content.mediaUrls());
         replaceRelations(post.getId(), products, req.getTopics());
         return post.getId();
     }
@@ -87,7 +87,7 @@ public class CommunityServiceImpl implements CommunityService {
             throw exception(POST_STATE_INVALID);
         }
         replaceRelations(req.getId(), products, req.getTopics());
-        mediaClient.replaceFileReferences("community_post", req.getId().toString(), "media", content.mediaUrls());
+        mediaOutboxService.recordDesiredState("community_post", req.getId().toString(), "media", content.mediaUrls());
     }
 
     @Override

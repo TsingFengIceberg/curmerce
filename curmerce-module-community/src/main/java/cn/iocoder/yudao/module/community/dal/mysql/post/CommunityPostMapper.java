@@ -15,6 +15,12 @@ import cn.hutool.core.util.StrUtil;
 
 @Mapper
 public interface CommunityPostMapper extends BaseMapperX<CommunityPostDO> {
+    default java.util.List<CommunityPostDO> selectMediaBatchAfterId(long afterId, int batchSize) {
+        int safeBatchSize = Math.max(1, Math.min(batchSize, 500));
+        return selectList(new LambdaQueryWrapper<CommunityPostDO>()
+                .gt(CommunityPostDO::getId, afterId).orderByAsc(CommunityPostDO::getId)
+                .last("LIMIT " + safeBatchSize));
+    }
     default CommunityPostDO selectByIdForUpdate(Long id) {
         return selectOneForUpdate(new LambdaQueryWrapper<CommunityPostDO>().eq(CommunityPostDO::getId, id));
     }

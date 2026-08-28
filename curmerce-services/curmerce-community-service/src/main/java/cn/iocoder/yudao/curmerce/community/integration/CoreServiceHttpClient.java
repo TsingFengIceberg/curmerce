@@ -11,6 +11,8 @@ import cn.iocoder.yudao.framework.common.biz.system.permission.dto.DeptDataPermi
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import lombok.extern.slf4j.Slf4j;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.slf4j.MDC;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -19,6 +21,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 import static cn.iocoder.yudao.module.community.enums.ErrorCodeConstants.CORE_SERVICE_UNAVAILABLE;
 
@@ -27,20 +30,23 @@ import static cn.iocoder.yudao.module.community.enums.ErrorCodeConstants.CORE_SE
 public class CoreServiceHttpClient {
 
     private final RestClient client;
+    private final CircuitBreaker circuitBreaker;
 
-    public CoreServiceHttpClient(RestClient.Builder builder, CoreServiceProperties properties) {
+    public CoreServiceHttpClient(RestClient.Builder builder, CoreServiceProperties properties,
+                                 CircuitBreakerRegistry circuitBreakerRegistry) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(properties.connectTimeout());
         requestFactory.setReadTimeout(properties.readTimeout());
         this.client = builder.baseUrl(properties.baseUrl()).requestFactory(requestFactory)
                 .defaultHeader(CloudHeaders.INTERNAL_TOKEN, properties.internalToken())
                 .requestInterceptor((request, body, execution) -> {
-                    String traceId = MDC.get("traceId");
+                    String traceId = MDC.get("correlationId");
                     if (traceId != null) {
                         request.getHeaders().set(CloudHeaders.TRACE_ID, traceId);
                     }
                     return execution.execute(request, body);
                 }).build();
+        this.circuitBreaker = circuitBreakerRegistry.circuitBreaker("coreService");
     }
 
     public OAuth2AccessTokenCheckRespDTO checkToken(String token) {
@@ -79,7 +85,8 @@ public class CoreServiceHttpClient {
 
     private <T> T get(String path, ParameterizedTypeReference<CommonResult<T>> type, Object... variables) {
         try {
-            CommonResult<T> result = client.get().uri(path, variables).retrieve().body(type);
+            CommonResult<T> result = execute(path,
+                    () -> client.get().uri(path, variables).retrieve().body(type));
             return checked(result);
         } catch (ServiceException ex) {
             throw ex;
@@ -90,7 +97,8 @@ public class CoreServiceHttpClient {
 
     private <T> T post(String path, Object body, ParameterizedTypeReference<CommonResult<T>> type) {
         try {
-            CommonResult<T> result = client.post().uri(path).body(body).retrieve().body(type);
+            CommonResult<T> result = execute(path,
+                    () -> client.post().uri(path).body(body).retrieve().body(type));
             return checked(result);
         } catch (ServiceException ex) {
             throw ex;
@@ -102,7 +110,8 @@ public class CoreServiceHttpClient {
     private <T> T postWithoutBody(String path, ParameterizedTypeReference<CommonResult<T>> type,
                                   Object... variables) {
         try {
-            CommonResult<T> result = client.post().uri(path, variables).retrieve().body(type);
+            CommonResult<T> result = execute(path,
+                    () -> client.post().uri(path, variables).retrieve().body(type));
             return checked(result);
         } catch (ServiceException ex) {
             throw ex;
@@ -118,8 +127,17 @@ public class CoreServiceHttpClient {
         return result.getCheckedData();
     }
 
-    private ServiceException unavailable(String path, RestClientException cause) {
-        log.warn("core service call failed: path={}, traceId={}, reason={}", path, MDC.get("traceId"), cause.getMessage());
+    private <T> T execute(String path, Supplier<T> request) {
+        try {
+            return circuitBreaker.executeSupplier(request);
+        } catch (RuntimeException ex) {
+            throw unavailable(path, ex);
+        }
+    }
+
+    private ServiceException unavailable(String path, RuntimeException cause) {
+        log.warn("core service call failed: path={}, correlationId={}, breakerState={}, reason={}", path,
+                MDC.get("correlationId"), circuitBreaker.getState(), cause.getMessage());
         return new ServiceException(CORE_SERVICE_UNAVAILABLE);
     }
 }

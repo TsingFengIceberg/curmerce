@@ -21,10 +21,10 @@ import cn.iocoder.yudao.module.community.dal.mysql.report.CommunityReportMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.topic.CommunityPostTopicMapper;
 import cn.iocoder.yudao.module.community.dal.mysql.topic.CommunityTopicMapper;
 import cn.iocoder.yudao.module.community.enums.CommunityPostStatusEnum;
-import cn.iocoder.yudao.module.community.service.integration.CommunityMediaClient;
 import cn.iocoder.yudao.module.community.service.integration.CommunityMemberClient;
 import cn.iocoder.yudao.module.community.service.integration.CommunityMemberProfile;
 import cn.iocoder.yudao.module.community.service.integration.CommunityProductClient;
+import cn.iocoder.yudao.module.community.service.outbox.CommunityMediaOutboxService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -53,7 +53,7 @@ class CommunityServiceImplTest {
     @Mock private CommunityReportMapper reportMapper;
     @Mock private CommunityMemberClient memberClient;
     @Mock private CommunityProductClient productClient;
-    @Mock private CommunityMediaClient mediaClient;
+    @Mock private CommunityMediaOutboxService mediaOutboxService;
     @InjectMocks private CommunityServiceImpl service;
 
     @Test

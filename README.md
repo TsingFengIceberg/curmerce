@@ -26,7 +26,8 @@ Curmerce 是一个面向兴趣消费场景的社区内容驱动型多模式交�
 - **限时发售**：活动和 SKU 配置、时间状态、活动库存、用户限购、下单、支付、取消或超时后的库存恢复，以及自动开始和结束。
 - **基础拍卖**：场次状态、起拍价和最小加价、出价幂等、胜者结算、唯一订单、支付超时失败，以及复用普通订单履约和退款流程。
 - **社区基础**：可选图片的文字帖子、草稿与发布、话题、搜索、评论与回复、点赞、收藏、关注内容流、举报和管理员审核，以及可选的帖子商品关联。
-- **可靠性基础**：数据库约束、关键操作幂等键、支付和退款重复回调保护、订单状态约束、库存恢复、对账查询，以及基于 Transactional Outbox 和 Redis Stream 的本地事件投递。
+- **可靠性基础**：数据库约束、关键操作幂等键、支付和退款重复回调保护、订单状态约束、库存恢复、对账查询、交易事件 Outbox，以及带租约、指数退避和对账修复的 Community 媒体期望状态 Outbox。
+- **服务治理与可观测性**：Core、Community 和 Agent 下游调用的 Resilience4j 断路器，Gateway/Core/Community/Agent 的 Prometheus 指标，以及默认本地采样、按配置导出的 OpenTelemetry W3C 链路追踪。
 - **媒体资产基础**：认证上传、真实图片校验、限流与用户配额、SHA-256 去重、稳定资产地址、业务引用和延迟孤立清理、私有访问、病毒扫描、异步 WebP/AVIF 衍生图、内容审核、管理员治理，以及可恢复的对象存储迁移。
 - **验收前端**：买家、个人卖家、商家和平台管理员的基础操作页面，覆盖当前主要业务闭环。
 
@@ -35,7 +36,7 @@ Curmerce 是一个面向兴趣消费场景的社区内容驱动型多模式交�
 ```text
 curmerce-web :3003 -> Spring Cloud Gateway :48082
                             ├── Core :48080      system、infra、member、commerce
-                            ├── Community :48083 community_* 数据与社区接口
+                            ├── Community :48083 curmerce_community Schema 与社区接口
                             └── Agent :48084     只读商品/社区检索与故障降级
                                       |
                                   Nacos :8848
@@ -43,7 +44,7 @@ curmerce-web :3003 -> Spring Cloud Gateway :48082
 
 核心商品、库存、订单、支付和退款仍保留在 `yudao-server`，避免过早制造分布式交易一致性问题。Community 已移除对 Commerce、Member 和 Infra 持久化模块的依赖，通过受内部密钥保护的 HTTP 契约访问核心能力。Agent 当前不依赖模型凭据，只提供可独立失败的只读检索与来源降级骨架。
 
-MySQL 是业务事实来源，Redis 用于框架能力和本地事件流，Spring Cloud Gateway 和 Nacos 已用于本次服务拆分。Kafka、Elasticsearch、Spring AI 模型接入与生产级可观测性尚未作为已完成功能引入。
+MySQL 是业务事实来源；Core 与 Community 共用一个本地 MySQL 实例，但分别使用 `curmerce` 与 `curmerce_community` Schema 和互相不可越权的账号。Redis 用于框架能力和本地事件流，Spring Cloud Gateway 和 Nacos 已用于本次服务拆分。Kafka、Elasticsearch、Spring AI 模型接入，以及外部遥测存储、仪表盘和告警仍未作为已完成功能引入。
 
 项目使用 JDK 21 构建和运行，根 Maven 构建也统一使用 Java 21 源码与字节码目标。
 
@@ -84,13 +85,14 @@ npm run build
 - 社区目前提供基础时间流，不包含推荐算法、通知中心、复杂楼中楼或大规模异步计数。
 - 媒体内容审核默认关闭，需要显式配置兼容的 HTTP 审核服务；ClamAV、imgproxy 和 MinIO 也是可选的本地部署能力。数据库文件存储仍可作为最低运行方式，但大文件和正式环境应使用私有对象存储。
 - Agent 当前只是无模型凭据也可运行的只读检索骨架，不是完整的 Spring AI/RAG 产品能力。
-- Community 与 Core 当前仍共享一个 MySQL 服务和 Schema，依靠代码依赖与表所有权隔离；独立数据库账号和 Schema 尚待后续硬化。
-- Community 的媒体引用通过可重试的远程写入同步，但尚无跨服务原子性；远程成功后本地回滚的失效引用需要后续 Outbox 与对账任务修复。
-- Kafka、Elasticsearch、分布式补偿、多节点注册中心和生产级可观测性仍属于后续阶段。
+- Community 与 Core 仍共享一个本地 MySQL 进程以控制运行成本，但已使用独立 Schema 和最小权限账号；本地配置可暂时回退到同一密码，正式环境必须提供独立的 `COMMUNITY_MYSQL_PASSWORD`。
+- Community 媒体引用使用“最新期望状态”Outbox、租约领取、无限重试和定时全量对账实现最终一致；它不声称提供跨服务强原子性，Core 长时间不可用时任务会持续积压并通过指标暴露。
+- OTLP 导出默认关闭；当前已提供本地指标、断路器状态和 W3C Trace 传播，但尚未部署遥测 Collector、持久存储、仪表盘、告警或 SLO。
+- Kafka、Elasticsearch、分布式补偿和多节点注册中心仍属于后续阶段。
 
 ## 后续方向
 
-1. 用独立数据库账号和 Schema 硬化 Community 所有权，并完善远程契约、超时、指标和链路追踪。
+1. 为当前四进程拓扑补齐容器化依赖、统一配置和自动化故障回归，并接入实际 OpenTelemetry Collector、指标存储与仪表盘。
 2. 以订单、库存、限时发售和拍卖为学习载体，逐步实现并发控制、可靠消息、补偿和对账。
 3. 引入 Kafka 与可重建的 Elasticsearch 搜索投影，再评估拍卖服务拆分。
 4. 在当前只读 Agent 骨架上接入 Spring AI、RAG、规则解释和受权限控制的领域工具。
