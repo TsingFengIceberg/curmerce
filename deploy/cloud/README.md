@@ -49,6 +49,8 @@ The temporary fallback to `CURMERCE_OAUTH_CLIENT_SECRET` exists only for migrati
 
 Prometheus endpoints are available on each loopback service. W3C tracing is enabled locally, but OTLP export is off by default. Configure `OTEL_TRACING_ENABLED=true` and `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` only after a reachable, authenticated Collector is available. Search projection is opt-in: set `CURMERCE_SEARCH_ENABLED=true` and `CURMERCE_SEARCH_EVENTS_ENABLED=true` after Kafka and Elasticsearch are healthy. Keep `CURMERCE_SEARCH_REBUILD_TOKEN` private; it protects rebuild endpoints when configured.
 
+The Compose Elasticsearch node uses 5 GB / 2 GB / 1 GB absolute disk watermarks for low, high, and flood-stage allocation. This is a local single-node setting for the shared host's disk capacity, not a production sizing recommendation; production clusters must use capacity-aware defaults and alerts.
+
 ## Nacos installation
 
 Download the official Nacos 3.0.3 server release, verify its SHA-256 digest, and extract it under the user's toolchain directory. The verified release digest used by this runtime is:

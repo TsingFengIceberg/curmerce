@@ -11,6 +11,7 @@ import {
   LogIn,
   LogOut,
   Menu,
+  Search,
   ShoppingBag,
   ShoppingCart,
   Store,
@@ -40,6 +41,7 @@ interface HeaderSession {
 const publicLinks = [
   { href: "/community", label: "发现", icon: Compass },
   { href: "/catalog", label: "商城", icon: Store },
+  { href: "/search", label: "搜索", icon: Search },
   { href: "/releases", label: "限时发售", icon: Timer },
   { href: "/auctions", label: "拍卖", icon: Gavel },
 ];

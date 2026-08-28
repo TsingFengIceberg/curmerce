@@ -8,6 +8,11 @@ GATEWAY_BASE_URL="${CURMERCE_GATEWAY_BASE_URL:-http://127.0.0.1:48082}"
 CORE_URL="${CURMERCE_CORE_BASE_URL:-http://127.0.0.1:48080}"
 COMMUNITY_URL="${CURMERCE_COMMUNITY_BASE_URL:-http://127.0.0.1:48083}"
 AGENT_URL="${CURMERCE_AGENT_BASE_URL:-http://127.0.0.1:48084}"
+SEARCH_URL="${CURMERCE_SEARCH_BASE_URL:-http://127.0.0.1:48085}"
+ELASTICSEARCH_URL="${CURMERCE_ELASTICSEARCH_URL:-http://127.0.0.1:19200}"
+KAFKA_HOST="${CURMERCE_KAFKA_HOST:-127.0.0.1}"
+KAFKA_PORT="${CURMERCE_KAFKA_PORT:-19092}"
+SEARCH_RUNTIME_REQUIRED="${CURMERCE_SEARCH_RUNTIME_REQUIRED:-false}"
 COMMUNITY_UNIT="${CURMERCE_COMMUNITY_UNIT:-curmerce-community.service}"
 MYSQL_CLIENT="${MYSQL_CLIENT:-mysql}"
 TMP_DIR="$(mktemp -d)"
@@ -47,10 +52,23 @@ assert_up "$CORE_URL"
 assert_up "$COMMUNITY_URL"
 assert_up "$AGENT_URL"
 assert_up "$GATEWAY_BASE_URL"
+if [[ "$SEARCH_RUNTIME_REQUIRED" == "true" ]]; then
+  assert_up "$SEARCH_URL"
+fi
 
 for endpoint in "$CORE_URL" "$COMMUNITY_URL" "$AGENT_URL" "$GATEWAY_BASE_URL"; do
   assert_code 200 "$endpoint/actuator/prometheus"
 done
+if [[ "$SEARCH_RUNTIME_REQUIRED" == "true" ]]; then
+  assert_code 200 "$SEARCH_URL/actuator/prometheus"
+  curl --silent --show-error --fail --max-time 10 "$ELASTICSEARCH_URL/_cluster/health" >"$TMP_DIR/elasticsearch-health.json" \
+    || fail "Elasticsearch cluster health is unavailable"
+  grep -Eq '"status"[[:space:]]*:[[:space:]]*"(green|yellow)"' "$TMP_DIR/elasticsearch-health.json" \
+    || fail "Elasticsearch cluster is not green or yellow"
+  if ! timeout 5 bash -c "</dev/tcp/${KAFKA_HOST}/${KAFKA_PORT}" >/dev/null 2>&1; then
+    fail "Kafka broker is unavailable at ${KAFKA_HOST}:${KAFKA_PORT}"
+  fi
+fi
 
 curl --silent --show-error --fail --max-time 10 \
   "$COMMUNITY_URL/actuator/prometheus" >"$TMP_DIR/community-metrics"
@@ -59,6 +77,12 @@ grep -Eq '^curmerce_community_media_outbox_unfinished[[:space:]]+[0-9]+(\.0)?$' 
 
 assert_code 200 "$GATEWAY_BASE_URL/app-api/commerce/catalog/product-page?pageNo=1&pageSize=2"
 assert_code 200 "$GATEWAY_BASE_URL/app-api/community/post/page?pageNo=1&pageSize=2"
+if [[ "$SEARCH_RUNTIME_REQUIRED" == "true" ]]; then
+  assert_code 200 "$SEARCH_URL/app-api/search/products?pageNo=1&pageSize=2"
+  assert_code 200 "$SEARCH_URL/app-api/search/posts?pageNo=1&pageSize=2"
+  assert_code 200 "$GATEWAY_BASE_URL/app-api/search/products?pageNo=1&pageSize=2"
+  assert_code 200 "$GATEWAY_BASE_URL/app-api/search/posts?pageNo=1&pageSize=2"
+fi
 
 systemctl --user stop "$COMMUNITY_UNIT"
 COMMUNITY_STOPPED=1
@@ -99,10 +123,22 @@ if [[ -n "${MYSQL_PASSWORD:-}" && -n "${MYSQL_HOST:-}" && -n "${MYSQL_PORT:-}" ]
       >/dev/null 2>&1; then
     fail 'Community account can read the Core schema'
   fi
+  if ! "$MYSQL_CLIENT" --protocol=tcp -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
+      -u "$MYSQL_USER" -N -e 'SELECT 1 FROM curmerce.commerce_kafka_consumer_receipt LIMIT 1' \
+      >/dev/null 2>&1; then
+    fail 'Core Kafka consumer receipt migration is missing'
+  fi
   if "$MYSQL_CLIENT" --protocol=tcp -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
       -u "$MYSQL_USER" -N -e 'SELECT 1 FROM curmerce_community.community_post LIMIT 1' \
       >/dev/null 2>&1; then
     fail 'Core account can read the Community schema'
+  fi
+  COMMUNITY_DB_PASSWORD="${COMMUNITY_MYSQL_PASSWORD:-$MYSQL_PASSWORD}"
+  export MYSQL_PWD="$COMMUNITY_DB_PASSWORD"
+  if ! "$MYSQL_CLIENT" --protocol=tcp -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
+      -u curmerce_community -N -e 'SELECT 1 FROM curmerce_community.community_search_outbox LIMIT 1' \
+      >/dev/null 2>&1; then
+    fail 'Community search Outbox migration is missing'
   fi
   unset MYSQL_PWD
 fi

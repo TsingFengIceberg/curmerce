@@ -39,6 +39,14 @@ services:
       xpack.security.enrollment.enabled: "false"
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
       network.host: 0.0.0.0
+    # The shared development host has less than Elasticsearch's default 150 GB
+    # high-watermark headroom. Keep these absolute thresholds local-only so a
+    # single-node development index can allocate while still reserving space.
+    command:
+      - "elasticsearch"
+      - "-Ecluster.routing.allocation.disk.watermark.low=5gb"
+      - "-Ecluster.routing.allocation.disk.watermark.high=2gb"
+      - "-Ecluster.routing.allocation.disk.watermark.flood_stage=1gb"
     ports:
       - "127.0.0.1:19200:9200"
     volumes:

@@ -10,7 +10,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -109,17 +109,7 @@ public class ElasticsearchIndexClient {
     public SearchPage search(String index, String keyword, int page, int size) {
         if (!properties.enabled()) return new SearchPage(List.of(), 0L);
         int safePage = Math.max(1, page), safeSize = Math.max(1, Math.min(size, 100));
-        Map<String, Object> bool = new HashMap<>();
-        if (keyword == null || keyword.isBlank()) {
-            bool.put("must", List.of(Map.of("match_all", Map.of())));
-        } else {
-            bool.put("must", List.of(Map.of("multi_match", Map.of("query", keyword.trim(),
-                    "fields", List.of("name^3", "title^3", "subtitle^2", "content", "description", "code")))));
-        }
-        bool.put("filter", List.of(Map.of("term", Map.of("visible", true))));
-        Map<String, Object> query = Map.of("from", (safePage - 1) * safeSize, "size", safeSize,
-                "track_total_hits", true, "query", Map.of("bool", bool),
-                "sort", List.of(Map.of("_score", "desc"), Map.of("sourceEventId", "desc")));
+        Map<String, Object> query = buildSearchQuery(keyword, safePage, safeSize);
         Map<String, Object> response = JsonUtils.parseMap(request("POST", "/" + index + "/_search", JsonUtils.toJsonString(query)));
         Map<String, Object> hits = response != null && response.get("hits") instanceof Map<?, ?> map ? castMap(map) : Map.of();
         long total = 0L;
@@ -133,6 +123,42 @@ public class ElasticsearchIndexClient {
             }
         }
         return new SearchPage(results, total);
+    }
+
+    static Map<String, Object> buildSearchQuery(String keyword, int page, int size) {
+        Map<String, Object> bool = new LinkedHashMap<>();
+        String normalizedKeyword = keyword == null ? "" : keyword.trim();
+        if (normalizedKeyword.isBlank()) {
+            bool.put("must", List.of(Map.of("match_all", Map.of())));
+        } else {
+            List<String> textFields = List.of("name^3", "title^3", "subtitle^2", "content", "description", "code");
+            List<Map<String, Object>> should = new ArrayList<>();
+            should.add(Map.of("multi_match", Map.of("query", normalizedKeyword, "fields", textFields)));
+            should.add(Map.of("multi_match", Map.of("query", normalizedKeyword, "fields", textFields,
+                    "fuzziness", "AUTO", "prefix_length", 0)));
+            String wildcardValue = wildcardPattern(normalizedKeyword);
+            for (String field : List.of("name.keyword", "title.keyword", "code")) {
+                should.add(Map.of("wildcard", Map.of(field, Map.of(
+                        "value", wildcardValue, "case_insensitive", true))));
+            }
+            bool.put("should", should);
+            bool.put("minimum_should_match", 1);
+        }
+        bool.put("filter", List.of(Map.of("term", Map.of("visible", true))));
+        return Map.of("from", (Math.max(1, page) - 1) * Math.max(1, Math.min(size, 100)),
+                "size", Math.max(1, Math.min(size, 100)), "track_total_hits", true,
+                "query", Map.of("bool", bool),
+                "sort", List.of(Map.of("_score", "desc"), Map.of("sourceEventId", "desc")));
+    }
+
+    private static String wildcardPattern(String value) {
+        StringBuilder escaped = new StringBuilder(value.length() + 2);
+        for (int i = 0; i < value.length(); i++) {
+            char character = value.charAt(i);
+            if (character == '\\' || character == '*' || character == '?') escaped.append('\\');
+            escaped.append(character);
+        }
+        return '*' + escaped.toString() + '*';
     }
 
     private String request(String method, String path, String body) {

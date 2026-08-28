@@ -577,6 +577,49 @@ export interface CommunityPost {
   updateTime?: ApiDateValue;
 }
 
+export interface SearchPage<T> {
+  results: T[];
+  total: number;
+}
+
+export interface SearchProductDocument {
+  id?: number | string;
+  productId?: number | string;
+  categoryId?: number | string | null;
+  storeId?: number | string | null;
+  storeName?: string | null;
+  sellerType?: number | null;
+  sellerUserId?: number | string | null;
+  sellerName?: string | null;
+  name?: string | null;
+  subtitle?: string | null;
+  description?: string | null;
+  mainImageUrl?: string | null;
+  minPrice?: number | null;
+  minMarketPrice?: number | null;
+  totalStock?: number | null;
+  available?: boolean | null;
+  visible?: boolean;
+}
+
+export interface SearchPostDocument {
+  id?: number | string;
+  postId?: number | string;
+  authorUserId?: number | string | null;
+  authorNickname?: string | null;
+  authorAvatar?: string | null;
+  title?: string | null;
+  content?: string | null;
+  mediaUrls?: string[] | null;
+  status?: number | null;
+  likeCount?: number | null;
+  favoriteCount?: number | null;
+  commentCount?: number | null;
+  productIds?: (number | string)[] | null;
+  topics?: CommunityTopic[] | null;
+  createTime?: ApiDateValue;
+}
+
 export interface CommunityComment {
   id: number;
   postId: number;

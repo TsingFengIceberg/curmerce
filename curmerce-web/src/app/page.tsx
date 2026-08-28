@@ -53,7 +53,7 @@ export default function HomePage() {
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = keyword.trim();
-    router.push(value ? `/catalog?keyword=${encodeURIComponent(value)}` : "/catalog");
+    router.push(value ? `/search?keyword=${encodeURIComponent(value)}` : "/search");
   }
 
   return (
@@ -67,7 +67,7 @@ export default function HomePage() {
         <form className="discovery-search" onSubmit={search}>
           <Search aria-hidden="true" size={20} />
           <input aria-label="搜索商品" placeholder="搜索商品名称或描述" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
-          <button className="button button--primary" type="submit">搜索商城</button>
+          <button className="button button--primary" type="submit">全站搜索</button>
         </form>
         <nav className="discovery-shortcuts" aria-label="快捷发现">
           <Link href="/community"><Sparkles aria-hidden="true" size={18} /><span><strong>社区发现</strong><small>看看大家正在分享什么</small></span><ArrowRight aria-hidden="true" size={17} /></Link>
