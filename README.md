@@ -30,6 +30,7 @@ Curmerce 是一个面向兴趣消费场景的社区内容驱动型多模式交�
 - **服务治理与可观测性**：Core、Community 和 Agent 下游调用的 Resilience4j 断路器，Gateway/Core/Community/Agent 的 Prometheus 指标，以及默认本地采样、按配置导出的 OpenTelemetry W3C 链路追踪。
 - **媒体资产基础**：认证上传、真实图片校验、限流与用户配额、SHA-256 去重、稳定资产地址、业务引用和延迟孤立清理、私有访问、病毒扫描、异步 WebP/AVIF 衍生图、内容审核、管理员治理，以及可恢复的对象存储迁移。
 - **验收前端**：买家、个人卖家、商家和平台管理员的基础操作页面，覆盖当前主要业务闭环。
+- **前端设计标准**：消费者与社区页面采用小红书-inspired 的内容优先模式；商家工作台采用 Apple-inspired 的克制运营模式；管理员工作台采用石墨色中性管理模式。三者共享 Curmerce 自有 token、圆角、间距、焦点态和响应式规则，参考资料保存在被忽略的 `design-references/` 中。
 
 ## 当前架构
 
@@ -61,6 +62,7 @@ MySQL 是业务事实来源；Core 与 Community 共用一个本地 MySQL 实例
 - [MinIO、ClamAV 与 imgproxy 本地部署](./deploy/media/README.md)
 - [第一次服务拆分架构](./docs/microservice-architecture.md)
 - [Cloud 本地运行与故障验收](./deploy/cloud/README.md)
+- [前端设计标准](./docs/frontend-design-standard.md)
 
 后端核心测试：
 

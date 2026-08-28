@@ -30,6 +30,7 @@ The project has completed its runnable `v0.1-modular-monolith` baseline and ente
 - **Service resilience and observability**: Resilience4j circuit breakers for Core, Community, and Agent downstream calls; Prometheus metrics for Gateway, Core, Community, and Agent; and locally sampled OpenTelemetry W3C tracing with opt-in export.
 - **Media asset foundation**: authenticated uploads, real-image validation, rate limits and user quotas, SHA-256 deduplication, stable asset URLs, business references and delayed orphan cleanup, private access, antivirus scanning, asynchronous WebP/AVIF variants, content moderation, administrator governance, and resumable object-storage migration.
 - **Acceptance frontend**: basic operational pages for buyers, individual sellers, merchants, and platform administrators across the current primary workflows.
+- **Frontend design standard**: Xiaohongshu-inspired content-first surfaces for consumers and community, an Apple-inspired restrained operational workspace for merchants, and a neutral graphite administration workspace. All three share Curmerce-owned tokens, radii, spacing, focus states, and responsive rules; source references remain under the ignored `design-references/` directory.
 
 ## Current Architecture
 
@@ -61,6 +62,7 @@ The local environment requires JDK 21, Maven, Node.js/npm, MySQL, and Redis. Fol
 - [Local MinIO, ClamAV, and imgproxy deployment](./deploy/media/README.md)
 - [First service extraction architecture](./docs/microservice-architecture.md)
 - [Cloud local runtime and failure verification](./deploy/cloud/README.md)
+- [Frontend design standard](./docs/frontend-design-standard.md)
 
 Core backend tests:
 

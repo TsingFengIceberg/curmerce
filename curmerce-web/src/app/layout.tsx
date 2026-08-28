@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./product-ui.css";
+import "./curmerce-design.css";
 import { AppChrome } from "@/components/app-chrome";
 
 export const metadata: Metadata = {

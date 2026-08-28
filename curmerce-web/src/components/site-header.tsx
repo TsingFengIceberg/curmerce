@@ -123,6 +123,7 @@ export function SiteHeader() {
   const merchantOwner = adminLoggedIn && session.roles.includes("merchant_owner");
   const workspaceHref = platformAdmin ? "/admin" : merchantOwner ? "/merchant" : "/merchant/login";
   const workspaceLabel = platformAdmin ? "平台管理" : merchantOwner ? "商家工作台" : "工作台";
+  const workspaceMode = pathname.startsWith("/admin") ? "admin" : "merchant";
 
   async function logoutBuyer() {
     try {
@@ -146,7 +147,7 @@ export function SiteHeader() {
 
   if (backend) {
     return (
-      <header className="site-header site-header--workspace">
+      <header className={`site-header site-header--workspace site-header--workspace-${workspaceMode}`}>
         <div className="site-header__inner">
           <Link className="brand" href={workspaceHref}>
             <span className="brand__mark">C</span>
