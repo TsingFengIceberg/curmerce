@@ -5,13 +5,19 @@ GATEWAY_BASE_URL="${CURMERCE_GATEWAY_BASE_URL:-http://127.0.0.1:48082}"
 CORE_URL="${CURMERCE_CORE_BASE_URL:-http://127.0.0.1:48080}"
 COMMUNITY_URL="${CURMERCE_COMMUNITY_BASE_URL:-http://127.0.0.1:48083}"
 AGENT_URL="${CURMERCE_AGENT_BASE_URL:-http://127.0.0.1:48084}"
+AUCTION_URL="${CURMERCE_AUCTION_BASE_URL:-http://127.0.0.1:48086}"
 COMMUNITY_UNIT="${CURMERCE_COMMUNITY_UNIT:-curmerce-community.service}"
+AUCTION_UNIT="${CURMERCE_AUCTION_UNIT:-curmerce-auction.service}"
 TMP_DIR="$(mktemp -d)"
 COMMUNITY_STOPPED=0
+AUCTION_STOPPED=0
 
 cleanup() {
   if [[ "$COMMUNITY_STOPPED" == 1 ]]; then
     systemctl --user start "$COMMUNITY_UNIT" >/dev/null 2>&1 || true
+  fi
+  if [[ "$AUCTION_STOPPED" == 1 ]]; then
+    systemctl --user start "$AUCTION_UNIT" >/dev/null 2>&1 || true
   fi
   rm -rf "$TMP_DIR"
 }
@@ -48,14 +54,23 @@ wait_for_code() {
 wait_for_code 200 "$CORE_URL/actuator/health"
 wait_for_code 200 "$COMMUNITY_URL/actuator/health"
 wait_for_code 200 "$AGENT_URL/actuator/health"
+wait_for_code 200 "$AUCTION_URL/actuator/health"
 wait_for_code 200 "$GATEWAY_BASE_URL/actuator/health"
 assert_code 200 "$GATEWAY_BASE_URL/app-api/commerce/catalog/product-page?pageNo=1&pageSize=2"
 assert_code 200 "$GATEWAY_BASE_URL/app-api/community/post/page?pageNo=1&pageSize=2"
+assert_code 200 "$GATEWAY_BASE_URL/app-api/commerce/auction/page?pageNo=1&pageSize=2"
 
 systemctl --user stop "$COMMUNITY_UNIT"
 COMMUNITY_STOPPED=1
+COMMUNITY_FAILURE_RESPONSE="$TMP_DIR/community-failure.txt"
 for attempt in {1..12}; do
-  [[ "$(code "$GATEWAY_BASE_URL/app-api/community/post/page?pageNo=1&pageSize=2")" == 503 ]] && break
+  curl --silent --show-error --include --max-time 10 \
+    -H 'X-Curmerce-Trace-Id: community_failure_check' \
+    "$GATEWAY_BASE_URL/app-api/community/post/page?pageNo=1&pageSize=2" >"$COMMUNITY_FAILURE_RESPONSE" || true
+  if grep -q '^HTTP/.* 503' "$COMMUNITY_FAILURE_RESPONSE" \
+      && grep -qi 'X-Curmerce-Trace-Id: community_failure_check' "$COMMUNITY_FAILURE_RESPONSE"; then
+    break
+  fi
   [[ "$attempt" == 12 ]] && { printf 'FAIL: Community route did not become HTTP 503\n' >&2; exit 1; }
   sleep 1
 done
@@ -76,5 +91,37 @@ for attempt in {1..30}; do
   [[ "$attempt" == 30 ]] && break
   sleep 2
 done
-printf 'FAIL: Community did not recover through Nacos/Gateway\n' >&2
+if [[ "$attempt" == 30 ]]; then
+  printf 'FAIL: Community did not recover through Nacos/Gateway\n' >&2
+  exit 1
+fi
+
+systemctl --user stop "$AUCTION_UNIT"
+AUCTION_STOPPED=1
+AUCTION_FAILURE_RESPONSE="$TMP_DIR/auction-failure.txt"
+for attempt in {1..12}; do
+  curl --silent --show-error --include --max-time 10 \
+    -H 'X-Curmerce-Trace-Id: auction_failure_check' \
+    "$GATEWAY_BASE_URL/app-api/commerce/auction/page?pageNo=1&pageSize=2" >"$AUCTION_FAILURE_RESPONSE" || true
+  if grep -q '^HTTP/.* 503' "$AUCTION_FAILURE_RESPONSE" \
+      && grep -qi 'X-Curmerce-Trace-Id: auction_failure_check' "$AUCTION_FAILURE_RESPONSE"; then
+    break
+  fi
+  [[ "$attempt" == 12 ]] && { printf 'FAIL: Auction route did not become HTTP 503\n' >&2; exit 1; }
+  sleep 1
+done
+assert_code 200 "$GATEWAY_BASE_URL/app-api/commerce/catalog/product-page?pageNo=1&pageSize=2"
+
+systemctl --user start "$AUCTION_UNIT"
+AUCTION_STOPPED=0
+for attempt in {1..30}; do
+  if [[ "$(code "$AUCTION_URL/actuator/health")" == 200 ]] \
+      && [[ "$(code "$GATEWAY_BASE_URL/app-api/commerce/auction/page?pageNo=1&pageSize=2")" == 200 ]]; then
+    printf 'PASS: Agent/Community/Auction service boundary smoke completed\n'
+    exit 0
+  fi
+  [[ "$attempt" == 30 ]] && break
+  sleep 2
+done
+printf 'FAIL: Auction did not recover through Nacos/Gateway\n' >&2
 exit 1

@@ -11,6 +11,7 @@ This directory contains the reproducible user-level runtime layout for Curmerce'
 | `curmerce-community-service` | `127.0.0.1:48083` | Community posts and interactions; owns only `community_*` tables |
 | `curmerce-agent-service` | `127.0.0.1:48084` | Failure-isolated read-only product and community retrieval |
 | `curmerce-search-service` | `127.0.0.1:48085` | Kafka-driven Elasticsearch projections and rebuildable search |
+| `curmerce-auction-service` | `127.0.0.1:48086` | Auction HTTP boundary with timeout and circuit-breaker protection |
 | `curmerce-gateway` | `127.0.0.1:48082` | Stable frontend entry point, routing, CORS, and trace IDs |
 | `curmerce-web` | `127.0.0.1:3003` | Next.js acceptance frontend |
 
@@ -31,6 +32,7 @@ yudao-server/target/yudao-server.jar
 curmerce-services/curmerce-community-service/target/curmerce-community-service.jar
 curmerce-services/curmerce-agent-service/target/curmerce-agent-service.jar
 curmerce-services/curmerce-search-service/target/curmerce-search-service.jar
+curmerce-services/curmerce-auction-service/target/curmerce-auction-service.jar
 curmerce-services/curmerce-gateway/target/curmerce-gateway.jar
 ```
 
@@ -67,13 +69,13 @@ The templates in [`systemd/`](./systemd/) document process ownership, ordering, 
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now curmerce-nacos.service curmerce-yudao-server.service curmerce-community.service curmerce-agent.service curmerce-search.service curmerce-gateway.service curmerce-web.service
+systemctl --user enable --now curmerce-nacos.service curmerce-yudao-server.service curmerce-community.service curmerce-agent.service curmerce-search.service curmerce-auction.service curmerce-gateway.service curmerce-web.service
 ```
 
 Inspect all states without exposing credentials:
 
 ```bash
-systemctl --user --no-pager --full status curmerce-nacos.service curmerce-yudao-server.service curmerce-community.service curmerce-agent.service curmerce-search.service curmerce-gateway.service curmerce-web.service
+systemctl --user --no-pager --full status curmerce-nacos.service curmerce-yudao-server.service curmerce-community.service curmerce-agent.service curmerce-search.service curmerce-auction.service curmerce-gateway.service curmerce-web.service
 ```
 
 ## Verification
@@ -84,9 +86,11 @@ Use the Gateway for public and authenticated API checks. Direct service ports ar
 curl --max-time 10 --fail http://127.0.0.1:48082/
 curl --max-time 10 --fail http://127.0.0.1:48082/actuator/health
 curl --max-time 10 --fail http://127.0.0.1:48085/actuator/health
+curl --max-time 10 --fail http://127.0.0.1:48086/actuator/health
 curl --max-time 10 --fail 'http://127.0.0.1:48082/app-api/commerce/catalog/product-page?pageNo=1&pageSize=5'
 curl --max-time 10 --fail 'http://127.0.0.1:48082/app-api/community/post/page?pageNo=1&pageSize=5'
 curl --max-time 10 --fail 'http://127.0.0.1:48082/app-api/search/products?pageNo=1&pageSize=5'
+curl --max-time 10 --fail 'http://127.0.0.1:48082/app-api/commerce/auction/page?pageNo=1&pageSize=5'
 curl --max-time 10 --fail http://127.0.0.1:48082/app-api/agent/capabilities
 ```
 

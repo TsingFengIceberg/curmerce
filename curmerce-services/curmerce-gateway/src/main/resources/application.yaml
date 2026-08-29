@@ -27,6 +27,11 @@ spring:
               uri: lb://curmerce-search-service
               predicates:
                 - Path=/app-api/search/**
+            - id: auction-service
+              order: -10
+              uri: lb://curmerce-auction-service
+              predicates:
+                - Path=/app-api/commerce/auction/**,/admin-api/commerce/auction/**
             - id: core-service
               order: 0
               uri: lb://curmerce-core-service

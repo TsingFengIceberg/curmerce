@@ -18,5 +18,6 @@
         <module>curmerce-community-service</module>
         <module>curmerce-agent-service</module>
         <module>curmerce-search-service</module>
+        <module>curmerce-auction-service</module>
     </modules>
 </project>

@@ -40,6 +40,7 @@ curmerce-web :3003 -> Spring Cloud Gateway :48082
                             ├── Community :48083 curmerce_community Schema 与社区接口
                             ├── Agent :48084     只读商品/社区检索与故障降级
                             └── Search :48085    Kafka 驱动的 Elasticsearch 商品/帖子投影
+                            └── Auction :48086  拍卖 HTTP 边界、超时与断路器
                                       |
                                   Nacos :8848
 ```
@@ -113,12 +114,13 @@ Search 独立投影验收（Kafka、Elasticsearch 和 Search 服务启用后执�
 - Community 媒体引用使用“最新期望状态”Outbox、租约领取、无限重试和定时全量对账实现最终一致；它不声称提供跨服务强原子性，Core 长时间不可用时任务会持续积压并通过指标暴露。
 - OTLP 导出默认关闭；本地 Compose 提供 Collector、Tempo、Prometheus 和 Grafana，是否启用由运行环境决定，尚未宣称生产级告警或 SLO。
 - 搜索投影默认关闭；启用后由商品/帖子事务 Outbox 发布 Kafka 事件，Search 服务以事件 ID 忽略重复和乱序旧事件，失败经过重试后进入死信主题，并支持从 Core/Community API 重建索引。
+- Auction 已建立过渡性的独立 HTTP 服务边界，负责独立部署、Gateway 路由、超时和断路器；拍卖表、状态机和写入事实暂时仍由 Core 持有，尚未宣称完成独立数据库拆分。
 
 ## 后续方向
 
 1. 在本地 Compose 运行底座之上继续验证 Kafka、Elasticsearch、Collector、指标和追踪链路，并完善自动化故障回归。
 2. 以订单、库存、限时发售和拍卖为学习载体，逐步实现并发控制、可靠消息、补偿和对账。
-3. 评估 Search 与 Auction 的独立部署边界，补齐索引重建、消息死信和跨服务对账场景。
+3. 在 Search 与 Auction 的过渡边界上继续补齐索引重建、消息死信、服务故障恢复和跨服务对账场景，再决定是否迁移 Auction 数据所有权。
 4. 在当前只读 Agent 骨架上接入 Spring AI、RAG、规则解释和受权限控制的领域工具。
 
 ## 基座与参考项目

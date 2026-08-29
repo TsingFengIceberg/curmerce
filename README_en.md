@@ -40,6 +40,7 @@ curmerce-web :3003 -> Spring Cloud Gateway :48082
                             |-> Community :48083 curmerce_community schema and APIs
                             |-> Agent :48084     read-only retrieval and source degradation
                             `-> Search :48085    Kafka-driven Elasticsearch product/post projections
+                            `-> Auction :48086  auction HTTP boundary, timeouts and circuit breaker
                                       |
                                   Nacos :8848
 ```
@@ -113,12 +114,13 @@ Do not run `next dev` and `next build` against the same `.next` directory concur
 - Community media references converge through a latest-desired-state Outbox with leases, unbounded retries, and scheduled full reconciliation. This is eventual consistency, not cross-service atomicity; prolonged Core outages accumulate visible pending work.
 - OTLP export is disabled by default. The local Compose runtime provides a Collector, Tempo, Prometheus, and Grafana when enabled, but this is not a production alerting or SLO claim.
 - Search projection is disabled by default. When enabled, product and post transaction Outboxes publish Kafka events; the Search service ignores duplicate and out-of-order older event IDs, retries failures before dead-letter routing, and can rebuild indexes from the Core and Community APIs.
+- Auction now has a transitional independent HTTP service boundary for deployment, Gateway routing, timeouts, and circuit-breaker behavior. Core still owns auction tables, state transitions, and write facts; a separate database has not yet been claimed.
 
 ## Next Directions
 
 1. Continue validating Kafka, Elasticsearch, Collector, metrics, and tracing on the local Compose runtime and expand automated fault regression.
 2. Use orders, inventory, limited releases, and auctions to progressively study concurrency control, reliable messaging, compensation, and reconciliation.
-3. Evaluate independent deployment boundaries for Search and Auction, including index rebuilds, message dead letters, and cross-service reconciliation scenarios.
+3. Extend the Search and Auction transitional boundaries with index rebuild, dead-letter, failure-recovery, and cross-service reconciliation checks before deciding whether Auction data ownership should move out of Core.
 4. Build Spring AI, RAG, rule explanation, and permission-controlled domain tools on the current read-only Agent skeleton.
 
 ## Foundation and References
