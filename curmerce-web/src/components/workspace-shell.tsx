@@ -224,6 +224,7 @@ export function WorkspaceShell({ kind, children }: { kind: WorkspaceKind; childr
           <div><strong>{meta.title}</strong><small>{meta.description}</small></div>
         </div>
         {identity ? <div className="workspace-identity"><span aria-hidden="true">{identity.name.slice(0, 1)}</span><div><strong>{identity.name}</strong><small>{identity.context}</small></div></div> : null}
+        {kind === "admin" ? <p className="workspace-scope-note">平台管理员范围 · 审核与治理操作会记录审计日志</p> : kind === "merchant" ? <p className="workspace-scope-note">当前商家范围 · 仅展示本人商家与店铺数据</p> : null}
         <button aria-expanded={navOpen} className="workspace-nav-toggle" type="button" onClick={() => setNavOpen((current) => !current)}><span>{currentLabel(kind, pathname)}</span><ChevronDown aria-hidden="true" size={17} /></button>
         <nav className={navOpen ? "workspace-nav workspace-nav--open" : "workspace-nav"} aria-label={`${meta.title}导航`}>
           {meta.navigation.map(({ href, label, icon: Icon }) => (

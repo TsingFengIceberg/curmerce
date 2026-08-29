@@ -164,8 +164,9 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="site-header">
-      <div className="site-header__inner">
+    <>
+      <header className="site-header">
+        <div className="site-header__inner">
         <Link className="brand" href="/"><span className="brand__mark">C</span><span>Curmerce</span></Link>
         <button className="mobile-menu-button" type="button" aria-expanded={menuOpen} aria-label={menuOpen ? "关闭导航" : "打开导航"} onClick={() => setMenuOpen((current) => !current)}>
           {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
@@ -185,7 +186,11 @@ export function SiteHeader() {
             <Link className="workspace-entry" href={workspaceHref}><LayoutDashboard aria-hidden="true" size={17} />{workspaceLabel}</Link>
           </nav>
         </div>
-      </div>
-    </header>
+        </div>
+      </header>
+      <nav className="consumer-mobile-nav" aria-label="移动端快捷导航">
+        {[{ href: "/community", label: "发现", icon: Compass }, { href: "/catalog", label: "商城", icon: Store }, { href: "/search", label: "搜索", icon: Search }, { href: "/cart", label: "购物车", icon: ShoppingCart }, { href: loggedIn ? "/account" : "/login", label: loggedIn ? "我的" : "登录", icon: loggedIn ? CircleUserRound : LogIn }].map(({ href, label, icon: Icon }) => <Link className={isActive(pathname, href) ? "consumer-mobile-nav__item consumer-mobile-nav__item--active" : "consumer-mobile-nav__item"} href={href} key={href}><Icon aria-hidden="true" size={19} /><span>{label}</span></Link>)}
+      </nav>
+    </>
   );
 }

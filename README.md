@@ -63,6 +63,7 @@ MySQL 是业务事实来源；Core 与 Community 共用一个本地 MySQL 实例
 - [第一次服务拆分架构](./docs/microservice-architecture.md)
 - [Cloud 本地运行与故障验收](./deploy/cloud/README.md)
 - [前端设计标准](./docs/frontend-design-standard.md)
+- [Agent 与 Community 服务边界验收](./docs/service-extraction-acceptance.md)
 
 后端核心测试：
 
@@ -75,6 +76,20 @@ mvn -pl yudao-module-infra,curmerce-module-commerce,curmerce-module-community -a
 ```bash
 cd curmerce-web
 npm run build
+```
+
+前端回归测试：
+
+```bash
+npm run typecheck
+npm run test:components
+npm run test:e2e -- e2e/surface-smoke.spec.ts
+```
+
+服务边界故障验收（服务启动后执行）：
+
+```bash
+./script/verify/service-boundary-smoke.sh
 ```
 
 不要让 `next dev` 和 `next build` 同时共享同一个 `.next` 目录；执行生产构建前先停止开发服务。

@@ -63,6 +63,7 @@ The local environment requires JDK 21, Maven, Node.js/npm, MySQL, and Redis. Fol
 - [First service extraction architecture](./docs/microservice-architecture.md)
 - [Cloud local runtime and failure verification](./deploy/cloud/README.md)
 - [Frontend design standard](./docs/frontend-design-standard.md)
+- [Agent and Community service-boundary acceptance](./docs/service-extraction-acceptance.md)
 
 Core backend tests:
 
@@ -75,6 +76,20 @@ Frontend production build:
 ```bash
 cd curmerce-web
 npm run build
+```
+
+Frontend regression tests:
+
+```bash
+npm run typecheck
+npm run test:components
+npm run test:e2e -- e2e/surface-smoke.spec.ts
+```
+
+Service-boundary failure acceptance (run after the services are started):
+
+```bash
+./script/verify/service-boundary-smoke.sh
 ```
 
 Do not run `next dev` and `next build` against the same `.next` directory concurrently. Stop the development server before producing a production build.
