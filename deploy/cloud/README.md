@@ -112,6 +112,14 @@ curl --max-time 10 --fail 'http://127.0.0.1:48082/app-api/search/products?keywor
 curl --max-time 10 --fail 'http://127.0.0.1:48082/app-api/search/posts?keyword=review&pageNo=1&pageSize=10'
 ```
 
+For a repeatable independent Search-service check, run:
+
+```bash
+./script/verify/search-projection-smoke.sh
+```
+
+The check validates Search health and Prometheus exposure, Kafka and Elasticsearch reachability, routed product/post queries, and a source-backed full rebuild. The rebuild response must report `completed=true`. Duplicate and out-of-order event protection is enforced by `sourceEventId`; projection failures retry three times before Spring Kafka publishes to the `<topic>.DLT` dead-letter topic. The existing `script/verify/cloud-runtime-regression.sh` additionally verifies service recovery and schema isolation.
+
 ---
 
 # Curmerce Cloud 本地运行

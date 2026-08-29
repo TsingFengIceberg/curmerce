@@ -92,6 +92,12 @@ Service-boundary failure acceptance (run after the services are started):
 ./script/verify/service-boundary-smoke.sh
 ```
 
+Independent Search projection acceptance (run after Kafka, Elasticsearch, and Search are enabled):
+
+```bash
+./script/verify/search-projection-smoke.sh
+```
+
 Do not run `next dev` and `next build` against the same `.next` directory concurrently. Stop the development server before producing a production build.
 
 ## Current Boundaries

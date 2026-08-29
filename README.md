@@ -92,6 +92,12 @@ npm run test:e2e -- e2e/surface-smoke.spec.ts
 ./script/verify/service-boundary-smoke.sh
 ```
 
+Search 独立投影验收（Kafka、Elasticsearch 和 Search 服务启用后执行）：
+
+```bash
+./script/verify/search-projection-smoke.sh
+```
+
 不要让 `next dev` 和 `next build` 同时共享同一个 `.next` 目录；执行生产构建前先停止开发服务。
 
 ## 当前边界

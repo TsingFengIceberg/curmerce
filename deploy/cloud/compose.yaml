@@ -57,6 +57,14 @@ services:
       timeout: 5s
       retries: 20
 
+  tempo-init:
+    image: busybox:1.37
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /var/lib/tempo/wal /var/lib/tempo/blocks && chown -R 10001:10001 /var/lib/tempo"]
+    restart: "no"
+    volumes:
+      - tempo-data:/var/lib/tempo
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.123.0
     restart: unless-stopped
@@ -72,6 +80,9 @@ services:
     restart: unless-stopped
     network_mode: host
     command: ["-config.file=/etc/tempo.yaml"]
+    depends_on:
+      tempo-init:
+        condition: service_completed_successfully
     volumes:
       - ./observability/tempo.yaml:/etc/tempo.yaml:ro
       - tempo-data:/var/lib/tempo
