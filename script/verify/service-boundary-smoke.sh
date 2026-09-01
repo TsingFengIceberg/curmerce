@@ -85,8 +85,7 @@ COMMUNITY_STOPPED=0
 for attempt in {1..30}; do
   if [[ "$(code "$COMMUNITY_URL/actuator/health")" == 200 ]] \
       && [[ "$(code "$GATEWAY_BASE_URL/app-api/community/post/page?pageNo=1&pageSize=2")" == 200 ]]; then
-    printf 'PASS: Agent/Community service boundary smoke completed\n'
-    exit 0
+    break
   fi
   [[ "$attempt" == 30 ]] && break
   sleep 2

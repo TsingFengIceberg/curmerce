@@ -9,6 +9,7 @@ import org.apache.ibatis.annotations.Mapper;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface CommerceOutboxMapper extends BaseMapperX<CommerceOutboxEventDO> {
@@ -53,5 +54,25 @@ public interface CommerceOutboxMapper extends BaseMapperX<CommerceOutboxEventDO>
                         .setLastError(lastError),
                 new LambdaUpdateWrapper<CommerceOutboxEventDO>().eq(CommerceOutboxEventDO::getId, id)
                         .eq(CommerceOutboxEventDO::getStatus, CommerceOutboxStatusEnum.PENDING.getStatus()));
+    }
+
+    default int requeueDead(Long id) {
+        return update(new CommerceOutboxEventDO().setStatus(CommerceOutboxStatusEnum.PENDING.getStatus())
+                        .setAttempts(0).setNextRetryTime(null).setLastError(null).setPublishedTime(null),
+                new LambdaUpdateWrapper<CommerceOutboxEventDO>().eq(CommerceOutboxEventDO::getId, id)
+                        .eq(CommerceOutboxEventDO::getStatus, CommerceOutboxStatusEnum.DEAD.getStatus()));
+    }
+
+    default List<CommerceOutboxEventDO> selectDead(int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 1000));
+        return selectList(new LambdaQueryWrapper<CommerceOutboxEventDO>()
+                .eq(CommerceOutboxEventDO::getStatus, CommerceOutboxStatusEnum.DEAD.getStatus())
+                .orderByAsc(CommerceOutboxEventDO::getId)
+                .last("LIMIT " + safeLimit));
+    }
+
+    default long countByStatus(Integer status) {
+        return selectCount(new LambdaQueryWrapper<CommerceOutboxEventDO>()
+                .eq(CommerceOutboxEventDO::getStatus, status));
     }
 }

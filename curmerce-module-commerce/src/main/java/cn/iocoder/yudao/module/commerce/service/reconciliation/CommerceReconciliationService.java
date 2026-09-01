@@ -18,4 +18,7 @@ public interface CommerceReconciliationService {
      * @return 是否更新成功
      */
     boolean resolveIssue(Long id);
+
+    /** Apply only a safe local state-mirror repair and resolve the issue. */
+    boolean repairIssue(Long id);
 }

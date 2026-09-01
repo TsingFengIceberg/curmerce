@@ -11,6 +11,7 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.refund.RefundStatusEnum;
+import cn.iocoder.yudao.module.commerce.enums.reconciliation.CommerceReconciliationIssueStatusEnum;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -23,6 +24,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -117,5 +119,39 @@ class CommerceReconciliationServiceImplTest {
         when(issueMapper.markResolved(42L)).thenReturn(1);
         assertTrue(service.resolveIssue(42L));
         verify(issueMapper).markResolved(42L);
+    }
+
+    @Test
+    void repairIssue_advancesPendingOrderAfterSuccessfulPayment() {
+        CommerceReconciliationIssueDO issue = new CommerceReconciliationIssueDO().setId(42L)
+                .setIssueType("PAYMENT_ORDER_STATE_MISMATCH").setOrderId(9001L).setPaymentId(9101L)
+                .setStatus(CommerceReconciliationIssueStatusEnum.OPEN.getStatus());
+        when(issueMapper.selectByIdForUpdate(42L)).thenReturn(issue);
+        when(orderMapper.selectByIdForUpdate(9001L)).thenReturn(new CommerceOrderDO().setId(9001L)
+                .setStatus(OrderStatusEnum.PENDING_PAYMENT.getStatus()));
+        when(paymentMapper.selectByIdForUpdate(9101L)).thenReturn(new CommercePaymentDO().setId(9101L)
+                .setStatus(PaymentStatusEnum.SUCCESS.getStatus()));
+        when(orderMapper.markPaid(9001L)).thenReturn(1);
+        when(issueMapper.markResolved(42L)).thenReturn(1);
+
+        assertTrue(service.repairIssue(42L));
+        verify(orderMapper).markPaid(9001L);
+        verify(issueMapper).markResolved(42L);
+    }
+
+    @Test
+    void repairIssue_doesNotInventPaymentForCanceledOrder() {
+        CommerceReconciliationIssueDO issue = new CommerceReconciliationIssueDO().setId(42L)
+                .setIssueType("PAYMENT_ORDER_STATE_MISMATCH").setOrderId(9001L).setPaymentId(9101L)
+                .setStatus(CommerceReconciliationIssueStatusEnum.OPEN.getStatus());
+        when(issueMapper.selectByIdForUpdate(42L)).thenReturn(issue);
+        when(orderMapper.selectByIdForUpdate(9001L)).thenReturn(new CommerceOrderDO().setId(9001L)
+                .setStatus(OrderStatusEnum.CANCELED.getStatus()));
+        when(paymentMapper.selectByIdForUpdate(9101L)).thenReturn(new CommercePaymentDO().setId(9101L)
+                .setStatus(PaymentStatusEnum.SUCCESS.getStatus()));
+
+        assertTrue(!service.repairIssue(42L));
+        verify(orderMapper, never()).markPaid(anyLong());
+        verify(issueMapper, never()).markResolved(42L);
     }
 }

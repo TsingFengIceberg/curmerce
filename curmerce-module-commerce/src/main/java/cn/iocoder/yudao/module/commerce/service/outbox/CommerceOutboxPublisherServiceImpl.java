@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -43,6 +45,26 @@ public class CommerceOutboxPublisherServiceImpl implements CommerceOutboxPublish
             }
         }
         return published;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int retryDead(int limit) {
+        int retried = 0;
+        for (CommerceOutboxEventDO event : outboxMapper.selectDead(limit)) {
+            retried += outboxMapper.requeueDead(event.getId());
+        }
+        return retried;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Integer, Long> statusCounts() {
+        Map<Integer, Long> counts = new LinkedHashMap<>();
+        for (var status : cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxStatusEnum.values()) {
+            counts.put(status.getStatus(), outboxMapper.countByStatus(status.getStatus()));
+        }
+        return counts;
     }
 
     private void handleFailure(CommerceOutboxEventDO event, Exception ex) {

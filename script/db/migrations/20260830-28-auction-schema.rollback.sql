@@ -1,0 +1,3 @@
+-- Rollback aid for a stopped disposable database. It never deletes the Core
+-- source tables or auction business data automatically.
+-- DROP DATABASE curmerce_auction;

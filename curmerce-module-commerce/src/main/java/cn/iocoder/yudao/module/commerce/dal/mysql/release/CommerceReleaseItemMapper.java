@@ -20,6 +20,12 @@ public interface CommerceReleaseItemMapper extends BaseMapperX<CommerceReleaseIt
     default CommerceReleaseItemDO selectByIdForUpdate(Long id) {
         return selectOneForUpdate(new LambdaQueryWrapper<CommerceReleaseItemDO>().eq(CommerceReleaseItemDO::getId, id));
     }
+
+    default List<CommerceReleaseItemDO> selectForReservationReconciliation(int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 1000));
+        return selectList(new LambdaQueryWrapper<CommerceReleaseItemDO>()
+                .orderByAsc(CommerceReleaseItemDO::getId).last("LIMIT " + safeLimit));
+    }
     default int deleteByCampaignId(Long campaignId) {
         return delete(new LambdaQueryWrapper<CommerceReleaseItemDO>()
                 .eq(CommerceReleaseItemDO::getCampaignId, campaignId));

@@ -41,6 +41,7 @@ import cn.iocoder.yudao.module.commerce.enums.refund.RefundStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
 import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxEventAppender;
+import cn.iocoder.yudao.module.commerce.service.release.ReleaseReservationService;
 import cn.iocoder.yudao.module.member.api.address.MemberAddressApi;
 import cn.iocoder.yudao.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
@@ -79,6 +80,7 @@ public class OrderServiceImpl implements OrderService {
     @Resource private CommerceRefundMapper refundMapper;
     @Resource private CommerceReleaseItemMapper releaseItemMapper;
     @Resource private CommerceReleasePurchaseMapper releasePurchaseMapper;
+    @Resource private ReleaseReservationService releaseReservationService;
     @Resource private CommerceOutboxEventAppender outboxEventAppender;
     @Resource private FileApi fileApi;
     @org.springframework.beans.factory.annotation.Value("${curmerce.order.payment-timeout-minutes:30}")
@@ -380,6 +382,10 @@ public class OrderServiceImpl implements OrderService {
         }
         if (releasePurchaseMapper.markCanceled(purchase.getId()) != 1
                 || releaseItemMapper.restoreInventory(purchase.getItemId(), purchase.getQuantity()) != 1) {
+            throw exception(RELEASE_STOCK_RESTORE_FAILED);
+        }
+        if (releaseReservationService != null && !releaseReservationService.release(purchase.getCampaignId(), purchase.getItemId(),
+                purchase.getBuyerUserId(), purchase.getQuantity())) {
             throw exception(RELEASE_STOCK_RESTORE_FAILED);
         }
     }

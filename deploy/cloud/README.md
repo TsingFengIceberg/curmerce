@@ -11,7 +11,7 @@ This directory contains the reproducible user-level runtime layout for Curmerce'
 | `curmerce-community-service` | `127.0.0.1:48083` | Community posts and interactions; owns only `community_*` tables |
 | `curmerce-agent-service` | `127.0.0.1:48084` | Failure-isolated read-only product and community retrieval |
 | `curmerce-search-service` | `127.0.0.1:48085` | Kafka-driven Elasticsearch projections and rebuildable search |
-| `curmerce-auction-service` | `127.0.0.1:48086` | Auction HTTP boundary with timeout and circuit-breaker protection |
+| `curmerce-auction-service` | `127.0.0.1:48086` | Auction lifecycle and bids; optional owned `curmerce_auction` schema with Core contract calls |
 | `curmerce-gateway` | `127.0.0.1:48082` | Stable frontend entry point, routing, CORS, and trace IDs |
 | `curmerce-web` | `127.0.0.1:3003` | Next.js acceptance frontend |
 
@@ -45,9 +45,20 @@ CURMERCE_INTERNAL_TOKEN=<random value with at least 32 characters>
 COMMUNITY_MYSQL_DATABASE=curmerce_community
 COMMUNITY_MYSQL_USER=curmerce_community
 COMMUNITY_MYSQL_PASSWORD=<distinct Community database password>
+CURMERCE_AUCTION_LOCAL_STORE_ENABLED=false
+CURMERCE_AUCTION_DB_USER=curmerce_auction
+CURMERCE_AUCTION_DB_PASSWORD=<dedicated Auction database password>
 ```
 
 The temporary fallback to `CURMERCE_OAUTH_CLIENT_SECRET` exists only for migration compatibility. A dedicated token is preferred because it can be rotated independently. Never expose the internal core API through the Gateway.
+
+Auction local storage is disabled by default so existing deployments continue to
+use the Core proxy. After applying migration `20260830-28-auction-schema.sql`,
+verifying the `ownership_cutover` row counts, and stopping all Auction writers,
+set `CURMERCE_AUCTION_LOCAL_STORE_ENABLED=true` to enable the owned session and
+bid tables. The old `curmerce.commerce_auction_*` tables are retained as a
+read-only rollback source until cutover verification and reconciliation are
+complete; do not delete them as part of routine startup.
 
 Prometheus endpoints are available on each loopback service. W3C tracing is enabled locally, but OTLP export is off by default. Configure `OTEL_TRACING_ENABLED=true` and `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` only after a reachable, authenticated Collector is available. Search projection is opt-in: set `CURMERCE_SEARCH_ENABLED=true` and `CURMERCE_SEARCH_EVENTS_ENABLED=true` after Kafka and Elasticsearch are healthy. Keep `CURMERCE_SEARCH_REBUILD_TOKEN` private; it protects rebuild endpoints when configured.
 

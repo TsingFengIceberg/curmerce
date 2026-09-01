@@ -50,6 +50,52 @@ public class CommerceReconciliationServiceImpl implements CommerceReconciliation
         return issueMapper.markResolved(id) == 1;
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean repairIssue(Long id) {
+        CommerceReconciliationIssueDO issue = issueMapper.selectByIdForUpdate(id);
+        if (issue == null || !CommerceReconciliationIssueStatusEnum.OPEN.getStatus().equals(issue.getStatus())) {
+            return false;
+        }
+        boolean repaired = switch (issue.getIssueType()) {
+            case "PAYMENT_ORDER_STATE_MISMATCH" -> repairPaymentOrderState(issue);
+            case "REFUND_ORDER_STATUS_MISMATCH" -> repairRefundOrderState(issue);
+            default -> false;
+        };
+        return repaired && issueMapper.markResolved(id) == 1;
+    }
+
+    /** A successful payment may safely advance only a still-pending order. */
+    private boolean repairPaymentOrderState(CommerceReconciliationIssueDO issue) {
+        if (issue.getOrderId() == null || issue.getPaymentId() == null) {
+            return false;
+        }
+        CommerceOrderDO order = orderMapper.selectByIdForUpdate(issue.getOrderId());
+        CommercePaymentDO payment = paymentMapper.selectByIdForUpdate(issue.getPaymentId());
+        if (order == null || payment == null
+                || !PaymentStatusEnum.SUCCESS.getStatus().equals(payment.getStatus())
+                || !OrderStatusEnum.PENDING_PAYMENT.getStatus().equals(order.getStatus())) {
+            return false;
+        }
+        return orderMapper.markPaid(order.getId()) == 1;
+    }
+
+    /** Refund reconciliation repairs only the denormalized order after-sale status. */
+    private boolean repairRefundOrderState(CommerceReconciliationIssueDO issue) {
+        if (issue.getOrderId() == null || issue.getRefundId() == null) {
+            return false;
+        }
+        CommerceOrderDO order = orderMapper.selectByIdForUpdate(issue.getOrderId());
+        CommerceRefundDO refund = refundMapper.selectByIdForUpdate(issue.getRefundId());
+        if (order == null || refund == null || refund.getStatus() == null
+                || (!RefundStatusEnum.REQUESTED.getStatus().equals(refund.getStatus())
+                && !RefundStatusEnum.APPROVED.getStatus().equals(refund.getStatus())
+                && !RefundStatusEnum.SUCCESS.getStatus().equals(refund.getStatus()))) {
+            return false;
+        }
+        return orderMapper.markRefundStatus(order.getId(), refund.getStatus()) == 1;
+    }
+
     private int scanPaidOrderStateMismatches(int batchSize) {
         int opened = 0;
         List<CommercePaymentDO> payments = paymentMapper.selectSuccessForAudit(batchSize);

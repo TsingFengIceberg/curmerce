@@ -102,3 +102,21 @@ projection events. Apply both after the earlier numbered migrations and verify
 the schema name, unique event keys, status checks, and retry indexes. The
 rollback files only support a stopped disposable local database after pending
 events have been reviewed; they are not routine application rollback.
+
+## Commerce reliability and Auction ownership migrations
+
+Migration 27 (`migrations/20260830-27-commerce-reliability.sql`) adds the
+operational indexes and constraints used by Commerce Outbox publishing and
+payment/refund reconciliation. Apply it after the preceding numbered
+migrations, inspect generated issue rows, and keep the rollback script as a
+review aid only. Reconciliation repair endpoints never invent payment facts.
+
+Migration 28 (`migrations/20260830-28-auction-schema.sql`) creates the dedicated
+`curmerce_auction` schema and copies Auction sessions and bids from Core. Stop
+Auction writers first, record the source and target counts from
+`curmerce_auction.ownership_cutover`, and require `verified=1` before enabling
+`CURMERCE_AUCTION_LOCAL_STORE_ENABLED=true`. The Core tables remain available as
+a read-only rollback source during the transition; the migration does not
+delete them and does not grant the Auction account access to the Core schema.
+Create the dedicated `curmerce_auction@127.0.0.1` account with only the
+permissions needed for `curmerce_auction.*`, and keep its password outside Git.

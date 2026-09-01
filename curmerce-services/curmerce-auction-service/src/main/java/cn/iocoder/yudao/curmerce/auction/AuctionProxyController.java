@@ -6,11 +6,13 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.io.IOException;
 import java.util.Collections;
 
 @RestController
+@ConditionalOnProperty(prefix = "curmerce.auction", name = "local-store-enabled", havingValue = "false", matchIfMissing = true)
 public class AuctionProxyController {
     private final AuctionCoreProxy coreProxy;
 

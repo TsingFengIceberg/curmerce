@@ -26,4 +26,9 @@ public interface CommerceReconciliationIssueMapper extends BaseMapperX<CommerceR
                 new LambdaUpdateWrapper<CommerceReconciliationIssueDO>().eq(CommerceReconciliationIssueDO::getId, id)
                         .eq(CommerceReconciliationIssueDO::getStatus, CommerceReconciliationIssueStatusEnum.OPEN.getStatus()));
     }
+
+    default CommerceReconciliationIssueDO selectByIdForUpdate(Long id) {
+        return selectOneForUpdate(new LambdaQueryWrapper<CommerceReconciliationIssueDO>()
+                .eq(CommerceReconciliationIssueDO::getId, id));
+    }
 }

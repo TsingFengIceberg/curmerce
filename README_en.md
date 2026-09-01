@@ -104,7 +104,7 @@ Do not run `next dev` and `next build` against the same `.next` directory concur
 ## Current Boundaries
 
 - Payment and refund callbacks are simulated to verify state machines and idempotency; they are not integrations with a real payment provider.
-- Limited releases and auctions are currently database-transaction baselines without Redis/Lua reservation, queue-based load leveling, real-time push, or distributed compensation.
+- Limited releases now have Redis/Lua atomic reservations, per-user limits, failure/timeout release, and MySQL reconciliation, but not queue-based load leveling, asynchronous order creation, or distributed compensation. Auctions have an optional independent service and `curmerce_auction` schema; Core still provides ownership checks and settlement-order creation through typed contracts.
 - The buyer-side limited-release page currently purchases one item and does not yet provide multi-SKU or quantity selection; the merchant side already uses product and SKU selectors.
 - Community posts may be published without images or products. Product association still uses identifier input and needs a user-facing search selector.
 - The community currently provides a basic chronological feed without recommendation algorithms, a notification center, deeply nested comments, or large-scale asynchronous counters.
@@ -114,13 +114,13 @@ Do not run `next dev` and `next build` against the same `.next` directory concur
 - Community media references converge through a latest-desired-state Outbox with leases, unbounded retries, and scheduled full reconciliation. This is eventual consistency, not cross-service atomicity; prolonged Core outages accumulate visible pending work.
 - OTLP export is disabled by default. The local Compose runtime provides a Collector, Tempo, Prometheus, and Grafana when enabled, but this is not a production alerting or SLO claim.
 - Search projection is disabled by default. When enabled, product and post transaction Outboxes publish Kafka events; the Search service ignores duplicate and out-of-order older event IDs, retries failures before dead-letter routing, and can rebuild indexes from the Core and Community APIs.
-- Auction now has a transitional independent HTTP service boundary for deployment, Gateway routing, timeouts, and circuit-breaker behavior. Core still owns auction tables, state transitions, and write facts; a separate database has not yet been claimed.
+- Auction now has a transitional independent HTTP service boundary. With `CURMERCE_AUCTION_LOCAL_STORE_ENABLED=true`, sessions, bids, and lifecycle state are owned by the `curmerce_auction` schema, while product ownership and settlement orders remain explicit Core contracts. Migration 28 retains the old Core tables as a rollback source and does not automatically delete them or provide cross-service automatic reconciliation.
 
 ## Next Directions
 
 1. Continue validating Kafka, Elasticsearch, Collector, metrics, and tracing on the local Compose runtime and expand automated fault regression.
 2. Use orders, inventory, limited releases, and auctions to progressively study concurrency control, reliable messaging, compensation, and reconciliation.
-3. Extend the Search and Auction transitional boundaries with index rebuild, dead-letter, failure-recovery, and cross-service reconciliation checks before deciding whether Auction data ownership should move out of Core.
+3. Verify Auction schema cutover with cross-service reconciliation, old-table read-only protection, and rollback drills, then choose the next service boundary.
 4. Build Spring AI, RAG, rule explanation, and permission-controlled domain tools on the current read-only Agent skeleton.
 
 ## Foundation and References

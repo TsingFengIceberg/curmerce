@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.commerce.service.outbox;
 
+import java.util.Map;
+
 public interface CommerceOutboxPublisherService {
 
     /**
@@ -10,4 +12,10 @@ public interface CommerceOutboxPublisherService {
      * @return 成功发布并标记的事件数
      */
     int publishPending(int batchSize);
+
+    /** Requeue at most {@code limit} dead events for a controlled retry. */
+    int retryDead(int limit);
+
+    /** Return counts by durable Outbox status. */
+    Map<Integer, Long> statusCounts();
 }

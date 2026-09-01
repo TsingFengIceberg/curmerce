@@ -29,6 +29,7 @@ import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -48,6 +49,7 @@ public class ReleaseServiceImpl implements ReleaseService {
     @Resource private MerchantAccessService merchantAccessService;
     @Resource private MemberUserApi memberUserApi;
     @Resource private OrderService orderService;
+    @Autowired(required = false) private ReleaseReservationService reservationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -154,29 +156,65 @@ public class ReleaseServiceImpl implements ReleaseService {
     @Transactional(rollbackFor = Exception.class)
     public ReleasePurchaseRespVO purchase(Long userId, ReleasePurchaseReqVO reqVO) {
         memberUserApi.validateActiveUserForUpdate(userId);
-        CommerceReleaseItemDO item = itemMapper.selectByIdForUpdate(reqVO.getItemId());
-        CommerceReleaseCampaignDO campaign = item == null ? null : campaignMapper.selectByIdForUpdate(item.getCampaignId());
+        CommerceReleaseItemDO snapshot = itemMapper.selectById(reqVO.getItemId());
+        if (snapshot == null) snapshot = itemMapper.selectByIdForUpdate(reqVO.getItemId());
+        CommerceReleaseCampaignDO campaignSnapshot = snapshot == null ? null : campaignMapper.selectById(snapshot.getCampaignId());
+        if (campaignSnapshot == null && snapshot != null) campaignSnapshot = campaignMapper.selectByIdForUpdate(snapshot.getCampaignId());
         LocalDateTime now = LocalDateTime.now();
-        if (item == null || campaign == null || (campaign.getStatus() != ReleaseStatusEnum.SCHEDULED.getStatus()
-                && campaign.getStatus() != ReleaseStatusEnum.RUNNING.getStatus())
-                || now.isBefore(campaign.getStartTime()) || !now.isBefore(campaign.getEndTime())) throw exception(RELEASE_STATE_INVALID);
-        CommerceReleasePurchaseDO existing = purchaseMapper.selectByBuyerAndItem(userId, item.getId());
-        if (existing != null) throw exception(RELEASE_PURCHASE_DUPLICATE);
-        if (reqVO.getQuantity() > campaign.getPerUserLimit() || reqVO.getQuantity() > item.getStock()) {
-            throw exception(reqVO.getQuantity() > item.getStock() ? RELEASE_STOCK_INSUFFICIENT : RELEASE_PURCHASE_LIMIT);
+        if (!isOpen(campaignSnapshot, now) || snapshot == null) throw exception(RELEASE_STATE_INVALID);
+        ReleaseReservationService.ReservationResult reservation = reserveInventory(campaignSnapshot, snapshot, userId, reqVO.getQuantity());
+        boolean completed = false;
+        try {
+            CommerceReleaseItemDO item = itemMapper.selectByIdForUpdate(reqVO.getItemId());
+            CommerceReleaseCampaignDO campaign = item == null ? null : campaignMapper.selectByIdForUpdate(item.getCampaignId());
+            if (!isOpen(campaign, now) || item == null) throw exception(RELEASE_STATE_INVALID);
+            CommerceReleasePurchaseDO existing = purchaseMapper.selectByBuyerAndItem(userId, item.getId());
+            if (existing != null) throw exception(RELEASE_PURCHASE_DUPLICATE);
+            if (reqVO.getQuantity() > campaign.getPerUserLimit() || reqVO.getQuantity() > item.getStock()) {
+                throw exception(reqVO.getQuantity() > item.getStock() ? RELEASE_STOCK_INSUFFICIENT : RELEASE_PURCHASE_LIMIT);
+            }
+            if (itemMapper.updateInventory(item.getId(), reqVO.getQuantity()) != 1) throw exception(RELEASE_STOCK_INSUFFICIENT);
+            String idempotencyKey = reqVO.getIdempotencyKey() == null ? null : reqVO.getIdempotencyKey().trim();
+            cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderCreateRespVO order = orderService.createReleaseOrder(
+                    userId, reqVO.getAddressId(), item.getProductId(), item.getSkuId(), item.getCampaignPrice(),
+                    reqVO.getQuantity(), idempotencyKey);
+            CommerceReleasePurchaseDO purchase = new CommerceReleasePurchaseDO().setCampaignId(campaign.getId()).setItemId(item.getId())
+                    .setBuyerUserId(userId).setOrderId(order.getOrderId()).setQuantity(reqVO.getQuantity())
+                    .setUnitPrice(item.getCampaignPrice()).setStatus(ReleasePurchaseStatusEnum.PENDING.getStatus());
+            try { purchaseMapper.insert(purchase); } catch (DuplicateKeyException ex) { throw exception(RELEASE_PURCHASE_DUPLICATE); }
+            completed = true;
+            return new ReleasePurchaseRespVO().setPurchaseId(purchase.getId()).setCampaignId(campaign.getId())
+                    .setItemId(item.getId()).setQuantity(purchase.getQuantity()).setUnitPrice(purchase.getUnitPrice())
+                    .setOrderId(order.getOrderId()).setOrderNo(order.getOrderNo()).setOrderStatus(order.getStatus());
+        } finally {
+            if (reservation == ReleaseReservationService.ReservationResult.RESERVED) {
+                if (completed) {
+                    reservationService.commit(campaignSnapshot.getId(), snapshot.getId(), reqVO.getQuantity());
+                } else {
+                    reservationService.release(campaignSnapshot.getId(), snapshot.getId(), userId, reqVO.getQuantity());
+                }
+            }
         }
-        if (itemMapper.updateInventory(item.getId(), reqVO.getQuantity()) != 1) throw exception(RELEASE_STOCK_INSUFFICIENT);
-        String idempotencyKey = reqVO.getIdempotencyKey() == null ? null : reqVO.getIdempotencyKey().trim();
-        cn.iocoder.yudao.module.commerce.controller.app.order.vo.OrderCreateRespVO order = orderService.createReleaseOrder(
-                userId, reqVO.getAddressId(), item.getProductId(), item.getSkuId(), item.getCampaignPrice(),
-                reqVO.getQuantity(), idempotencyKey);
-        CommerceReleasePurchaseDO purchase = new CommerceReleasePurchaseDO().setCampaignId(campaign.getId()).setItemId(item.getId())
-                .setBuyerUserId(userId).setOrderId(order.getOrderId()).setQuantity(reqVO.getQuantity())
-                .setUnitPrice(item.getCampaignPrice()).setStatus(ReleasePurchaseStatusEnum.PENDING.getStatus());
-        try { purchaseMapper.insert(purchase); } catch (DuplicateKeyException ex) { throw exception(RELEASE_PURCHASE_DUPLICATE); }
-        return new ReleasePurchaseRespVO().setPurchaseId(purchase.getId()).setCampaignId(campaign.getId())
-                .setItemId(item.getId()).setQuantity(purchase.getQuantity()).setUnitPrice(purchase.getUnitPrice())
-                .setOrderId(order.getOrderId()).setOrderNo(order.getOrderNo()).setOrderStatus(order.getStatus());
+    }
+
+    private ReleaseReservationService.ReservationResult reserveInventory(CommerceReleaseCampaignDO campaign,
+                                                                           CommerceReleaseItemDO item,
+                                                                           Long userId, int quantity) {
+        if (quantity <= 0 || quantity > campaign.getPerUserLimit()) throw exception(RELEASE_PURCHASE_LIMIT);
+        if (quantity > item.getStock()) throw exception(RELEASE_STOCK_INSUFFICIENT);
+        if (reservationService == null) return ReleaseReservationService.ReservationResult.DISABLED;
+        ReleaseReservationService.ReservationResult result = reservationService.reserve(campaign.getId(), item.getId(), userId,
+                quantity, campaign.getPerUserLimit(), item.getStock());
+        if (result == ReleaseReservationService.ReservationResult.STOCK_INSUFFICIENT) throw exception(RELEASE_STOCK_INSUFFICIENT);
+        if (result == ReleaseReservationService.ReservationResult.LIMIT_EXCEEDED) throw exception(RELEASE_PURCHASE_LIMIT);
+        if (result == ReleaseReservationService.ReservationResult.UNAVAILABLE) throw exception(RELEASE_RESERVATION_UNAVAILABLE);
+        return result;
+    }
+
+    private boolean isOpen(CommerceReleaseCampaignDO campaign, LocalDateTime now) {
+        return campaign != null && (ReleaseStatusEnum.SCHEDULED.getStatus().equals(campaign.getStatus())
+                || ReleaseStatusEnum.RUNNING.getStatus().equals(campaign.getStatus()))
+                && !now.isBefore(campaign.getStartTime()) && now.isBefore(campaign.getEndTime());
     }
 
     @Override

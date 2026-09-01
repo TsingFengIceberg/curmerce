@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: curmerce-auction-service
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        ip: ${NACOS_DISCOVERY_IP:127.0.0.1}
+        register-enabled: ${NACOS_DISCOVERY_ENABLED:true}
+
+server:
+  address: 127.0.0.1
+  port: ${CURMERCE_AUCTION_PORT:48086}
+
+curmerce:
+  auction:
+    core-base-url: ${CURMERCE_CORE_BASE_URL:http://127.0.0.1:48080}
+    connect-timeout: ${CURMERCE_AUCTION_CONNECT_TIMEOUT:1s}
+    read-timeout: ${CURMERCE_AUCTION_READ_TIMEOUT:5s}
+    core-internal-token: ${CURMERCE_INTERNAL_TOKEN:}
+    local-store-enabled: ${CURMERCE_AUCTION_LOCAL_STORE_ENABLED:false}
+    datasource:
+      url: ${CURMERCE_AUCTION_JDBC_URL:jdbc:mysql://127.0.0.1:13306/curmerce_auction?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+      username: ${CURMERCE_AUCTION_DB_USER:curmerce_auction}
+      password: ${CURMERCE_AUCTION_DB_PASSWORD:}
+      maximum-pool-size: ${CURMERCE_AUCTION_DB_POOL_SIZE:8}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  tracing:
+    enabled: true
+    sampling:
+      probability: ${OTEL_TRACES_SAMPLER_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      export:
+        enabled: ${OTEL_TRACING_ENABLED:false}
+      endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://127.0.0.1:4318/v1/traces}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      coreAuctionService:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
+
+logging:
+  file:
+    name: ${CURMERCE_AUCTION_LOG_FILE:${user.home}/.local/state/curmerce/auction-service.log}
+  pattern:
+    level: "%5p [traceId=%X{traceId:-},spanId=%X{spanId:-}]"

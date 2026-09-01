@@ -3,6 +3,7 @@ package cn.iocoder.yudao.curmerce.auction;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -28,6 +29,7 @@ public class AuctionCoreProxy {
     private final RestClient client;
     private final CircuitBreaker circuitBreaker;
 
+    @Autowired
     public AuctionCoreProxy(RestClient.Builder builder, AuctionServiceProperties properties,
                              CircuitBreakerRegistry circuitBreakerRegistry) {
         this(builder, properties, circuitBreakerRegistry, true);

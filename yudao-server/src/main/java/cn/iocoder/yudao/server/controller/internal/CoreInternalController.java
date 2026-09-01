@@ -5,6 +5,11 @@ import cn.iocoder.yudao.curmerce.cloud.api.CoreMemberUserRespDTO;
 import cn.iocoder.yudao.curmerce.cloud.api.CorePermissionCheckReqDTO;
 import cn.iocoder.yudao.curmerce.cloud.api.CoreProductSummaryRespDTO;
 import cn.iocoder.yudao.curmerce.cloud.api.CoreTokenCheckReqDTO;
+import cn.iocoder.yudao.curmerce.cloud.api.CoreAuctionItemCheckReqDTO;
+import cn.iocoder.yudao.curmerce.cloud.api.CoreAuctionItemCheckRespDTO;
+import cn.iocoder.yudao.curmerce.cloud.api.CoreAuctionOrderReqDTO;
+import cn.iocoder.yudao.curmerce.cloud.api.CoreAuctionOrderRespDTO;
+import cn.iocoder.yudao.curmerce.cloud.api.CoreMerchantOwnerRespDTO;
 import cn.iocoder.yudao.framework.common.biz.system.oauth2.OAuth2TokenCommonApi;
 import cn.iocoder.yudao.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenCheckRespDTO;
 import cn.iocoder.yudao.framework.common.biz.system.permission.PermissionCommonApi;
@@ -12,6 +17,7 @@ import cn.iocoder.yudao.framework.common.biz.system.permission.dto.DeptDataPermi
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.commerce.controller.app.catalog.vo.PublicProductSummaryRespVO;
 import cn.iocoder.yudao.module.commerce.service.catalog.PublicCatalogService;
+import cn.iocoder.yudao.module.commerce.service.auction.AuctionCoreIntegrationService;
 import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
@@ -42,6 +48,7 @@ public class CoreInternalController {
     @Resource private MemberUserApi memberUserApi;
     @Resource private PublicCatalogService catalogService;
     @Resource private FileApi fileApi;
+    @Resource private AuctionCoreIntegrationService auctionIntegrationService;
 
     @PostMapping("/auth/check")
     public CommonResult<OAuth2AccessTokenCheckRespDTO> checkToken(
@@ -109,6 +116,30 @@ public class CoreInternalController {
         fileApi.replaceFileReferences(request.getBusinessType(), request.getBusinessId(),
                 request.getFieldName(), request.getUrls());
         return success(true);
+    }
+
+    @PostMapping("/auction/item/check")
+    public CommonResult<CoreAuctionItemCheckRespDTO> checkAuctionItem(
+            @RequestHeader(INTERNAL_TOKEN_HEADER) String internalToken,
+            @Valid @RequestBody CoreAuctionItemCheckReqDTO request) {
+        requestGuard.check(internalToken);
+        return success(auctionIntegrationService.validateOwnedItem(request));
+    }
+
+    @PostMapping("/auction/settlement-order")
+    public CommonResult<CoreAuctionOrderRespDTO> createAuctionSettlementOrder(
+            @RequestHeader(INTERNAL_TOKEN_HEADER) String internalToken,
+            @Valid @RequestBody CoreAuctionOrderReqDTO request) {
+        requestGuard.check(internalToken);
+        return success(auctionIntegrationService.createSettlementOrder(request));
+    }
+
+    @GetMapping("/auction/owner/{userId}")
+    public CommonResult<CoreMerchantOwnerRespDTO> getAuctionMerchantOwner(
+            @RequestHeader(INTERNAL_TOKEN_HEADER) String internalToken,
+            @PathVariable Long userId) {
+        requestGuard.check(internalToken);
+        return success(auctionIntegrationService.findMerchantOwner(userId));
     }
 
     private static CoreMemberUserRespDTO toMember(MemberUserRespDTO source) {

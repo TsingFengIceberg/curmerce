@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -89,6 +90,26 @@ class CommerceOutboxPublisherServiceImplTest {
         verify(messagePublisher).publish(event);
         verify(outboxMapper, never()).markRetry(any(), anyInt(), any(), anyString());
         verify(outboxMapper, never()).markDead(any(), anyString());
+    }
+
+    @Test
+    void retryDead_requeuesDeadEventsAndResetsRetryState() {
+        CommerceOutboxEventDO event = pendingEvent(1005L).setStatus(CommerceOutboxStatusEnum.DEAD.getStatus())
+                .setAttempts(5).setLastError("broker down");
+        when(outboxMapper.selectDead(10)).thenReturn(List.of(event));
+        when(outboxMapper.requeueDead(1005L)).thenReturn(1);
+
+        assertEquals(1, service.retryDead(10));
+        verify(outboxMapper).requeueDead(1005L);
+    }
+
+    @Test
+    void statusCounts_returnsAllDurableStatuses() {
+        when(outboxMapper.countByStatus(CommerceOutboxStatusEnum.PENDING.getStatus())).thenReturn(2L);
+        when(outboxMapper.countByStatus(CommerceOutboxStatusEnum.PUBLISHED.getStatus())).thenReturn(3L);
+        when(outboxMapper.countByStatus(CommerceOutboxStatusEnum.DEAD.getStatus())).thenReturn(4L);
+
+        assertEquals(Map.of(10, 2L, 20, 3L, 30, 4L), service.statusCounts());
     }
 
     private static CommerceOutboxEventDO pendingEvent(Long id) {
