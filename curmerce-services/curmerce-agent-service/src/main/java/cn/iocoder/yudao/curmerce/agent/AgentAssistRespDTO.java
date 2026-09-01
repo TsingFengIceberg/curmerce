@@ -13,4 +13,6 @@ public class AgentAssistRespDTO {
     private JsonNode communityPosts;
     private List<String> degradedSources;
     private boolean modelBacked;
+    private String modelAnswer;
+    private AgentUsageRecorder.Usage usage;
 }

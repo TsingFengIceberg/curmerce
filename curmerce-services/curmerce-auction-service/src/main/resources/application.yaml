@@ -10,6 +10,12 @@ spring:
         namespace: ${NACOS_NAMESPACE:public}
         ip: ${NACOS_DISCOVERY_IP:127.0.0.1}
         register-enabled: ${NACOS_DISCOVERY_ENABLED:true}
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:16379}
+      username: ${REDIS_USER:curmerce}
+      password: ${REDIS_PASSWORD:}
 
 server:
   address: 127.0.0.1
@@ -22,6 +28,8 @@ curmerce:
     read-timeout: ${CURMERCE_AUCTION_READ_TIMEOUT:5s}
     core-internal-token: ${CURMERCE_INTERNAL_TOKEN:}
     local-store-enabled: ${CURMERCE_AUCTION_LOCAL_STORE_ENABLED:false}
+    redis-gate-enabled: ${CURMERCE_AUCTION_REDIS_GATE_ENABLED:false}
+    redis-gate-ttl-seconds: ${CURMERCE_AUCTION_REDIS_GATE_TTL_SECONDS:86400}
     datasource:
       url: ${CURMERCE_AUCTION_JDBC_URL:jdbc:mysql://127.0.0.1:13306/curmerce_auction?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
       username: ${CURMERCE_AUCTION_DB_USER:curmerce_auction}

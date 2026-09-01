@@ -162,7 +162,7 @@ public class ReleaseServiceImpl implements ReleaseService {
         if (campaignSnapshot == null && snapshot != null) campaignSnapshot = campaignMapper.selectByIdForUpdate(snapshot.getCampaignId());
         LocalDateTime now = LocalDateTime.now();
         if (!isOpen(campaignSnapshot, now) || snapshot == null) throw exception(RELEASE_STATE_INVALID);
-        ReleaseReservationService.ReservationResult reservation = reserveInventory(campaignSnapshot, snapshot, userId, reqVO.getQuantity());
+        ReleaseReservationService.ReservationResult reservation = reserveInventory(campaignSnapshot, snapshot, userId, reqVO.getQuantity(), reqVO.getIdempotencyKey());
         boolean completed = false;
         try {
             CommerceReleaseItemDO item = itemMapper.selectByIdForUpdate(reqVO.getItemId());
@@ -191,7 +191,7 @@ public class ReleaseServiceImpl implements ReleaseService {
                 if (completed) {
                     reservationService.commit(campaignSnapshot.getId(), snapshot.getId(), reqVO.getQuantity());
                 } else {
-                    reservationService.release(campaignSnapshot.getId(), snapshot.getId(), userId, reqVO.getQuantity());
+                    reservationService.release(campaignSnapshot.getId(), snapshot.getId(), userId, reqVO.getQuantity(), reqVO.getIdempotencyKey());
                 }
             }
         }
@@ -199,17 +199,19 @@ public class ReleaseServiceImpl implements ReleaseService {
 
     private ReleaseReservationService.ReservationResult reserveInventory(CommerceReleaseCampaignDO campaign,
                                                                            CommerceReleaseItemDO item,
-                                                                           Long userId, int quantity) {
+                                                                           Long userId, int quantity, String idempotencyKey) {
         if (quantity <= 0 || quantity > campaign.getPerUserLimit()) throw exception(RELEASE_PURCHASE_LIMIT);
         if (quantity > item.getStock()) throw exception(RELEASE_STOCK_INSUFFICIENT);
         if (reservationService == null) return ReleaseReservationService.ReservationResult.DISABLED;
         ReleaseReservationService.ReservationResult result = reservationService.reserve(campaign.getId(), item.getId(), userId,
-                quantity, campaign.getPerUserLimit(), item.getStock());
+                quantity, campaign.getPerUserLimit(), item.getStock(), idempotencyKey);
         if (result == ReleaseReservationService.ReservationResult.STOCK_INSUFFICIENT) throw exception(RELEASE_STOCK_INSUFFICIENT);
         if (result == ReleaseReservationService.ReservationResult.LIMIT_EXCEEDED) throw exception(RELEASE_PURCHASE_LIMIT);
+        if (result == ReleaseReservationService.ReservationResult.DUPLICATE) throw exception(RELEASE_PURCHASE_DUPLICATE);
         if (result == ReleaseReservationService.ReservationResult.UNAVAILABLE) throw exception(RELEASE_RESERVATION_UNAVAILABLE);
         return result;
     }
+
 
     private boolean isOpen(CommerceReleaseCampaignDO campaign, LocalDateTime now) {
         return campaign != null && (ReleaseStatusEnum.SCHEDULED.getStatus().equals(campaign.getStatus())

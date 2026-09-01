@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -32,6 +33,7 @@ public class CommunitySearchEventPublisher {
     }
 
     @Scheduled(fixedDelayString = "${curmerce.search.publish-delay-ms:2000}")
+    @Transactional(rollbackFor = Exception.class)
     public void publishAvailable() {
         for (CommunitySearchOutboxDO event : outboxMapper.selectPending(50)) {
             try {

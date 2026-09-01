@@ -19,6 +19,13 @@ curmerce:
     community-base-url: ${CURMERCE_COMMUNITY_BASE_URL:http://127.0.0.1:48083}
     connect-timeout: ${CURMERCE_AGENT_CONNECT_TIMEOUT:1s}
     read-timeout: ${CURMERCE_AGENT_READ_TIMEOUT:2s}
+    model-enabled: ${CURMERCE_AGENT_MODEL_ENABLED:false}
+    model-base-url: ${CURMERCE_AGENT_MODEL_BASE_URL:http://127.0.0.1:11434/v1}
+    model-api-key: ${CURMERCE_AGENT_MODEL_API_KEY:}
+    model-name: ${CURMERCE_AGENT_MODEL_NAME:curmerce-local}
+    input-cost-per-thousand-tokens: ${CURMERCE_AGENT_INPUT_COST_PER_1K:0}
+    output-cost-per-thousand-tokens: ${CURMERCE_AGENT_OUTPUT_COST_PER_1K:0}
+    internal-token: ${CURMERCE_INTERNAL_TOKEN:${CURMERCE_OAUTH_CLIENT_SECRET:}}
 
 resilience4j:
   circuitbreaker:

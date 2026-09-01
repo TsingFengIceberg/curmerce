@@ -10,6 +10,7 @@ import cn.iocoder.yudao.curmerce.cloud.api.CoreAuctionItemCheckRespDTO;
 import cn.iocoder.yudao.curmerce.cloud.api.CoreAuctionOrderReqDTO;
 import cn.iocoder.yudao.curmerce.cloud.api.CoreAuctionOrderRespDTO;
 import cn.iocoder.yudao.curmerce.cloud.api.CoreMerchantOwnerRespDTO;
+import cn.iocoder.yudao.curmerce.cloud.api.CoreOrderStatusRespDTO;
 import cn.iocoder.yudao.framework.common.biz.system.oauth2.OAuth2TokenCommonApi;
 import cn.iocoder.yudao.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenCheckRespDTO;
 import cn.iocoder.yudao.framework.common.biz.system.permission.PermissionCommonApi;
@@ -18,6 +19,7 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.commerce.controller.app.catalog.vo.PublicProductSummaryRespVO;
 import cn.iocoder.yudao.module.commerce.service.catalog.PublicCatalogService;
 import cn.iocoder.yudao.module.commerce.service.auction.AuctionCoreIntegrationService;
+import cn.iocoder.yudao.module.commerce.service.order.OrderService;
 import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
@@ -49,6 +51,7 @@ public class CoreInternalController {
     @Resource private PublicCatalogService catalogService;
     @Resource private FileApi fileApi;
     @Resource private AuctionCoreIntegrationService auctionIntegrationService;
+    @Resource private OrderService orderService;
 
     @PostMapping("/auth/check")
     public CommonResult<OAuth2AccessTokenCheckRespDTO> checkToken(
@@ -140,6 +143,20 @@ public class CoreInternalController {
             @PathVariable Long userId) {
         requestGuard.check(internalToken);
         return success(auctionIntegrationService.findMerchantOwner(userId));
+    }
+
+    @GetMapping("/order/{userId}/{orderId}/status")
+    public CommonResult<CoreOrderStatusRespDTO> getOwnOrderStatus(
+            @RequestHeader(INTERNAL_TOKEN_HEADER) String internalToken,
+            @PathVariable Long userId, @PathVariable Long orderId) {
+        requestGuard.check(internalToken);
+        var order = orderService.getOrder(userId, orderId);
+        CoreOrderStatusRespDTO response = new CoreOrderStatusRespDTO().setOrderId(order.getId())
+                .setOrderNo(order.getOrderNo()).setStatus(order.getStatus()).setRefundStatus(order.getRefundStatus())
+                .setPayableAmount(order.getPayableAmount()).setCreateTime(order.getCreateTime())
+                .setShippingTime(order.getShippingTime()).setCompletionTime(order.getCompletionTime())
+                .setLogisticsCompany(order.getLogisticsCompany()).setTrackingNo(order.getTrackingNo());
+        return success(response);
     }
 
     private static CoreMemberUserRespDTO toMember(MemberUserRespDTO source) {

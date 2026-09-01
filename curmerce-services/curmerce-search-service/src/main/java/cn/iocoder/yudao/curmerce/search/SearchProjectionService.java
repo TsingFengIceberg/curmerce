@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class SearchProjectionService {
@@ -18,6 +19,8 @@ public class SearchProjectionService {
     private final SearchSourceClient sourceClient;
     private final SearchProperties properties;
     private final MeterRegistry meterRegistry;
+    private final Map<String, CacheEntry> pageCache = new ConcurrentHashMap<>();
+    private static final long CACHE_TTL_MILLIS = 2_000L;
 
     public SearchProjectionService(ElasticsearchIndexClient indexClient, SearchSourceClient sourceClient,
                                    SearchProperties properties, MeterRegistry meterRegistry) {
@@ -41,6 +44,7 @@ public class SearchProjectionService {
         if (PRODUCT_EVENT.equals(eventType)) projectProduct(eventId, payload);
         else if (POST_EVENT.equals(eventType)) projectPost(eventId, payload);
         else return;
+        pageCache.clear();
         meterRegistry.counter("curmerce.search.projection.events", "type", eventType, "result", "accepted").increment();
     }
 
@@ -57,6 +61,7 @@ public class SearchProjectionService {
         indexClient.deleteAll(properties.productIndex());
         List<Map<String, Object>> documents = sourceClient.fetchProducts();
         indexClient.bulkPut(properties.productIndex(), documents);
+        pageCache.clear();
         meterRegistry.counter("curmerce.search.rebuild", "index", "products").increment();
         return new RebuildReport(documents.size(), 0, true);
     }
@@ -67,16 +72,45 @@ public class SearchProjectionService {
         indexClient.deleteAll(properties.postIndex());
         List<Map<String, Object>> documents = sourceClient.fetchPosts();
         indexClient.bulkPut(properties.postIndex(), documents);
+        pageCache.clear();
         meterRegistry.counter("curmerce.search.rebuild", "index", "posts").increment();
         return new RebuildReport(0, documents.size(), true);
     }
 
     public ElasticsearchIndexClient.SearchPage searchProducts(String keyword, int page, int size) {
-        return indexClient.search(properties.productIndex(), keyword, page, size);
+        return cached("products", keyword, page, size,
+                () -> indexClient.search(properties.productIndex(), keyword, page, size));
     }
 
     public ElasticsearchIndexClient.SearchPage searchPosts(String keyword, int page, int size) {
-        return indexClient.search(properties.postIndex(), keyword, page, size);
+        return cached("posts", keyword, page, size,
+                () -> indexClient.search(properties.postIndex(), keyword, page, size));
+    }
+
+    public ProjectionReconciliationReport reconcile() {
+        if (!indexClient.enabled()) return new ProjectionReconciliationReport(0, 0, 0, 0, true);
+        long sourceProducts = sourceClient.fetchProducts().size();
+        long sourcePosts = sourceClient.fetchPosts().size();
+        long indexedProducts = indexClient.countVisible(properties.productIndex());
+        long indexedPosts = indexClient.countVisible(properties.postIndex());
+        boolean matched = sourceProducts == indexedProducts && sourcePosts == indexedPosts;
+        meterRegistry.counter("curmerce.search.reconciliation", "result", matched ? "matched" : "mismatch").increment();
+        return new ProjectionReconciliationReport(sourceProducts, indexedProducts, sourcePosts, indexedPosts, matched);
+    }
+
+    private ElasticsearchIndexClient.SearchPage cached(String type, String keyword, int page, int size,
+                                                        java.util.function.Supplier<ElasticsearchIndexClient.SearchPage> loader) {
+        String key = type + "|" + (keyword == null ? "" : keyword.trim()) + "|" + page + "|" + size;
+        long now = System.currentTimeMillis();
+        CacheEntry existing = pageCache.get(key);
+        if (existing != null && existing.expiresAt() > now) {
+            meterRegistry.counter("curmerce.search.cache", "result", "hit").increment();
+            return existing.page();
+        }
+        ElasticsearchIndexClient.SearchPage pageResult = loader.get();
+        pageCache.put(key, new CacheEntry(pageResult, now + CACHE_TTL_MILLIS));
+        meterRegistry.counter("curmerce.search.cache", "result", "miss").increment();
+        return pageResult;
     }
 
     private void projectProduct(long eventId, Map<String, Object> payload) {
@@ -131,4 +165,7 @@ public class SearchProjectionService {
     }
 
     public record RebuildReport(long products, long posts, boolean completed) { }
+    public record ProjectionReconciliationReport(long sourceProducts, long indexedProducts,
+                                                long sourcePosts, long indexedPosts, boolean matched) { }
+    private record CacheEntry(ElasticsearchIndexClient.SearchPage page, long expiresAt) { }
 }

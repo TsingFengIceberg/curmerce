@@ -25,6 +25,7 @@ import cn.iocoder.yudao.module.commerce.service.order.OrderService;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +36,14 @@ import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.*;
 
 @Service
 public class AuctionServiceImpl implements AuctionService {
+    /**
+     * Once the independent Auction store is enabled, Core must remain a
+     * read-only compatibility source.  Keeping this guard in every write
+     * entry point prevents an old route or stale client from creating a split
+     * write model during the cutover window.
+     */
+    @Value("${curmerce.auction.local-store-enabled:false}")
+    private boolean auctionLocalStoreEnabled;
     @Resource private CommerceAuctionSessionMapper sessionMapper;
     @Resource private CommerceAuctionBidMapper bidMapper;
     @Resource private ProductMapper productMapper;
@@ -43,10 +52,12 @@ public class AuctionServiceImpl implements AuctionService {
     @Resource private MemberUserApi memberUserApi;
     @Resource private OrderService orderService;
     @Resource private CommerceOrderMapper orderMapper;
+    @Resource private AuctionBidConcurrencyGate bidConcurrencyGate;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long create(AuctionCreateReqVO reqVO) {
+        requireLegacyStoreWritable();
         MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
         validateInput(reqVO, context);
         CommerceAuctionSessionDO session = new CommerceAuctionSessionDO().setMerchantId(context.merchant().getId())
@@ -61,6 +72,7 @@ public class AuctionServiceImpl implements AuctionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(AuctionUpdateReqVO reqVO) {
+        requireLegacyStoreWritable();
         MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
         CommerceAuctionSessionDO session = requireOwnedForUpdate(reqVO.getId(), context);
         if (!AuctionStatusEnum.DRAFT.getStatus().equals(session.getStatus())) throw exception(AUCTION_STATE_INVALID);
@@ -119,6 +131,7 @@ public class AuctionServiceImpl implements AuctionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void publish(Long id) {
+        requireLegacyStoreWritable();
         MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
         CommerceAuctionSessionDO session = requireOwned(id, context);
         if (!AuctionStatusEnum.DRAFT.getStatus().equals(session.getStatus())) throw exception(AUCTION_STATE_INVALID);
@@ -129,6 +142,7 @@ public class AuctionServiceImpl implements AuctionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancel(Long id) {
+        requireLegacyStoreWritable();
         MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
         CommerceAuctionSessionDO session = requireOwned(id, context);
         if (!AuctionStatusEnum.DRAFT.getStatus().equals(session.getStatus()) && !AuctionStatusEnum.SCHEDULED.getStatus().equals(session.getStatus())) throw exception(AUCTION_STATE_INVALID);
@@ -138,6 +152,7 @@ public class AuctionServiceImpl implements AuctionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void end(Long id) {
+        requireLegacyStoreWritable();
         MerchantAccessContext context = merchantAccessService.requireApprovedOwner();
         CommerceAuctionSessionDO session = requireOwnedForUpdate(id, context);
         LocalDateTime now = LocalDateTime.now();
@@ -152,6 +167,7 @@ public class AuctionServiceImpl implements AuctionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long bid(Long userId, AuctionBidReqVO reqVO) {
+        requireLegacyStoreWritable();
         memberUserApi.validateActiveUserForUpdate(userId);
         CommerceAuctionSessionDO session = sessionMapper.selectByIdForUpdate(reqVO.getSessionId());
         if (session == null) throw exception(AUCTION_NOT_FOUND);
@@ -164,9 +180,20 @@ public class AuctionServiceImpl implements AuctionService {
         CommerceAuctionBidDO highest = bidMapper.selectHighest(session.getId());
         long minimum = highest == null ? session.getStartingPrice() : highest.getAmount() + session.getMinIncrement();
         if (reqVO.getAmount() < minimum) throw exception(AUCTION_BID_INVALID);
+        AuctionBidConcurrencyGate.Result gateResult = bidConcurrencyGate == null ? AuctionBidConcurrencyGate.Result.DISABLED
+                : bidConcurrencyGate.tryAccept(session.getId(), reqVO.getAmount(), minimum, userId, reqVO.getIdempotencyKey().trim());
+        if (gateResult == AuctionBidConcurrencyGate.Result.BELOW_MINIMUM) throw exception(AUCTION_BID_INVALID);
+        if (gateResult == AuctionBidConcurrencyGate.Result.DUPLICATE) throw exception(AUCTION_BID_DUPLICATE);
+        if (gateResult == AuctionBidConcurrencyGate.Result.UNAVAILABLE) throw exception(AUCTION_STATE_INVALID);
         CommerceAuctionBidDO bid = new CommerceAuctionBidDO().setSessionId(session.getId()).setBidderUserId(userId)
                 .setAmount(reqVO.getAmount()).setIdempotencyKey(reqVO.getIdempotencyKey().trim());
-        try { bidMapper.insert(bid); } catch (DuplicateKeyException ex) { throw exception(AUCTION_BID_DUPLICATE); }
+        try { bidMapper.insert(bid); } catch (DuplicateKeyException ex) {
+            if (bidConcurrencyGate != null) bidConcurrencyGate.reconcile(session.getId(), highest == null ? null : highest.getAmount(), highest == null ? null : highest.getBidderUserId());
+            throw exception(AUCTION_BID_DUPLICATE);
+        } catch (RuntimeException ex) {
+            if (bidConcurrencyGate != null) bidConcurrencyGate.reconcile(session.getId(), highest == null ? null : highest.getAmount(), highest == null ? null : highest.getBidderUserId());
+            throw ex;
+        }
         if (AuctionStatusEnum.SCHEDULED.getStatus().equals(session.getStatus())) {
             sessionMapper.update(new CommerceAuctionSessionDO().setStatus(AuctionStatusEnum.RUNNING.getStatus()),
                     new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CommerceAuctionSessionDO>()
@@ -178,6 +205,7 @@ public class AuctionServiceImpl implements AuctionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long settle(Long userId, Long sessionId, Long addressId) {
+        requireLegacyStoreWritable();
         memberUserApi.validateActiveUserForUpdate(userId);
         CommerceAuctionSessionDO session = sessionMapper.selectByIdForUpdate(sessionId);
         if (session == null) throw exception(AUCTION_NOT_FOUND);
@@ -265,5 +293,11 @@ public class AuctionServiceImpl implements AuctionService {
                 || AuctionStatusEnum.RUNNING.getStatus().equals(status)
                 || AuctionStatusEnum.ENDED.getStatus().equals(status)
                 || AuctionStatusEnum.SETTLEMENT_FAILED.getStatus().equals(status));
+    }
+
+    private void requireLegacyStoreWritable() {
+        if (auctionLocalStoreEnabled) {
+            throw new IllegalStateException("Auction ownership has moved to curmerce-auction; Core auction tables are read-only");
+        }
     }
 }

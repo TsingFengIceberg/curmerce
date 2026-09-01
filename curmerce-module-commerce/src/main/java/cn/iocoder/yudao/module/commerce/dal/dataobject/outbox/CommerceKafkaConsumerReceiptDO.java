@@ -19,5 +19,10 @@ public class CommerceKafkaConsumerReceiptDO extends BaseDO {
     private Long eventId;
     private String eventType;
     private String eventKey;
+    private String payload;
+    private Integer status;
+    private Integer attempts;
+    private String lastError;
     private LocalDateTime receivedTime;
+    private LocalDateTime processedTime;
 }

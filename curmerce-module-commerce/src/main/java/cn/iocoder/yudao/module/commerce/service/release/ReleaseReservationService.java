@@ -51,6 +51,23 @@ public class ReleaseReservationService {
             if reserved == quantity then redis.call('DEL', KEYS[2]) end
             return 1
             """, Long.class);
+    private static final DefaultRedisScript<Long> RESERVE_IDEMPOTENT_SCRIPT = new DefaultRedisScript<>("""
+            local stock = tonumber(redis.call('GET', KEYS[1]) or '-1')
+            if stock < 0 then return -3 end
+            if redis.call('EXISTS', KEYS[4]) == 1 then return -4 end
+            local quantity = tonumber(ARGV[1])
+            local limit = tonumber(ARGV[2])
+            local user = tonumber(redis.call('GET', KEYS[3]) or '0')
+            if user + quantity > limit then return -2 end
+            if stock < quantity then return -1 end
+            redis.call('DECRBY', KEYS[1], quantity)
+            redis.call('INCRBY', KEYS[2], quantity)
+            redis.call('INCRBY', KEYS[3], quantity)
+            redis.call('SET', KEYS[4], quantity, 'EX', ARGV[3])
+            redis.call('EXPIRE', KEYS[3], ARGV[3])
+            redis.call('EXPIRE', KEYS[2], ARGV[3])
+            return stock - quantity
+            """, Long.class);
 
     private final StringRedisTemplate redis;
     private final boolean enabled;
@@ -63,6 +80,12 @@ public class ReleaseReservationService {
 
     public ReservationResult reserve(Long campaignId, Long itemId, Long userId,
                                      int quantity, int userLimit, int databaseStock) {
+        return reserve(campaignId, itemId, userId, quantity, userLimit, databaseStock, null);
+    }
+
+    /** Atomic reservation with a request key, preventing duplicate HTTP retries from consuming stock twice. */
+    public ReservationResult reserve(Long campaignId, Long itemId, Long userId,
+                                     int quantity, int userLimit, int databaseStock, String idempotencyKey) {
         if (!enabled) {
             return ReservationResult.DISABLED;
         }
@@ -72,11 +95,16 @@ public class ReleaseReservationService {
         try {
             redis.opsForValue().setIfAbsent(stockKey, String.valueOf(databaseStock));
             redis.opsForValue().setIfAbsent(reservedKey, "0");
-            Long result = redis.execute(RESERVE_SCRIPT, List.of(stockKey, reservedKey, userKey),
-                    String.valueOf(quantity), String.valueOf(userLimit), String.valueOf(USER_KEY_TTL_SECONDS));
+            boolean keyed = idempotencyKey != null && !idempotencyKey.isBlank();
+            List<String> keys = keyed ? List.of(stockKey, reservedKey, userKey, requestKey(campaignId, itemId, userId, idempotencyKey))
+                    : List.of(stockKey, reservedKey, userKey);
+            Long result = keyed
+                    ? redis.execute(RESERVE_IDEMPOTENT_SCRIPT, keys, String.valueOf(quantity), String.valueOf(userLimit), String.valueOf(USER_KEY_TTL_SECONDS))
+                    : redis.execute(RESERVE_SCRIPT, keys, String.valueOf(quantity), String.valueOf(userLimit), String.valueOf(USER_KEY_TTL_SECONDS));
             if (result == null || result == -3L) return ReservationResult.UNAVAILABLE;
             if (result == -2L) return ReservationResult.LIMIT_EXCEEDED;
             if (result == -1L) return ReservationResult.STOCK_INSUFFICIENT;
+            if (result == -4L) return ReservationResult.DUPLICATE;
             return ReservationResult.RESERVED;
         } catch (RuntimeException ex) {
             return ReservationResult.UNAVAILABLE;
@@ -84,11 +112,18 @@ public class ReleaseReservationService {
     }
 
     public boolean release(Long campaignId, Long itemId, Long userId, int quantity) {
+        return release(campaignId, itemId, userId, quantity, null);
+    }
+
+    public boolean release(Long campaignId, Long itemId, Long userId, int quantity, String idempotencyKey) {
         if (!enabled) return true;
         try {
-            Long result = redis.execute(RELEASE_SCRIPT,
-                    List.of(stockKey(campaignId, itemId), reservedKey(campaignId, itemId),
-                            userKey(campaignId, itemId, userId)), String.valueOf(quantity));
+            List<String> keys = List.of(stockKey(campaignId, itemId), reservedKey(campaignId, itemId),
+                    userKey(campaignId, itemId, userId));
+            Long result = redis.execute(RELEASE_SCRIPT, keys, String.valueOf(quantity));
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                redis.delete(requestKey(campaignId, itemId, userId, idempotencyKey));
+            }
             return Long.valueOf(1L).equals(result);
         } catch (RuntimeException ex) {
             return false;
@@ -134,11 +169,15 @@ public class ReleaseReservationService {
         return KEY_PREFIX + "user:" + campaignId + ":" + itemId + ":" + userId;
     }
 
+    private String requestKey(Long campaignId, Long itemId, Long userId, String idempotencyKey) {
+        return KEY_PREFIX + "request:" + campaignId + ":" + itemId + ":" + userId + ":" + idempotencyKey;
+    }
+
     private Long parse(String value) {
         return value == null ? null : Long.valueOf(value);
     }
 
     public enum ReservationResult {
-        RESERVED, STOCK_INSUFFICIENT, LIMIT_EXCEEDED, UNAVAILABLE, DISABLED
+        RESERVED, DUPLICATE, STOCK_INSUFFICIENT, LIMIT_EXCEEDED, UNAVAILABLE, DISABLED
     }
 }

@@ -42,6 +42,14 @@ public class SearchController {
         return success(projectionService.searchPosts(keyword, pageNo, pageSize));
     }
 
+    @PostMapping("/reconcile")
+    public CommonResult<SearchProjectionService.ProjectionReconciliationReport> reconcile(
+            @RequestHeader(value = "X-Curmerce-Search-Token", required = false) String token,
+            HttpServletRequest request) {
+        authorizeRebuild(token, request);
+        return success(projectionService.reconcile());
+    }
+
     @PostMapping("/rebuild/all")
     public CommonResult<SearchProjectionService.RebuildReport> rebuildAll(
             @RequestHeader(value = "X-Curmerce-Search-Token", required = false) String token,

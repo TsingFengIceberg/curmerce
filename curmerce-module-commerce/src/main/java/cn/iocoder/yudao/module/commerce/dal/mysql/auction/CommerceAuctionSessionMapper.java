@@ -62,6 +62,13 @@ public interface CommerceAuctionSessionMapper extends BaseMapperX<CommerceAuctio
                 .last("LIMIT " + safeBatchSize + " FOR UPDATE"));
     }
 
+    default List<CommerceAuctionSessionDO> selectActiveForReconciliation(int batchSize) {
+        int safeBatchSize = Math.max(1, Math.min(batchSize, 1000));
+        return selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CommerceAuctionSessionDO>()
+                .in(CommerceAuctionSessionDO::getStatus, AuctionStatusEnum.SCHEDULED.getStatus(), AuctionStatusEnum.RUNNING.getStatus())
+                .orderByAsc(CommerceAuctionSessionDO::getId).last("LIMIT " + safeBatchSize));
+    }
+
     default int markSettlementFailed(Long id, LocalDateTime failedTime, String reason) {
         return update(new CommerceAuctionSessionDO().setStatus(AuctionStatusEnum.SETTLEMENT_FAILED.getStatus())
                         .setSettlementFailedTime(failedTime).setSettlementFailureReason(reason),

@@ -24,7 +24,7 @@ public interface CommunitySearchOutboxMapper extends BaseMapperX<CommunitySearch
                 .eq(CommunitySearchOutboxDO::getStatus, 10)
                 .and(w -> w.isNull(CommunitySearchOutboxDO::getNextRetryTime)
                         .or().le(CommunitySearchOutboxDO::getNextRetryTime, LocalDateTime.now()))
-                .orderByAsc(CommunitySearchOutboxDO::getId).last("LIMIT " + safeSize));
+                .orderByAsc(CommunitySearchOutboxDO::getId).last("LIMIT " + safeSize + " FOR UPDATE SKIP LOCKED"));
     }
 
     default int markPublished(Long id, LocalDateTime time) {
@@ -45,5 +45,28 @@ public interface CommunitySearchOutboxMapper extends BaseMapperX<CommunitySearch
                         .setNextRetryTime(null).setLastError(lastError),
                 new LambdaUpdateWrapper<CommunitySearchOutboxDO>().eq(CommunitySearchOutboxDO::getId, id)
                         .eq(CommunitySearchOutboxDO::getStatus, 10));
+    }
+
+    default List<CommunitySearchOutboxDO> selectDead(int limit) {
+        int safe = Math.max(1, Math.min(limit, 500));
+        return selectList(new LambdaQueryWrapper<CommunitySearchOutboxDO>()
+                .eq(CommunitySearchOutboxDO::getStatus, 20).orderByAsc(CommunitySearchOutboxDO::getId)
+                .last("LIMIT " + safe));
+    }
+
+    default int requeueDead(Long id) {
+        return update(new CommunitySearchOutboxDO().setStatus(10).setAttempts(0)
+                        .setNextRetryTime(null).setLastError(null).setPublishedTime(null),
+                new LambdaUpdateWrapper<CommunitySearchOutboxDO>().eq(CommunitySearchOutboxDO::getId, id)
+                        .eq(CommunitySearchOutboxDO::getStatus, 20));
+    }
+
+    default java.util.Map<Integer, Long> countByStatus() {
+        java.util.Map<Integer, Long> result = new java.util.LinkedHashMap<>();
+        for (Integer status : java.util.List.of(10, 20, 30)) {
+            result.put(status, selectCount(new LambdaQueryWrapper<CommunitySearchOutboxDO>()
+                    .eq(CommunitySearchOutboxDO::getStatus, status)));
+        }
+        return result;
     }
 }

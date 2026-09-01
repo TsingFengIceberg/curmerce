@@ -3,9 +3,11 @@ package cn.iocoder.yudao.module.commerce.controller.admin.reliability;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxPublisherService;
 import cn.iocoder.yudao.module.commerce.service.reconciliation.CommerceReconciliationService;
+import cn.iocoder.yudao.module.commerce.service.outbox.kafka.CommerceKafkaReceiptService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +27,8 @@ public class CommerceReliabilityController {
     private CommerceOutboxPublisherService outboxPublisherService;
     @Resource
     private CommerceReconciliationService reconciliationService;
+    @Autowired(required = false)
+    private CommerceKafkaReceiptService kafkaReceiptService;
 
     @GetMapping("/outbox/status")
     @Operation(summary = "查询 Outbox 状态统计")
@@ -66,5 +70,19 @@ public class CommerceReliabilityController {
     @PreAuthorize("@ss.hasPermission('commerce:reliability:operate')")
     public CommonResult<Boolean> resolve(@RequestParam Long id) {
         return success(reconciliationService.resolveIssue(id));
+    }
+
+    @GetMapping("/kafka/status")
+    @Operation(summary = "查询 Kafka 消费处理状态")
+    @PreAuthorize("@ss.hasPermission('commerce:reliability:query')")
+    public CommonResult<Map<Integer, Long>> kafkaStatus() {
+        return success(kafkaReceiptService == null ? Map.of() : kafkaReceiptService.statusCounts());
+    }
+
+    @PostMapping("/kafka/replay-failed")
+    @Operation(summary = "重放失败的 Kafka 消费事件")
+    @PreAuthorize("@ss.hasPermission('commerce:reliability:operate')")
+    public CommonResult<Integer> replayKafka(@RequestParam(defaultValue = "100") int limit) {
+        return success(kafkaReceiptService == null ? 0 : kafkaReceiptService.replayFailed(limit));
     }
 }

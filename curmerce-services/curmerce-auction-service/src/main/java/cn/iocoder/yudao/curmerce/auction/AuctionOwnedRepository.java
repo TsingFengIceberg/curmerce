@@ -22,6 +22,18 @@ public class AuctionOwnedRepository {
 
     private static final String COLUMNS = "id, merchant_id, store_id, product_id, sku_id, name, status, starting_price, min_increment, start_time, end_time, winner_user_id, winning_bid_id, settlement_order_id, settlement_failed_time, settlement_failure_reason, product_name, product_image_url, sku_label, original_price";
 
+    public OwnershipCounts ownershipCounts() {
+        Long sessions = jdbc.queryForObject("SELECT COUNT(*) FROM auction_session WHERE deleted=0", Long.class);
+        Long bids = jdbc.queryForObject("SELECT COUNT(*) FROM auction_bid WHERE deleted=0", Long.class);
+        CutoverSnapshot snapshot = jdbc.query("SELECT source_session_count,target_session_count,source_bid_count,target_bid_count,verified,verified_time "
+                        + "FROM ownership_cutover ORDER BY id DESC LIMIT 1", rs -> rs.next()
+                        ? new CutoverSnapshot(rs.getLong("source_session_count"), rs.getLong("target_session_count"),
+                        rs.getLong("source_bid_count"), rs.getLong("target_bid_count"), rs.getBoolean("verified"),
+                        rs.getTimestamp("verified_time") == null ? null : rs.getTimestamp("verified_time").toLocalDateTime())
+                        : null);
+        return new OwnershipCounts(sessions == null ? 0 : sessions, bids == null ? 0 : bids, snapshot);
+    }
+
     public AuctionSessionRow findSession(Long id, boolean forUpdate) {
         List<AuctionSessionRow> rows = jdbc.query("SELECT " + COLUMNS + " FROM auction_session WHERE id=? AND deleted=0" + (forUpdate ? " FOR UPDATE" : ""), this::mapSession, id);
         return rows.isEmpty() ? null : rows.get(0);
@@ -89,6 +101,12 @@ public class AuctionOwnedRepository {
         return value == null ? 0 : value;
     }
 
+    public List<Long> activeSessionIds(int limit) {
+        int safe = Math.max(1, Math.min(limit, 500));
+        return jdbc.queryForList("SELECT id FROM auction_session WHERE status IN (10,20) AND end_time>? AND deleted=0 ORDER BY id LIMIT ?",
+                Long.class, Timestamp.valueOf(LocalDateTime.now()), safe);
+    }
+
     public AuctionBidRow findBidByKey(Long sessionId, String idempotencyKey) {
         List<AuctionBidRow> rows = jdbc.query("SELECT id,session_id,bidder_user_id,amount,idempotency_key,create_time FROM auction_bid WHERE session_id=? AND idempotency_key=? AND deleted=0 LIMIT 1", this::mapBid, sessionId, idempotencyKey);
         return rows.isEmpty() ? null : rows.get(0);
@@ -117,4 +135,16 @@ public class AuctionOwnedRepository {
     public record AuctionCreateCommand(Long merchantId, Long storeId, Long productId, Long skuId, String name, Long startingPrice, Long minIncrement, LocalDateTime startTime, LocalDateTime endTime, String productName, String productImageUrl, String skuLabel, Long originalPrice) {}
     public record AuctionSessionRow(Long id, Long merchantId, Long storeId, Long productId, Long skuId, String name, Integer status, Long startingPrice, Long minIncrement, LocalDateTime startTime, LocalDateTime endTime, Long winnerUserId, Long winningBidId, Long settlementOrderId, LocalDateTime settlementFailedTime, String settlementFailureReason, String productName, String productImageUrl, String skuLabel, Long originalPrice) {}
     public record AuctionBidRow(Long id, Long sessionId, Long bidderUserId, Long amount, String idempotencyKey, LocalDateTime createTime) {}
+    public record OwnershipCounts(long sessionCount, long bidCount, CutoverSnapshot cutover) {
+        public boolean verified() {
+            return cutover != null && cutover.verified()
+                    && sessionCount == cutover.sourceSessionCount()
+                    && bidCount == cutover.sourceBidCount()
+                    && sessionCount == cutover.targetSessionCount()
+                    && bidCount == cutover.targetBidCount();
+        }
+    }
+    public record CutoverSnapshot(long sourceSessionCount, long targetSessionCount,
+                                  long sourceBidCount, long targetBidCount,
+                                  boolean verified, LocalDateTime verifiedTime) {}
 }

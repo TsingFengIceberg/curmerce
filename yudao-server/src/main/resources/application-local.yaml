@@ -66,6 +66,9 @@ management:
       endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://127.0.0.1:4318/v1/traces}
 
 curmerce:
+  auction:
+    # Core rejects legacy Auction writes once the independent service is cut over.
+    local-store-enabled: ${CURMERCE_AUCTION_LOCAL_STORE_ENABLED:false}
   outbox:
     transport: ${CURMERCE_OUTBOX_TRANSPORT:redis}
     kafka:

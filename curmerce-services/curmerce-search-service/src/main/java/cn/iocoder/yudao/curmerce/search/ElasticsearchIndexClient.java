@@ -90,6 +90,14 @@ public class ElasticsearchIndexClient {
         request("POST", "/" + index + "/_delete_by_query?conflicts=proceed", JsonUtils.toJsonString(query));
     }
 
+    public long countVisible(String index) {
+        if (!properties.enabled()) return 0;
+        Map<String, Object> query = Map.of("query", Map.of("term", Map.of("visible", true)));
+        Map<String, Object> response = JsonUtils.parseMap(request("POST", "/" + index + "/_count", JsonUtils.toJsonString(query)));
+        Object count = response == null ? null : response.get("count");
+        return count instanceof Number number ? number.longValue() : 0;
+    }
+
     public void bulkPut(String index, List<Map<String, Object>> documents) {
         if (!properties.enabled() || documents.isEmpty()) return;
         StringBuilder body = new StringBuilder();

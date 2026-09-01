@@ -17,10 +17,12 @@ import java.util.Map;
 public class AuctionOwnedService {
     private final AuctionOwnedRepository repository;
     private final AuctionCoreClient core;
+    private final AuctionOwnedBidGate bidGate;
 
-    public AuctionOwnedService(AuctionOwnedRepository repository, AuctionCoreClient core) {
+    public AuctionOwnedService(AuctionOwnedRepository repository, AuctionCoreClient core, AuctionOwnedBidGate bidGate) {
         this.repository = repository;
         this.core = core;
+        this.bidGate = bidGate;
     }
 
     public Map<String, Object> publicPage(String keyword, int pageNo, int pageSize) {
@@ -117,6 +119,10 @@ public class AuctionOwnedService {
         AuctionOwnedRepository.AuctionBidRow highest = repository.highestBid(sessionId);
         long minimum = highest == null ? session.startingPrice() : highest.amount() + session.minIncrement();
         if (amount == null || amount < minimum) throw new AuctionBusinessException("出价金额不符合规则");
+        AuctionOwnedBidGate.Result gate = bidGate.tryAccept(sessionId, amount, minimum, userId, key);
+        if (gate == AuctionOwnedBidGate.Result.BELOW_MINIMUM) throw new AuctionBusinessException("出价金额不符合规则");
+        if (gate == AuctionOwnedBidGate.Result.DUPLICATE) throw new AuctionBusinessException("出价幂等键已使用");
+        if (gate == AuctionOwnedBidGate.Result.UNAVAILABLE) throw new AuctionBusinessException("拍卖并发闸门暂时不可用");
         try {
             Long bidId = repository.insertBid(sessionId, userId, amount, key);
             if (session.status() == 10) repository.markRunning(sessionId);
@@ -124,7 +130,11 @@ public class AuctionOwnedService {
         } catch (DuplicateKeyException ex) {
             AuctionOwnedRepository.AuctionBidRow replay = repository.findBidByKey(sessionId, key);
             if (replay != null) return replay.id();
+            bidGate.reconcile(sessionId, highest == null ? null : highest.amount(), highest == null ? null : highest.bidderUserId());
             throw new AuctionBusinessException("出价幂等键已使用");
+        } catch (RuntimeException ex) {
+            bidGate.reconcile(sessionId, highest == null ? null : highest.amount(), highest == null ? null : highest.bidderUserId());
+            throw ex;
         }
     }
 
