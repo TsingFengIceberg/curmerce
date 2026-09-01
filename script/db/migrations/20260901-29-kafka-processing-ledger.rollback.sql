@@ -1,5 +1,6 @@
 -- Review aid only. Stop Kafka consumers and inspect failed/replayed receipts
 -- before removing these columns. No destructive statement is executed here.
 -- ALTER TABLE commerce_kafka_consumer_receipt DROP KEY idx_commerce_kafka_receipt_status;
+-- ALTER TABLE commerce_kafka_consumer_receipt DROP COLUMN processing_time;
 -- ALTER TABLE commerce_kafka_consumer_receipt DROP COLUMN processed_time, DROP COLUMN last_error,
 --   DROP COLUMN attempts, DROP COLUMN status, DROP COLUMN payload;

@@ -28,6 +28,7 @@ curmerce:
     read-timeout: ${CURMERCE_AUCTION_READ_TIMEOUT:5s}
     core-internal-token: ${CURMERCE_INTERNAL_TOKEN:}
     local-store-enabled: ${CURMERCE_AUCTION_LOCAL_STORE_ENABLED:false}
+    require-cutover-verification: ${CURMERCE_AUCTION_REQUIRE_CUTOVER_VERIFICATION:true}
     redis-gate-enabled: ${CURMERCE_AUCTION_REDIS_GATE_ENABLED:false}
     redis-gate-ttl-seconds: ${CURMERCE_AUCTION_REDIS_GATE_TTL_SECONDS:86400}
     datasource:

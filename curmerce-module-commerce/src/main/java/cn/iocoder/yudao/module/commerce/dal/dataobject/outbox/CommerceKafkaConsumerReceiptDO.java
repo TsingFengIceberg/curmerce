@@ -22,6 +22,7 @@ public class CommerceKafkaConsumerReceiptDO extends BaseDO {
     private String payload;
     private Integer status;
     private Integer attempts;
+    private LocalDateTime processingTime;
     private String lastError;
     private LocalDateTime receivedTime;
     private LocalDateTime processedTime;

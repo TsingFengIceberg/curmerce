@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class AgentConfirmationService {
     private static final Duration TTL = Duration.ofMinutes(5);
+    private static final int MAX_ACTIVE_TOKENS = 10_000;
     private final SecureRandom random = new SecureRandom();
     private final Map<String, Confirmation> tokens = new ConcurrentHashMap<>();
     private final AgentCoreClient coreClient;
@@ -23,6 +24,10 @@ public class AgentConfirmationService {
         Long userId = coreClient.authenticate(authorization);
         if (action == null || action.isBlank() || target == null || target.isBlank())
             throw new IllegalArgumentException("确认动作和目标不能为空");
+        cleanupExpired();
+        if (tokens.size() >= MAX_ACTIVE_TOKENS) {
+            throw new IllegalStateException("确认令牌服务暂时繁忙");
+        }
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(random.generateSeed(24));
         tokens.put(token, new Confirmation(userId, action.trim(), target.trim(), Instant.now().plus(TTL)));
         return new Issued(token, TTL.toSeconds());
@@ -30,6 +35,9 @@ public class AgentConfirmationService {
 
     public void consume(String authorization, String token, String action, String target) {
         Long userId = coreClient.authenticate(authorization);
+        if (token == null || action == null || target == null) {
+            throw new AgentAuthorizationException("确认令牌无效、过期或不匹配");
+        }
         Confirmation confirmation = tokens.get(token);
         if (confirmation == null || confirmation.expiresAt().isBefore(Instant.now())
                 || !confirmation.userId().equals(userId)
@@ -41,6 +49,11 @@ public class AgentConfirmationService {
         if (!tokens.remove(token, confirmation)) {
             throw new AgentAuthorizationException("确认令牌已被消费");
         }
+    }
+
+    private void cleanupExpired() {
+        Instant now = Instant.now();
+        tokens.entrySet().removeIf(entry -> entry.getValue().expiresAt().isBefore(now));
     }
 
     public static class AgentAuthorizationException extends RuntimeException {

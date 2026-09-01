@@ -41,8 +41,9 @@ public class CommerceKafkaEventConsumer {
         if (message == null || message.getEventId() == null || message.getEventType() == null) {
             throw new IllegalArgumentException("Kafka commerce event envelope is invalid");
         }
-        var receipt = receiptService.begin(message);
-        if (receipt.getStatus() != null && receipt.getStatus() == 20) {
+        var begin = receiptService.begin(message);
+        var receipt = begin.receipt();
+        if (!begin.claimed()) {
             acknowledgment.acknowledge();
             meterRegistry.counter("curmerce.kafka.consumer.events", "result", "duplicate").increment();
             return;

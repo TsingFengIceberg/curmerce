@@ -32,7 +32,7 @@ class SearchProjectionServiceTest {
                 "127.0.0.1:19092", "curmerce.events.v1", "curmerce-search-v1",
                 "http://127.0.0.1:48080", "http://127.0.0.1:48083", java.time.Duration.ofSeconds(5), "");
         service = new SearchProjectionService(indexClient, sourceClient, properties, new SimpleMeterRegistry());
-        when(indexClient.enabled()).thenReturn(true);
+        lenient().when(indexClient.enabled()).thenReturn(true);
     }
 
     @Test
@@ -76,6 +76,32 @@ class SearchProjectionServiceTest {
         verify(indexClient).deleteAll("posts");
         verify(indexClient).bulkPut("products", products);
         verify(indexClient).bulkPut("posts", posts);
+    }
+
+    @Test
+    void searchPageUsesShortLivedLocalCache() {
+        ElasticsearchIndexClient.SearchPage page = new ElasticsearchIndexClient.SearchPage(List.of(Map.of("id", 1L)), 1L);
+        when(indexClient.search("products", "phone", 1, 20)).thenReturn(page);
+
+        assertThat(service.searchProducts("phone", 1, 20)).isSameAs(page);
+        assertThat(service.searchProducts("phone", 1, 20)).isSameAs(page);
+
+        verify(indexClient, times(1)).search("products", "phone", 1, 20);
+    }
+
+    @Test
+    void reconciliationReportsSourceAndVisibleIndexMismatch() {
+        when(sourceClient.fetchProducts()).thenReturn(List.of(Map.of("id", 1L), Map.of("id", 2L)));
+        when(sourceClient.fetchPosts()).thenReturn(List.of(Map.of("id", 3L)));
+        when(indexClient.countVisible("products")).thenReturn(1L);
+        when(indexClient.countVisible("posts")).thenReturn(1L);
+
+        SearchProjectionService.ProjectionReconciliationReport report = service.reconcile();
+
+        assertThat(report.sourceProducts()).isEqualTo(2L);
+        assertThat(report.indexedProducts()).isEqualTo(1L);
+        assertThat(report.sourcePosts()).isEqualTo(1L);
+        assertThat(report.matched()).isFalse();
     }
 
     private static Map<String, Object> productEvent(long productId, long eventId, String name) {

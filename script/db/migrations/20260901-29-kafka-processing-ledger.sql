@@ -15,6 +15,10 @@ SET @c = (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = D
 SET @sql = IF(@c = 0, 'ALTER TABLE commerce_kafka_consumer_receipt ADD COLUMN attempts INT NOT NULL DEFAULT 0 AFTER status', 'SELECT 1');
 PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 SET @c = (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE()
+          AND table_name = 'commerce_kafka_consumer_receipt' AND column_name = 'processing_time');
+SET @sql = IF(@c = 0, 'ALTER TABLE commerce_kafka_consumer_receipt ADD COLUMN processing_time DATETIME NULL AFTER attempts', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @c = (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE()
           AND table_name = 'commerce_kafka_consumer_receipt' AND column_name = 'last_error');
 SET @sql = IF(@c = 0, 'ALTER TABLE commerce_kafka_consumer_receipt ADD COLUMN last_error VARCHAR(500) NULL AFTER attempts', 'SELECT 1');
 PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
@@ -24,7 +28,7 @@ SET @sql = IF(@c = 0, 'ALTER TABLE commerce_kafka_consumer_receipt ADD COLUMN pr
 PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 SET @c = (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE()
           AND table_name = 'commerce_kafka_consumer_receipt' AND index_name = 'idx_commerce_kafka_receipt_status');
-SET @sql = IF(@c = 0, 'ALTER TABLE commerce_kafka_consumer_receipt ADD KEY idx_commerce_kafka_receipt_status (status, attempts, id)', 'SELECT 1');
+SET @sql = IF(@c = 0, 'ALTER TABLE commerce_kafka_consumer_receipt ADD KEY idx_commerce_kafka_receipt_status (status, processing_time, attempts, id)', 'SELECT 1');
 PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
 UPDATE commerce_kafka_consumer_receipt SET status = 20, attempts = GREATEST(attempts, 1), processed_time = received_time

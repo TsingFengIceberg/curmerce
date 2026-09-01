@@ -38,7 +38,13 @@ public class AgentToolController {
     @PostMapping("/confirmations")
     public CommonResult<AgentConfirmationService.Issued> issueConfirmation(@Valid @RequestBody ConfirmationIssueRequest request,
                                                                              @RequestHeader(value = "Authorization", required = false) String authorization) {
-        return success(confirmationService.issue(authorization, request.action(), request.target()));
+        try {
+            return success(confirmationService.issue(authorization, request.action(), request.target()));
+        } catch (AgentCoreClient.AgentAuthorizationException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, ex.getMessage(), ex);
+        } catch (AgentCoreClient.AgentServiceException ex) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), ex);
+        }
     }
 
     @PostMapping("/confirmations/consume")
@@ -47,6 +53,10 @@ public class AgentToolController {
         try {
             confirmationService.consume(authorization, request.token(), request.action(), request.target());
             return success(true);
+        } catch (AgentCoreClient.AgentAuthorizationException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, ex.getMessage(), ex);
+        } catch (AgentCoreClient.AgentServiceException ex) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), ex);
         } catch (AgentConfirmationService.AgentAuthorizationException ex) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, ex.getMessage(), ex);
         }

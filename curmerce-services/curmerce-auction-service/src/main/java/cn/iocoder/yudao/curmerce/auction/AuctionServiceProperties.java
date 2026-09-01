@@ -7,9 +7,10 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "curmerce.auction")
 public record AuctionServiceProperties(String coreBaseUrl, Duration connectTimeout, Duration readTimeout,
                                        String coreInternalToken, boolean localStoreEnabled,
-                                       boolean redisGateEnabled, long redisGateTtlSeconds) {
+                                       boolean redisGateEnabled, long redisGateTtlSeconds,
+                                       boolean requireCutoverVerification) {
     public AuctionServiceProperties(String coreBaseUrl, Duration connectTimeout, Duration readTimeout) {
-        this(coreBaseUrl, connectTimeout, readTimeout, "", false, false, 86400);
+        this(coreBaseUrl, connectTimeout, readTimeout, "", false, false, 86400, true);
     }
 
     public AuctionServiceProperties {

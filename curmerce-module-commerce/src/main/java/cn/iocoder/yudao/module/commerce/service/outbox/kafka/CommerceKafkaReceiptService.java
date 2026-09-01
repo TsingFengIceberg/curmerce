@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.Map;
 
 @Service
@@ -23,42 +24,51 @@ public class CommerceKafkaReceiptService {
     private final String topic;
     private final String group;
     private final MeterRegistry meterRegistry;
+    private final Duration processingLease;
 
     public CommerceKafkaReceiptService(CommerceKafkaConsumerReceiptMapper mapper,
                                        KafkaTemplate<String, String> kafkaTemplate,
                                        @Value("${curmerce.outbox.kafka.topic:curmerce.events.v1}") String topic,
                                        @Value("${curmerce.outbox.kafka.consumer-group:curmerce-core-ledger-v1}") String group,
-                                       MeterRegistry meterRegistry) {
+                                       MeterRegistry meterRegistry,
+                                       @Value("${curmerce.outbox.kafka.processing-lease:10m}") Duration processingLease) {
         this.mapper = mapper;
         this.kafkaTemplate = kafkaTemplate;
         this.topic = topic;
         this.group = group;
         this.meterRegistry = meterRegistry;
+        this.processingLease = processingLease == null || processingLease.isNegative() || processingLease.isZero()
+                ? Duration.ofMinutes(10) : processingLease;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public CommerceKafkaConsumerReceiptDO begin(CommerceKafkaEventMessage message) {
+    public BeginResult begin(CommerceKafkaEventMessage message) {
         CommerceKafkaConsumerReceiptDO existing = mapper.selectByGroupAndEvent(group, message.getEventId());
         if (existing != null) {
             if (CommerceKafkaReceiptStatusEnum.PROCESSED.getStatus() == existing.getStatus()) {
-                return existing;
+                return new BeginResult(existing, false);
             }
             int attempts = (existing.getAttempts() == null ? 0 : existing.getAttempts()) + 1;
-            mapper.markProcessing(existing.getId(), attempts);
-            return existing.setAttempts(attempts).setStatus(CommerceKafkaReceiptStatusEnum.PROCESSING.getStatus());
+            LocalDateTime now = LocalDateTime.now().withNano(0);
+            int claimed = mapper.claimProcessing(existing.getId(), attempts, now,
+                    now.minus(processingLease));
+            if (claimed != 1) return new BeginResult(existing, false);
+            return new BeginResult(existing.setAttempts(attempts).setStatus(CommerceKafkaReceiptStatusEnum.PROCESSING.getStatus())
+                    .setProcessingTime(now), true);
         }
         try {
             CommerceKafkaConsumerReceiptDO receipt = new CommerceKafkaConsumerReceiptDO()
                     .setConsumerGroup(group).setEventId(message.getEventId()).setEventType(message.getEventType())
                     .setEventKey(message.getEventKey()).setPayload(message.getPayload())
                     .setStatus(CommerceKafkaReceiptStatusEnum.PROCESSING.getStatus()).setAttempts(1)
+                    .setProcessingTime(LocalDateTime.now().withNano(0))
                     .setReceivedTime(LocalDateTime.now().withNano(0));
             mapper.insert(receipt);
-            return receipt;
+            return new BeginResult(receipt, true);
         } catch (DuplicateKeyException ex) {
             CommerceKafkaConsumerReceiptDO duplicate = mapper.selectByGroupAndEvent(group, message.getEventId());
             if (duplicate == null) throw ex;
-            return duplicate;
+            return new BeginResult(duplicate, false);
         }
     }
 
@@ -92,4 +102,6 @@ public class CommerceKafkaReceiptService {
         }
         return replayed;
     }
+
+    public record BeginResult(CommerceKafkaConsumerReceiptDO receipt, boolean claimed) { }
 }
