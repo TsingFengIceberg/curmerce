@@ -33,6 +33,7 @@ import cn.iocoder.yudao.module.commerce.dal.mysql.payment.CommercePaymentMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.refund.CommerceRefundMapper;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.payment.CommercePaymentDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.refund.CommerceRefundDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseItemDO;
 import cn.iocoder.yudao.module.commerce.enums.payment.PaymentStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.order.OrderStatusEnum;
 import cn.iocoder.yudao.module.commerce.enums.product.ProductSellerTypeEnum;
@@ -384,8 +385,13 @@ public class OrderServiceImpl implements OrderService {
                 || releaseItemMapper.restoreInventory(purchase.getItemId(), purchase.getQuantity()) != 1) {
             throw exception(RELEASE_STOCK_RESTORE_FAILED);
         }
-        if (releaseReservationService != null && !releaseReservationService.release(purchase.getCampaignId(), purchase.getItemId(),
-                purchase.getBuyerUserId(), purchase.getQuantity())) {
+        CommerceReleaseItemDO restoredItem = releaseItemMapper.selectById(purchase.getItemId());
+        if (restoredItem == null || restoredItem.getStock() == null) {
+            throw exception(RELEASE_STOCK_RESTORE_FAILED);
+        }
+        if (releaseReservationService != null && !releaseReservationService.restoreCommittedPurchase(
+                purchase.getCampaignId(), purchase.getItemId(), purchase.getBuyerUserId(), purchase.getId(),
+                purchase.getQuantity(), restoredItem.getStock())) {
             throw exception(RELEASE_STOCK_RESTORE_FAILED);
         }
     }

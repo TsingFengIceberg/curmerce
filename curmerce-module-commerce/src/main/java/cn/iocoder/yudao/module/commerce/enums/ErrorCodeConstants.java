@@ -100,6 +100,7 @@ public interface ErrorCodeConstants {
     ErrorCode RELEASE_PURCHASE_DUPLICATE = new ErrorCode(1_023_008_006, "限时发售购买记录已存在");
     ErrorCode RELEASE_STOCK_RESTORE_FAILED = new ErrorCode(1_023_008_007, "限时发售库存恢复失败");
     ErrorCode RELEASE_RESERVATION_UNAVAILABLE = new ErrorCode(1_023_008_008, "限时发售库存预占服务暂时不可用");
+    ErrorCode RELEASE_IDEMPOTENCY_CONFLICT = new ErrorCode(1_023_008_009, "限时发售幂等键已用于不同购买参数");
 
     ErrorCode AUCTION_NOT_FOUND = new ErrorCode(1_023_009_000, "拍卖场次不存在");
     ErrorCode AUCTION_STATE_INVALID = new ErrorCode(1_023_009_001, "拍卖场次状态不允许该操作");

@@ -17,6 +17,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
 class ReleaseReservationServiceTest {
@@ -35,6 +37,32 @@ class ReleaseReservationServiceTest {
 
         assertEquals(ReleaseReservationService.ReservationResult.RESERVED,
                 service.reserve(1L, 2L, 3L, 1, 2, 3));
+    }
+
+    @Test
+    void keyedReserveRecognizesAnUnfinishedReservationWithoutConsumingAgain() {
+        when(redis.opsForValue()).thenReturn(values);
+        when(values.setIfAbsent(anyString(), anyString())).thenReturn(true);
+        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString(), anyString(), anyString()))
+                .thenReturn(-4L);
+
+        ReleaseReservationService service = new ReleaseReservationService(redis, true);
+
+        assertEquals(ReleaseReservationService.ReservationResult.ALREADY_RESERVED,
+                service.reserve(1L, 2L, 3L, 1, 2, 3, "request-0001"));
+    }
+
+    @Test
+    void keyedReserveRejectsAKeyReusedWithDifferentQuantity() {
+        when(redis.opsForValue()).thenReturn(values);
+        when(values.setIfAbsent(anyString(), anyString())).thenReturn(true);
+        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString(), anyString(), anyString()))
+                .thenReturn(-5L);
+
+        ReleaseReservationService service = new ReleaseReservationService(redis, true);
+
+        assertEquals(ReleaseReservationService.ReservationResult.IDEMPOTENCY_CONFLICT,
+                service.reserve(1L, 2L, 3L, 1, 2, 3, "request-0001"));
     }
 
     @Test
@@ -64,6 +92,41 @@ class ReleaseReservationServiceTest {
 
         assertFalse(service.release(1L, 2L, 3L, 1));
         assertFalse(service.commit(1L, 2L, 1));
+    }
+
+    @Test
+    void keyedReleaseUsesOneAtomicScriptSoRetriesCannotRestoreStockTwice() {
+        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString())).thenReturn(1L);
+        ReleaseReservationService service = new ReleaseReservationService(redis, true);
+
+        assertTrue(service.release(1L, 2L, 3L, 1, "request-0001"));
+        ArgumentCaptor<List<String>> keys = ArgumentCaptor.forClass(List.class);
+        verify(redis).execute(any(DefaultRedisScript.class), keys.capture(), anyString());
+        assertEquals(4, keys.getValue().size());
+        assertFalse(keys.getValue().get(3).contains("request-0001"));
+    }
+
+    @Test
+    void committedPurchaseRestoreUsesPurchaseFenceAndDatabaseStockFallback() {
+        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString(), anyString(), anyString())).thenReturn(1L);
+        ReleaseReservationService service = new ReleaseReservationService(redis, true);
+
+        assertTrue(service.restoreCommittedPurchase(1L, 2L, 3L, 4L, 1, 5));
+        ArgumentCaptor<List<String>> keys = ArgumentCaptor.forClass(List.class);
+        verify(redis).execute(any(DefaultRedisScript.class), keys.capture(), anyString(), anyString(), anyString());
+        assertEquals(3, keys.getValue().size());
+        assertTrue(keys.getValue().get(2).endsWith(":4"));
+    }
+
+    @Test
+    void invalidReservationArgumentsFailBeforeTouchingRedis() {
+        ReleaseReservationService service = new ReleaseReservationService(redis, true);
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.reserve(1L, 2L, 3L, 0, 1, 2, "key"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.release(1L, 2L, 3L, 0, "key"));
+        verify(redis, org.mockito.Mockito.never()).execute(any(DefaultRedisScript.class), anyList(), anyString());
     }
 
     @Test

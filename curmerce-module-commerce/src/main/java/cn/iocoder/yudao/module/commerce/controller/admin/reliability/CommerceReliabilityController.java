@@ -27,6 +27,10 @@ public class CommerceReliabilityController {
     private CommerceOutboxPublisherService outboxPublisherService;
     @Resource
     private CommerceReconciliationService reconciliationService;
+    @Resource
+    private cn.iocoder.yudao.module.commerce.service.release.ReleaseDistributedPurchaseQueue releaseQueue;
+    @Resource
+    private cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleaseReservationMapper releaseReservationMapper;
     @Autowired(required = false)
     private CommerceKafkaReceiptService kafkaReceiptService;
 
@@ -84,5 +88,51 @@ public class CommerceReliabilityController {
     @PreAuthorize("@ss.hasPermission('commerce:reliability:operate')")
     public CommonResult<Integer> replayKafka(@RequestParam(defaultValue = "100") int limit) {
         return success(kafkaReceiptService == null ? 0 : kafkaReceiptService.replayFailed(limit));
+    }
+
+    @GetMapping("/release/queue-status")
+    @Operation(summary = "查询限时发售分布式队列状态")
+    @PreAuthorize("@ss.hasPermission('commerce:reliability:query')")
+    public CommonResult<cn.iocoder.yudao.module.commerce.service.release.ReleaseDistributedPurchaseQueue.QueueSnapshot> releaseQueueStatus() {
+        return success(releaseQueue.snapshot());
+    }
+
+    @GetMapping("/release/dead-letters")
+    @Operation(summary = "查询限时发售死信")
+    @PreAuthorize("@ss.hasPermission('commerce:reliability:query')")
+    public CommonResult<java.util.List<cn.iocoder.yudao.module.commerce.service.release.ReleaseDistributedPurchaseQueue.DeadLetter>> releaseDeadLetters(
+            @RequestParam(defaultValue = "50") int limit) {
+        return success(releaseQueue.deadLetters(limit));
+    }
+
+    @PostMapping("/release/dead-letters/replay")
+    @Operation(summary = "重放限时发售死信")
+    @PreAuthorize("@ss.hasPermission('commerce:reliability:operate')")
+    public CommonResult<Boolean> replayReleaseDeadLetter(@RequestParam String entryId) {
+        return success(releaseQueue.replayDeadLetter(entryId));
+    }
+
+    @GetMapping("/release/reservations/status")
+    @Operation(summary = "查询限时发售 Redis 预占恢复状态")
+    @PreAuthorize("@ss.hasPermission('commerce:reliability:query')")
+    public CommonResult<Map<String, Long>> releaseReservationStatus() {
+        Map<String, Long> result = new java.util.LinkedHashMap<>();
+        result.put("committed", releaseReservationMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO>()
+                .eq(cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO::getTenantId, releaseReservationMapper.tenantId())
+                .eq(cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO::getStatus, cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO.COMMITTED)));
+        result.put("finalized", releaseReservationMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO>()
+                .eq(cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO::getTenantId, releaseReservationMapper.tenantId())
+                .eq(cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO::getStatus, cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO.FINALIZED)));
+        result.put("dead", releaseReservationMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO>()
+                .eq(cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO::getTenantId, releaseReservationMapper.tenantId())
+                .eq(cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO::getStatus, cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO.DEAD)));
+        return success(Map.copyOf(result));
+    }
+
+    @PostMapping("/release/reservations/replay")
+    @Operation(summary = "重放限时发售 Redis 预占死信")
+    @PreAuthorize("@ss.hasPermission('commerce:reliability:operate')")
+    public CommonResult<Boolean> replayReleaseReservation(@RequestParam Long id) {
+        return success(releaseReservationMapper.replayDeadFinalization(id) == 1);
     }
 }

@@ -4,9 +4,11 @@ set -Eeuo pipefail
 # Redis/Lua-only gate for the limited-release reservation experiment. It does
 # not create orders and must be run against disposable keys or a local Redis.
 REDIS_CLI="${REDIS_CLI:-redis-cli}"
-REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
-REDIS_PORT="${REDIS_PORT:-6379}"
-REDIS_DB="${REDIS_DB:-0}"
+REDIS_HOST="${CURMERCE_REDIS_HOST:-${REDIS_HOST:-127.0.0.1}}"
+REDIS_PORT="${CURMERCE_REDIS_PORT:-${REDIS_PORT:-16379}}"
+REDIS_DB="${CURMERCE_REDIS_DB:-${REDIS_DB:-0}}"
+REDIS_USER="${CURMERCE_REDIS_USER:-${REDIS_USER:-}}"
+REDIS_PASSWORD="${CURMERCE_REDIS_PASSWORD:-${REDIS_PASSWORD:-}}"
 STOCK="${CURMERCE_RELEASE_TEST_STOCK:-20}"
 USERS="${CURMERCE_RELEASE_TEST_USERS:-100}"
 USER_LIMIT="${CURMERCE_RELEASE_TEST_USER_LIMIT:-1}"
@@ -21,7 +23,13 @@ RESERVED_KEY="$PREFIX:reserved"
 }
 
 redis() {
-  "$REDIS_CLI" --raw -h "$REDIS_HOST" -p "$REDIS_PORT" -n "$REDIS_DB" "$@"
+  local args=(--raw -h "$REDIS_HOST" -p "$REDIS_PORT" -n "$REDIS_DB")
+  [[ -n "$REDIS_USER" ]] && args+=(--user "$REDIS_USER")
+  if [[ -n "$REDIS_PASSWORD" ]]; then
+    REDISCLI_AUTH="$REDIS_PASSWORD" "$REDIS_CLI" "${args[@]}" "$@"
+  else
+    "$REDIS_CLI" "${args[@]}" "$@"
+  fi
 }
 
 cleanup() {
@@ -51,7 +59,7 @@ LUA
 )
 
 export -f redis
-export REDIS_CLI REDIS_HOST REDIS_PORT REDIS_DB PREFIX STOCK_KEY RESERVED_KEY
+export REDIS_CLI REDIS_HOST REDIS_PORT REDIS_DB REDIS_USER REDIS_PASSWORD PREFIX STOCK_KEY RESERVED_KEY
 export RESERVE_SCRIPT="$reserve_script" USER_LIMIT QUANTITY
 
 reserve_one() {

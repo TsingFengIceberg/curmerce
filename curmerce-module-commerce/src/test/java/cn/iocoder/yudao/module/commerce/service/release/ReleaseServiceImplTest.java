@@ -6,11 +6,16 @@ import cn.iocoder.yudao.module.commerce.controller.admin.release.vo.ReleaseUpdat
 import cn.iocoder.yudao.module.commerce.dal.dataobject.merchant.MerchantDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseCampaignDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseItemDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleasePurchaseDO;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.product.ProductSkuMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleaseCampaignMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleaseItemMapper;
 import cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleasePurchaseMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.release.CommerceReleaseReservationMapper;
+import cn.iocoder.yudao.module.commerce.dal.mysql.order.CommerceOrderMapper;
+import cn.iocoder.yudao.module.commerce.dal.dataobject.order.CommerceOrderDO;
 import cn.iocoder.yudao.module.commerce.dal.dataobject.store.StoreDO;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
@@ -22,6 +27,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 
@@ -38,11 +45,14 @@ class ReleaseServiceImplTest {
     @Mock private CommerceReleaseCampaignMapper campaignMapper;
     @Mock private CommerceReleaseItemMapper itemMapper;
     @Mock private CommerceReleasePurchaseMapper purchaseMapper;
+    @Mock private CommerceReleaseReservationMapper reservationMapper;
+    @Mock private CommerceOrderMapper orderMapper;
     @Mock private ProductMapper productMapper;
     @Mock private ProductSkuMapper skuMapper;
     @Mock private MerchantAccessService merchantAccessService;
     @Mock private MemberUserApi memberUserApi;
     @Mock private OrderService orderService;
+    @Mock private ReleaseReservationService reservationService;
     @InjectMocks private ReleaseServiceImpl service;
 
     @Test
@@ -125,6 +135,131 @@ class ReleaseServiceImplTest {
                         .setAddressId(701L).setIdempotencyKey("release-key")));
         assertEquals(RELEASE_PURCHASE_DUPLICATE.getCode(), error.getCode());
         verify(itemMapper, never()).updateInventory(anyLong(), anyInt());
+    }
+
+    @Test
+    void purchase_returnsCommittedResultWhenAStreamMessageIsRedeliveredAfterAckFailure() {
+        CommerceReleaseItemDO item = new CommerceReleaseItemDO().setId(20L).setCampaignId(10L)
+                .setProductId(201L).setSkuId(301L).setStock(0).setCampaignPrice(199L);
+        when(itemMapper.selectByIdForUpdate(20L)).thenReturn(item);
+        when(campaignMapper.selectByIdForUpdate(10L)).thenReturn(new CommerceReleaseCampaignDO().setId(10L)
+                .setStatus(20).setStartTime(LocalDateTime.now().minusMinutes(1)).setEndTime(LocalDateTime.now().plusMinutes(10))
+                .setPerUserLimit(1));
+        when(purchaseMapper.selectByBuyerAndItem(7L, 20L)).thenReturn(
+                new cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleasePurchaseDO()
+                        .setId(30L).setCampaignId(10L).setItemId(20L).setQuantity(1).setUnitPrice(199L).setOrderId(900L));
+        when(orderMapper.selectById(900L)).thenReturn(new CommerceOrderDO().setId(900L)
+                .setOrderNo("C-900").setIdempotencyKey("release-key").setStatus(10));
+
+        var response = service.purchase(7L, new ReleasePurchaseReqVO().setItemId(20L).setQuantity(1)
+                .setAddressId(701L).setIdempotencyKey("release-key"));
+
+        assertEquals(30L, response.getPurchaseId());
+        assertEquals(900L, response.getOrderId());
+        verify(itemMapper, never()).updateInventory(anyLong(), anyInt());
+        verify(orderService, never()).createReleaseOrder(anyLong(), anyLong(), anyLong(), anyLong(), anyLong(), anyInt(), anyString());
+    }
+
+    @Test
+    void purchase_returnsCommittedResultWhenSameKeyCompletesWhileWaitingForItemLock() {
+        CommerceReleaseItemDO item = new CommerceReleaseItemDO().setId(20L).setCampaignId(10L)
+                .setProductId(201L).setSkuId(301L).setStock(1).setCampaignPrice(199L);
+        CommerceReleaseCampaignDO campaign = new CommerceReleaseCampaignDO().setId(10L).setStatus(20)
+                .setStartTime(LocalDateTime.now().minusMinutes(1)).setEndTime(LocalDateTime.now().plusMinutes(10))
+                .setPerUserLimit(1);
+        CommerceReleasePurchaseDO committedPurchase = new CommerceReleasePurchaseDO().setId(30L).setCampaignId(10L)
+                .setItemId(20L).setQuantity(1).setUnitPrice(199L).setOrderId(900L);
+        when(itemMapper.selectByIdForUpdate(20L)).thenReturn(item);
+        when(campaignMapper.selectByIdForUpdate(10L)).thenReturn(campaign);
+        // The first read happens before Redis/item-lock contention; the second
+        // read sees the winner after this request receives the row lock.
+        when(purchaseMapper.selectByBuyerAndItem(7L, 20L)).thenReturn(null, committedPurchase);
+        when(orderMapper.selectById(900L)).thenReturn(new CommerceOrderDO().setId(900L)
+                .setOrderNo("C-900").setIdempotencyKey("release-key").setStatus(10));
+
+        var response = service.purchase(7L, new ReleasePurchaseReqVO().setItemId(20L).setQuantity(1)
+                .setAddressId(701L).setIdempotencyKey("release-key"));
+
+        assertEquals(30L, response.getPurchaseId());
+        assertEquals(900L, response.getOrderId());
+        verify(itemMapper, never()).updateInventory(anyLong(), anyInt());
+        verify(orderService, never()).createReleaseOrder(anyLong(), anyLong(), anyLong(), anyLong(), anyLong(), anyInt(), anyString());
+    }
+
+    @Test
+    void purchase_sameKeyRetryAdoptsReservationForCommitButDoesNotTreatItAsOwnedOnRollback() {
+        when(reservationService.reservationKey("release-key")).thenReturn("release-key");
+        when(reservationService.reserveTracked(10L, 20L, 7L, 1, 1, 1, "release-key"))
+                .thenReturn(ReleaseReservationService.ReservationResult.ALREADY_RESERVED);
+        when(reservationService.commitTracked(10L, 20L, 7L, 1, "release-key")).thenReturn(true);
+        when(itemMapper.selectById(20L)).thenReturn(new CommerceReleaseItemDO().setId(20L).setCampaignId(10L)
+                .setProductId(201L).setSkuId(301L).setStock(1).setCampaignPrice(199L));
+        when(campaignMapper.selectById(10L)).thenReturn(new CommerceReleaseCampaignDO().setId(10L)
+                .setStatus(20).setStartTime(LocalDateTime.now().minusMinutes(1)).setEndTime(LocalDateTime.now().plusMinutes(10))
+                .setPerUserLimit(1));
+        when(itemMapper.selectByIdForUpdate(20L)).thenReturn(new CommerceReleaseItemDO().setId(20L).setCampaignId(10L)
+                .setProductId(201L).setSkuId(301L).setStock(1).setCampaignPrice(199L));
+        when(campaignMapper.selectByIdForUpdate(10L)).thenReturn(new CommerceReleaseCampaignDO().setId(10L)
+                .setStatus(20).setStartTime(LocalDateTime.now().minusMinutes(1)).setEndTime(LocalDateTime.now().plusMinutes(10))
+                .setPerUserLimit(1));
+        when(purchaseMapper.selectByBuyerAndItem(7L, 20L)).thenReturn(null);
+        when(itemMapper.updateInventory(20L, 1)).thenReturn(1);
+        when(orderService.createReleaseOrder(eq(7L), eq(701L), eq(201L), eq(301L), eq(199L), eq(1), eq("release-key")))
+                .thenReturn(new OrderCreateRespVO().setOrderId(900L).setOrderNo("C-900").setStatus(10));
+        when(purchaseMapper.insert(any(CommerceReleasePurchaseDO.class))).thenAnswer(invocation -> {
+            invocation.<CommerceReleasePurchaseDO>getArgument(0).setId(30L);
+            return 1;
+        });
+        when(reservationMapper.insert(any(cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO.class))).thenReturn(1);
+
+        var response = service.purchase(7L, new ReleasePurchaseReqVO().setItemId(20L).setQuantity(1)
+                .setAddressId(701L).setIdempotencyKey("release-key"));
+
+        assertEquals(900L, response.getOrderId());
+        verify(reservationMapper).insert(argThat((CommerceReleaseReservationDO row) -> row.getReservationKey().equals("release-key")
+                && row.getStatus().equals(cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO.COMMITTED)));
+        verify(reservationService).commitTracked(10L, 20L, 7L, 1, "release-key");
+        verify(reservationService, never()).releaseTracked(anyLong(), anyLong(), anyLong(), anyInt(), anyString());
+    }
+
+    @Test
+    void purchase_alreadyReservedDoesNotReleaseConcurrentOwnerWhenTransactionRollsBack() {
+        when(reservationService.reservationKey("rollback-key")).thenReturn("rollback-key");
+        when(reservationService.reserveTracked(10L, 20L, 7L, 1, 1, 1, "rollback-key"))
+                .thenReturn(ReleaseReservationService.ReservationResult.ALREADY_RESERVED);
+        when(itemMapper.selectById(20L)).thenReturn(new CommerceReleaseItemDO().setId(20L).setCampaignId(10L)
+                .setProductId(201L).setSkuId(301L).setStock(1).setCampaignPrice(199L));
+        when(campaignMapper.selectById(10L)).thenReturn(new CommerceReleaseCampaignDO().setId(10L)
+                .setStatus(20).setStartTime(LocalDateTime.now().minusMinutes(1)).setEndTime(LocalDateTime.now().plusMinutes(10))
+                .setPerUserLimit(1));
+        when(itemMapper.selectByIdForUpdate(20L)).thenReturn(new CommerceReleaseItemDO().setId(20L).setCampaignId(10L)
+                .setProductId(201L).setSkuId(301L).setStock(1).setCampaignPrice(199L));
+        when(campaignMapper.selectByIdForUpdate(10L)).thenReturn(new CommerceReleaseCampaignDO().setId(10L)
+                .setStatus(20).setStartTime(LocalDateTime.now().minusMinutes(1)).setEndTime(LocalDateTime.now().plusMinutes(10))
+                .setPerUserLimit(1));
+        when(purchaseMapper.selectByBuyerAndItem(7L, 20L)).thenReturn(null);
+        when(itemMapper.updateInventory(20L, 1)).thenReturn(1);
+        when(orderService.createReleaseOrder(eq(7L), eq(701L), eq(201L), eq(301L), eq(199L), eq(1), eq("rollback-key")))
+                .thenReturn(new OrderCreateRespVO().setOrderId(901L).setOrderNo("C-901").setStatus(10));
+        when(purchaseMapper.insert(any(CommerceReleasePurchaseDO.class))).thenAnswer(invocation -> {
+            invocation.<CommerceReleasePurchaseDO>getArgument(0).setId(31L);
+            return 1;
+        });
+        when(reservationMapper.insert(any(cn.iocoder.yudao.module.commerce.dal.dataobject.release.CommerceReleaseReservationDO.class))).thenReturn(1);
+
+        TransactionSynchronizationManager.initSynchronization();
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            service.purchase(7L, new ReleasePurchaseReqVO().setItemId(20L).setQuantity(1)
+                    .setAddressId(701L).setIdempotencyKey("rollback-key"));
+            for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+                synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+            }
+            verify(reservationService, never()).releaseTracked(anyLong(), anyLong(), anyLong(), anyInt(), eq("rollback-key"));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
     }
 
     private MerchantAccessContext merchantContext() {
