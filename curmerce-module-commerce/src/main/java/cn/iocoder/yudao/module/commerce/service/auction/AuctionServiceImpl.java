@@ -22,14 +22,21 @@ import cn.iocoder.yudao.module.commerce.enums.auction.AuctionStatusEnum;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessContext;
 import cn.iocoder.yudao.module.commerce.service.merchant.MerchantAccessService;
 import cn.iocoder.yudao.module.commerce.service.order.OrderService;
+import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxEventAppender;
+import cn.iocoder.yudao.module.commerce.enums.outbox.CommerceOutboxEventTypeEnum;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
+import java.time.Duration;
+import java.util.Map;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.commerce.enums.ErrorCodeConstants.*;
@@ -44,6 +51,12 @@ public class AuctionServiceImpl implements AuctionService {
      */
     @Value("${curmerce.auction.local-store-enabled:false}")
     private boolean auctionLocalStoreEnabled;
+    @Value("${curmerce.auction.extension-enabled:true}")
+    private boolean extensionEnabled;
+    @Value("${curmerce.auction.extension-window-seconds:30}")
+    private long extensionWindowSeconds;
+    @Value("${curmerce.auction.extension-duration-seconds:120}")
+    private long extensionDurationSeconds;
     @Resource private CommerceAuctionSessionMapper sessionMapper;
     @Resource private CommerceAuctionBidMapper bidMapper;
     @Resource private ProductMapper productMapper;
@@ -53,6 +66,8 @@ public class AuctionServiceImpl implements AuctionService {
     @Resource private OrderService orderService;
     @Resource private CommerceOrderMapper orderMapper;
     @Resource private AuctionBidConcurrencyGate bidConcurrencyGate;
+    @Autowired(required = false) private AuctionEventBroadcaster eventBroadcaster;
+    @Resource private CommerceOutboxEventAppender outboxEventAppender;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -162,6 +177,11 @@ public class AuctionServiceImpl implements AuctionService {
         session.setStatus(AuctionStatusEnum.ENDED.getStatus());
         if (highest != null) session.setWinnerUserId(highest.getBidderUserId()).setWinningBidId(highest.getId());
         sessionMapper.updateById(session);
+        java.util.Map<String, Object> endedEvent = new java.util.LinkedHashMap<>();
+        endedEvent.put("sessionId", id); endedEvent.put("winnerUserId", session.getWinnerUserId());
+        endedEvent.put("winningBidId", session.getWinningBidId());
+        appendOutbox(CommerceOutboxEventTypeEnum.AUCTION_ENDED, id, endedEvent);
+        publishAfterCommit(id, "ended", endedEvent);
     }
 
     @Override
@@ -180,18 +200,25 @@ public class AuctionServiceImpl implements AuctionService {
         CommerceAuctionBidDO highest = bidMapper.selectHighest(session.getId());
         long minimum = highest == null ? session.getStartingPrice() : highest.getAmount() + session.getMinIncrement();
         if (reqVO.getAmount() < minimum) throw exception(AUCTION_BID_INVALID);
-        AuctionBidConcurrencyGate.Result gateResult = bidConcurrencyGate == null ? AuctionBidConcurrencyGate.Result.DISABLED
-                : bidConcurrencyGate.tryAccept(session.getId(), reqVO.getAmount(), minimum, userId, reqVO.getIdempotencyKey().trim());
-        if (gateResult == AuctionBidConcurrencyGate.Result.BELOW_MINIMUM) throw exception(AUCTION_BID_INVALID);
-        if (gateResult == AuctionBidConcurrencyGate.Result.DUPLICATE) throw exception(AUCTION_BID_DUPLICATE);
-        if (gateResult == AuctionBidConcurrencyGate.Result.UNAVAILABLE) throw exception(AUCTION_STATE_INVALID);
+        String idempotencyKey = reqVO.getIdempotencyKey().trim();
+        AuctionBidConcurrencyGate.Attempt gate = bidConcurrencyGate == null
+                ? new AuctionBidConcurrencyGate.Attempt(AuctionBidConcurrencyGate.Result.DISABLED, null)
+                : bidConcurrencyGate.tryAcceptAttempt(session.getId(), reqVO.getAmount(), minimum, userId, idempotencyKey);
+        if (gate.result() == AuctionBidConcurrencyGate.Result.BELOW_MINIMUM) throw exception(AUCTION_BID_INVALID);
+        if (gate.result() == AuctionBidConcurrencyGate.Result.DUPLICATE) throw exception(AUCTION_BID_DUPLICATE);
+        if (gate.result() == AuctionBidConcurrencyGate.Result.UNAVAILABLE) throw exception(AUCTION_STATE_INVALID);
         CommerceAuctionBidDO bid = new CommerceAuctionBidDO().setSessionId(session.getId()).setBidderUserId(userId)
-                .setAmount(reqVO.getAmount()).setIdempotencyKey(reqVO.getIdempotencyKey().trim());
+                .setAmount(reqVO.getAmount()).setIdempotencyKey(idempotencyKey);
         try { bidMapper.insert(bid); } catch (DuplicateKeyException ex) {
-            if (bidConcurrencyGate != null) bidConcurrencyGate.reconcile(session.getId(), highest == null ? null : highest.getAmount(), highest == null ? null : highest.getBidderUserId());
+            CommerceAuctionBidDO replay = bidMapper.selectBySessionAndKey(session.getId(), idempotencyKey);
+            if (replay != null) {
+                if (bidConcurrencyGate != null) bidConcurrencyGate.rollbackRequest(session.getId(), idempotencyKey, gate.reservationId());
+                return replay.getId();
+            }
+            rollbackAndReconcileBidGate(session.getId(), idempotencyKey, gate.reservationId());
             throw exception(AUCTION_BID_DUPLICATE);
         } catch (RuntimeException ex) {
-            if (bidConcurrencyGate != null) bidConcurrencyGate.reconcile(session.getId(), highest == null ? null : highest.getAmount(), highest == null ? null : highest.getBidderUserId());
+            rollbackAndReconcileBidGate(session.getId(), idempotencyKey, gate.reservationId());
             throw ex;
         }
         if (AuctionStatusEnum.SCHEDULED.getStatus().equals(session.getStatus())) {
@@ -199,6 +226,13 @@ public class AuctionServiceImpl implements AuctionService {
                     new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CommerceAuctionSessionDO>()
                             .eq(CommerceAuctionSessionDO::getId, session.getId()).eq(CommerceAuctionSessionDO::getStatus, AuctionStatusEnum.SCHEDULED.getStatus()));
         }
+        maybeExtend(session);
+        Map<String, Object> bidPayload = new java.util.LinkedHashMap<>();
+        bidPayload.put("sessionId", session.getId()); bidPayload.put("bidId", bid.getId());
+        bidPayload.put("amount", bid.getAmount()); bidPayload.put("bidderUserId", bid.getBidderUserId());
+        bidPayload.put("createTime", bid.getCreateTime());
+        appendOutbox(CommerceOutboxEventTypeEnum.AUCTION_BID, session.getId(), bidPayload);
+        publishAfterCommit(session.getId(), "bid", bidPayload);
         return bid.getId();
     }
 
@@ -217,6 +251,8 @@ public class AuctionServiceImpl implements AuctionService {
         sessionMapper.update(new CommerceAuctionSessionDO().setSettlementOrderId(orderId),
                 new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CommerceAuctionSessionDO>()
                         .eq(CommerceAuctionSessionDO::getId, sessionId).isNull(CommerceAuctionSessionDO::getSettlementOrderId));
+        appendOutbox(CommerceOutboxEventTypeEnum.AUCTION_SETTLED, sessionId,
+                Map.of("sessionId", sessionId, "orderId", orderId, "winnerUserId", userId));
         return orderId;
     }
 
@@ -228,7 +264,14 @@ public class AuctionServiceImpl implements AuctionService {
             CommerceAuctionBidDO highest = bidMapper.selectHighest(session.getId());
             session.setStatus(AuctionStatusEnum.ENDED.getStatus());
             if (highest != null) session.setWinnerUserId(highest.getBidderUserId()).setWinningBidId(highest.getId());
-            if (sessionMapper.updateById(session) == 1) changed++;
+            if (sessionMapper.updateById(session) == 1) {
+                changed++;
+                java.util.Map<String, Object> endedEvent = new java.util.LinkedHashMap<>();
+                endedEvent.put("sessionId", session.getId()); endedEvent.put("winnerUserId", session.getWinnerUserId());
+                endedEvent.put("winningBidId", session.getWinningBidId());
+                appendOutbox(CommerceOutboxEventTypeEnum.AUCTION_ENDED, session.getId(), endedEvent);
+                publishAfterCommit(session.getId(), "ended", endedEvent);
+            }
         }
         return changed;
     }
@@ -298,6 +341,44 @@ public class AuctionServiceImpl implements AuctionService {
     private void requireLegacyStoreWritable() {
         if (auctionLocalStoreEnabled) {
             throw new IllegalStateException("Auction ownership has moved to curmerce-auction; Core auction tables are read-only");
+        }
+    }
+
+    private void appendOutbox(CommerceOutboxEventTypeEnum type, Long aggregateId, Map<String, Object> payload) {
+        if (outboxEventAppender != null) outboxEventAppender.appendState(type, aggregateId, payload);
+    }
+
+    private void rollbackAndReconcileBidGate(Long sessionId, String idempotencyKey, String reservationId) {
+        if (bidConcurrencyGate == null) return;
+        bidConcurrencyGate.rollbackRequest(sessionId, idempotencyKey, reservationId);
+        CommerceAuctionBidDO durableHighest = bidMapper.selectHighest(sessionId);
+        bidConcurrencyGate.reconcile(sessionId, durableHighest == null ? null : durableHighest.getAmount(),
+                durableHighest == null ? null : durableHighest.getBidderUserId());
+    }
+
+    private void maybeExtend(CommerceAuctionSessionDO session) {
+        if (!extensionEnabled || session.getEndTime() == null) return;
+        long remaining = Duration.between(LocalDateTime.now(), session.getEndTime()).toSeconds();
+        if (remaining < 0 || remaining > Math.max(0, extensionWindowSeconds)) return;
+        LocalDateTime oldEnd = session.getEndTime();
+        LocalDateTime newEnd = oldEnd.plusSeconds(Math.max(1, extensionDurationSeconds));
+        if (sessionMapper.extendEndTime(session.getId(), oldEnd, newEnd) != 1) return;
+        appendOutbox(CommerceOutboxEventTypeEnum.AUCTION_EXTENDED, session.getId(), Map.of(
+                "sessionId", session.getId(), "previousEndTime", oldEnd, "endTime", newEnd));
+        publishAfterCommit(session.getId(), "extended", Map.of(
+                "sessionId", session.getId(), "previousEndTime", oldEnd, "endTime", newEnd));
+    }
+
+    private void publishAfterCommit(Long sessionId, String type, Object payload) {
+        if (eventBroadcaster == null) return;
+        Runnable publish = () -> eventBroadcaster.publish(sessionId, type, payload);
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { publish.run(); }
+            });
+        } else {
+            publish.run();
         }
     }
 }

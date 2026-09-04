@@ -11,6 +11,8 @@ import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import cn.iocoder.yudao.module.commerce.service.auction.AuctionEventBroadcaster;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -21,6 +23,9 @@ import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUti
 @Validated
 public class AuctionController {
     @Resource private AuctionService auctionService;
+    @Resource private AuctionEventBroadcaster eventBroadcaster;
+    @GetMapping(value = "/events", produces = "text/event-stream") @PermitAll @Operation(summary = "订阅拍卖实时事件")
+    public SseEmitter events(@RequestParam Long sessionId) { return eventBroadcaster.subscribe(sessionId); }
     @GetMapping("/page") @PermitAll @Operation(summary = "查询公开拍卖场次")
     public CommonResult<PageResult<AuctionRespVO>> page(@Valid AuctionPageReqVO reqVO) { return success(auctionService.getPublicPage(reqVO)); }
     @GetMapping("/get") @PermitAll @Operation(summary = "查询拍卖详情")

@@ -19,7 +19,7 @@ class AuctionBidConcurrencyGateTest {
 
     @Test
     void mapsLuaDecisionsToStableDomainResults() {
-        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString(), anyString(), anyString(), anyString()))
+        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(1L);
         AuctionBidConcurrencyGate gate = new AuctionBidConcurrencyGate(redis, true, 3600);
 
@@ -29,13 +29,13 @@ class AuctionBidConcurrencyGateTest {
 
     @Test
     void rejectsDuplicateAndUnavailableRequests() {
-        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString(), anyString(), anyString(), anyString()))
+        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(2L);
         AuctionBidConcurrencyGate gate = new AuctionBidConcurrencyGate(redis, true, 3600);
         assertThat(gate.tryAccept(1L, 120L, 110L, 42L, "bid-key-1"))
                 .isEqualTo(AuctionBidConcurrencyGate.Result.DUPLICATE);
 
-        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString(), anyString(), anyString(), anyString()))
+        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenThrow(new IllegalStateException("redis down"));
         assertThat(gate.tryAccept(1L, 120L, 110L, 42L, "bid-key-2"))
                 .isEqualTo(AuctionBidConcurrencyGate.Result.UNAVAILABLE);
@@ -46,5 +46,13 @@ class AuctionBidConcurrencyGateTest {
         AuctionBidConcurrencyGate gate = new AuctionBidConcurrencyGate(redis, false, 3600);
         assertThat(gate.tryAccept(1L, 120L, 110L, 42L, "bid-key-1"))
                 .isEqualTo(AuctionBidConcurrencyGate.Result.DISABLED);
+    }
+
+    @Test
+    void conditionallyRollsBackOnlyTheFailedAttemptMarker() {
+        when(redis.execute(any(DefaultRedisScript.class), anyList(), anyString())).thenReturn(1L);
+        AuctionBidConcurrencyGate gate = new AuctionBidConcurrencyGate(redis, true, 3600);
+
+        assertThat(gate.rollbackRequest(1L, "bid-key-1", "reservation-1")).isTrue();
     }
 }

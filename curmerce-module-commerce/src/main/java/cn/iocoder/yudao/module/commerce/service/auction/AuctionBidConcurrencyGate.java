@@ -6,6 +6,7 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.UUID;
 
 /** Optional Redis/Lua fast path for the hot leading-price check. */
 @Component
@@ -19,7 +20,7 @@ public class AuctionBidConcurrencyGate {
             if amount < minimum or amount <= current then return -1 end
             redis.call('SET', KEYS[1], amount, 'EX', ARGV[4])
             redis.call('SET', KEYS[2], ARGV[3], 'EX', ARGV[4])
-            redis.call('SET', KEYS[3], amount, 'EX', ARGV[4])
+            redis.call('SET', KEYS[3], ARGV[5], 'EX', ARGV[4])
             return 1
             """, Long.class);
     private static final DefaultRedisScript<Long> RECONCILE = new DefaultRedisScript<>("""
@@ -30,6 +31,10 @@ public class AuctionBidConcurrencyGate {
               redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
             end
             return 1
+            """, Long.class);
+    private static final DefaultRedisScript<Long> ROLLBACK_REQUEST = new DefaultRedisScript<>("""
+            if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
+            return 0
             """, Long.class);
 
     private final StringRedisTemplate redis;
@@ -47,17 +52,32 @@ public class AuctionBidConcurrencyGate {
     public boolean enabled() { return enabled; }
 
     public Result tryAccept(Long sessionId, Long amount, Long minimum, Long bidderUserId, String idempotencyKey) {
-        if (!enabled) return Result.DISABLED;
+        return tryAcceptAttempt(sessionId, amount, minimum, bidderUserId, idempotencyKey).result();
+    }
+
+    public Attempt tryAcceptAttempt(Long sessionId, Long amount, Long minimum, Long bidderUserId, String idempotencyKey) {
+        if (!enabled) return new Attempt(Result.DISABLED, null);
+        String reservationId = UUID.randomUUID().toString();
         try {
             Long result = redis.execute(ACCEPT, List.of(amountKey(sessionId), bidderKey(sessionId), requestKey(sessionId, idempotencyKey)),
-                    String.valueOf(minimum), String.valueOf(amount), String.valueOf(bidderUserId), String.valueOf(ttlSeconds));
-            if (result == null) return Result.UNAVAILABLE;
-            if (result == 2L) return Result.DUPLICATE;
-            if (result < 0L) return Result.BELOW_MINIMUM;
-            return Result.ACCEPTED;
+                    String.valueOf(minimum), String.valueOf(amount), String.valueOf(bidderUserId), String.valueOf(ttlSeconds), reservationId);
+            if (result == null) return new Attempt(Result.UNAVAILABLE, null);
+            if (result == 2L) return new Attempt(Result.DUPLICATE, null);
+            if (result < 0L) return new Attempt(Result.BELOW_MINIMUM, null);
+            return new Attempt(Result.ACCEPTED, reservationId);
         } catch (RuntimeException ex) {
-            return Result.UNAVAILABLE;
+            return new Attempt(Result.UNAVAILABLE, null);
         }
+    }
+
+    /** Clears an idempotency marker only when it still belongs to this failed
+     * reservation. The following reconciliation restores the durable price. */
+    public boolean rollbackRequest(Long sessionId, String idempotencyKey, String reservationId) {
+        if (!enabled || reservationId == null || reservationId.isBlank()) return false;
+        try {
+            Long result = redis.execute(ROLLBACK_REQUEST, List.of(requestKey(sessionId, idempotencyKey)), reservationId);
+            return Long.valueOf(1L).equals(result);
+        } catch (RuntimeException ex) { return false; }
     }
 
     public boolean reconcile(Long sessionId, Long highestAmount, Long bidderUserId) {
@@ -77,4 +97,5 @@ public class AuctionBidConcurrencyGate {
     private static String requestKey(Long id, String key) { return PREFIX + "request:" + id + ":" + key; }
 
     public enum Result { ACCEPTED, BELOW_MINIMUM, DUPLICATE, UNAVAILABLE, DISABLED }
+    public record Attempt(Result result, String reservationId) { }
 }

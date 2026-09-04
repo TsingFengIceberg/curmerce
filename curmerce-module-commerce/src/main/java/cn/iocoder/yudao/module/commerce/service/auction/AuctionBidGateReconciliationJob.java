@@ -14,7 +14,7 @@ public class AuctionBidGateReconciliationJob {
     @Resource private AuctionBidConcurrencyGate gate;
     @Resource private CommerceAuctionSessionMapper sessionMapper;
     @Resource private CommerceAuctionBidMapper bidMapper;
-    @Value("${curmerce.auction.redis-gate-enabled:false}") private boolean enabled;
+    @Value("${curmerce.auction.redis-gate-enabled:true}") private boolean enabled;
 
     @Scheduled(fixedDelayString = "${curmerce.auction.redis-reconcile-delay-ms:60000}")
     public void reconcile() {

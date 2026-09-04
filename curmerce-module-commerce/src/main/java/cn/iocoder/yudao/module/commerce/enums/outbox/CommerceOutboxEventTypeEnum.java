@@ -15,6 +15,10 @@ public enum CommerceOutboxEventTypeEnum {
     PRODUCT_CHANGED("commerce_product", "商品状态或资料变更"),
     REFUND_SUCCESS("commerce_refund", "退款成功"),
     REFUND_FAILED("commerce_refund", "退款失败"),
+    AUCTION_BID("commerce_auction", "拍卖出价已持久化"),
+    AUCTION_EXTENDED("commerce_auction", "拍卖临近结束自动延长"),
+    AUCTION_ENDED("commerce_auction", "拍卖已结束"),
+    AUCTION_SETTLED("commerce_auction", "拍卖结算订单已创建"),
     RELEASE_PURCHASE_COMMAND("commerce_release_purchase_command", "限时发售异步购买命令");
 
     /** 聚合类型，用于事件消费端定位业务对象。 */

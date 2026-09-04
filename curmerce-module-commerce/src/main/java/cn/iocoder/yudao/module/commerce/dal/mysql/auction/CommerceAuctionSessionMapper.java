@@ -45,6 +45,14 @@ public interface CommerceAuctionSessionMapper extends BaseMapperX<CommerceAuctio
                         .gt(CommerceAuctionSessionDO::getEndTime, now));
     }
 
+    default int extendEndTime(Long id, LocalDateTime expectedEnd, LocalDateTime extendedEnd) {
+        return update(new CommerceAuctionSessionDO().setEndTime(extendedEnd),
+                new LambdaUpdateWrapper<CommerceAuctionSessionDO>()
+                        .eq(CommerceAuctionSessionDO::getId, id)
+                        .eq(CommerceAuctionSessionDO::getEndTime, expectedEnd)
+                        .in(CommerceAuctionSessionDO::getStatus, AuctionStatusEnum.SCHEDULED.getStatus(), AuctionStatusEnum.RUNNING.getStatus()));
+    }
+
     default List<CommerceAuctionSessionDO> selectExpiredForUpdate(LocalDateTime now, int batchSize) {
         int safeBatchSize = Math.max(1, Math.min(batchSize, 1000));
         return selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CommerceAuctionSessionDO>()
