@@ -9,7 +9,7 @@ This directory contains the reproducible user-level runtime layout for Curmerce'
 | Nacos 3.0.3 | `127.0.0.1:8848` | Service registration and discovery |
 | `curmerce-core-service` | `127.0.0.1:48080` | Identity, members, products, inventory, orders, payments, refunds, and media |
 | `curmerce-community-service` | `127.0.0.1:48083` | Community posts and interactions; owns only `community_*` tables |
-| `curmerce-agent-service` | `127.0.0.1:48084` | Failure-isolated read-only product and community retrieval |
+| `curmerce-agent-service` | `127.0.0.1:48084` | Failure-isolated retrieval, controlled tools, and optional model/RAG runtime |
 | `curmerce-search-service` | `127.0.0.1:48085` | Kafka-driven Elasticsearch projections and rebuildable search |
 | `curmerce-auction-service` | `127.0.0.1:48086` | Auction lifecycle and bids; optional owned `curmerce_auction` schema with Core contract calls |
 | `curmerce-gateway` | `127.0.0.1:48082` | Stable frontend entry point, routing, CORS, and trace IDs |

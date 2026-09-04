@@ -15,7 +15,7 @@ English | [中文](./README.md)
 
 Curmerce is a community-content-driven, multi-mode commerce platform for interest-based consumption. It is also an autumn-recruiting portfolio project designed to demonstrate modern Java backend development, complex business modeling, transactional reliability, and architectural evolution.
 
-The project has completed its runnable `v0.1-modular-monolith` baseline and entered its first service-extraction stage. Standard commerce, individual listings, basic limited releases, basic auctions, and community content have usable end-to-end flows. Core commerce remains together, while Community and a read-only Agent now run as independently deployable and failure-isolated services.
+The project has completed its runnable `v0.1-modular-monolith` baseline and entered its first service-extraction stage. Standard commerce, individual listings, basic limited releases, basic auctions, and community content have usable end-to-end flows. Core commerce remains together, while Community, Agent, and the optional Auction service now run as independently deployable and failure-isolated services.
 
 ## Implemented Capabilities
 
@@ -27,7 +27,8 @@ The project has completed its runnable `v0.1-modular-monolith` baseline and ente
 - **Basic auctions**: session lifecycle, starting price and minimum increments, idempotent bidding, winner settlement, single-order creation, payment-timeout failure, and reuse of the standard fulfillment and refund lifecycle.
 - **Community foundation**: text posts with optional images, drafts and publishing, topics, search, comments and replies, likes, favorites, following feeds, reports and administrator moderation, plus optional post-product associations.
 - **Reliability baseline**: database constraints, idempotency keys for critical operations, duplicate payment and refund callback protection, order-state guards, inventory restoration, reconciliation queries, commerce event Outbox delivery, and a leased, exponentially retried, reconciled Community media desired-state Outbox.
-- **Service resilience and observability**: Resilience4j circuit breakers for Core, Community, and Agent downstream calls; Prometheus metrics for Gateway, Core, Community, and Agent; and locally sampled OpenTelemetry W3C tracing with opt-in export.
+- **Service resilience and observability**: Resilience4j circuit breakers for Core, Community, and Agent downstream calls; Prometheus metrics for Gateway, Core, Community, and Agent; Agent reliability alert rules; and locally sampled OpenTelemetry W3C tracing with opt-in export.
+- **Agent foundation**: product, community, and knowledge retrieval; source-cited answers; optional OpenAI-compatible/Spring AI Providers; allow-listed tool calls; refund confirmation; conversation memory; input policy; rate and usage quotas; audit; evaluation; and privacy-minimized feedback.
 - **Media asset foundation**: authenticated uploads, real-image validation, rate limits and user quotas, SHA-256 deduplication, stable asset URLs, business references and delayed orphan cleanup, private access, antivirus scanning, asynchronous WebP/AVIF variants, content moderation, administrator governance, and resumable object-storage migration.
 - **Acceptance frontend**: basic operational pages for buyers, individual sellers, merchants, and platform administrators across the current primary workflows.
 - **Frontend design standard**: Xiaohongshu-inspired content-first surfaces for consumers and community, an Apple-inspired restrained operational workspace for merchants, and a neutral graphite administration workspace. All three share Curmerce-owned tokens, radii, spacing, focus states, and responsive rules; source references remain under the ignored `design-references/` directory.
@@ -38,16 +39,16 @@ The project has completed its runnable `v0.1-modular-monolith` baseline and ente
 curmerce-web :3003 -> Spring Cloud Gateway :48082
                             |-> Core :48080      system, infra, member, commerce
                             |-> Community :48083 curmerce_community schema and APIs
-                            |-> Agent :48084     read-only retrieval and source degradation
+                            |-> Agent :48084     retrieval, controlled tools, and optional model providers
                             `-> Search :48085    Kafka-driven Elasticsearch product/post projections
                             `-> Auction :48086  auction HTTP boundary, timeouts and circuit breaker
                                       |
                                   Nacos :8848
 ```
 
-Core product, inventory, order, payment, and refund behavior remains in `yudao-server` to avoid prematurely introducing distributed transaction failures. Community no longer depends on Commerce, Member, or Infra persistence modules and reaches required core capabilities through an internal-key-protected HTTP contract. Agent requires no model credentials at this stage and provides a failure-isolated read-only retrieval and source-degradation skeleton.
+Core product, inventory, order, payment, and refund behavior remains in `yudao-server` to avoid prematurely introducing distributed transaction failures. Community no longer depends on Commerce, Member, or Infra persistence modules and reaches required core capabilities through an internal-key-protected HTTP contract. Agent never accesses business databases directly; it reads domain data through typed internal contracts, while Providers, Embeddings, Kafka projections, and external vector retrieval all remain disabled by default.
 
-MySQL remains the business source of truth. Core and Community share one local MySQL process but use separate `curmerce` and `curmerce_community` schemas with mutually restricted accounts. Redis supports framework capabilities and the local event stream, while Spring Cloud Gateway and Nacos support the first extraction. Kafka and Elasticsearch are now available as optional search-event transport and asynchronous projections. Spring AI model integration is not complete; the local Compose runtime provides optional telemetry, metrics, and tracing infrastructure rather than production alerting or SLOs.
+MySQL remains the business source of truth. Core and Community share one local MySQL process but use separate `curmerce` and `curmerce_community` schemas with mutually restricted accounts. Redis supports framework capabilities and the local event stream, while Spring Cloud Gateway and Nacos support the first extraction. Kafka and Elasticsearch are available as optional search-event transport, knowledge projection, and vector-retrieval infrastructure. The local Compose runtime provides metrics, tracing, and Agent alert rules, but it does not configure an external notification receiver.
 
 The project is built and run with JDK 21, and the root Maven build consistently targets Java 21 source and bytecode.
 
