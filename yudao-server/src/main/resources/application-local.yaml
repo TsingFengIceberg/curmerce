@@ -66,16 +66,55 @@ management:
       endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://127.0.0.1:4318/v1/traces}
 
 curmerce:
+  release:
+    traffic-gate-enabled: ${CURMERCE_RELEASE_TRAFFIC_GATE_ENABLED:true}
+    traffic-campaign-requests-per-window: ${CURMERCE_RELEASE_TRAFFIC_CAMPAIGN_LIMIT:2000}
+    traffic-user-requests-per-window: ${CURMERCE_RELEASE_TRAFFIC_USER_LIMIT:20}
+    traffic-window-seconds: ${CURMERCE_RELEASE_TRAFFIC_WINDOW_SECONDS:1}
+    distributed-queue-enabled: ${CURMERCE_RELEASE_DISTRIBUTED_QUEUE_ENABLED:false}
+    distributed-poll-ms: ${CURMERCE_RELEASE_DISTRIBUTED_POLL_MS:100}
+    distributed-ticket-ttl-seconds: ${CURMERCE_RELEASE_DISTRIBUTED_TICKET_TTL_SECONDS:3600}
+    distributed-max-attempts: ${CURMERCE_RELEASE_DISTRIBUTED_MAX_ATTEMPTS:3}
+    distributed-pending-idle-seconds: ${CURMERCE_RELEASE_DISTRIBUTED_PENDING_IDLE_SECONDS:30}
+    distributed-stream-max-length: ${CURMERCE_RELEASE_DISTRIBUTED_STREAM_MAX_LENGTH:10000}
+    distributed-retry-base-delay-ms: ${CURMERCE_RELEASE_DISTRIBUTED_RETRY_BASE_DELAY_MS:250}
+    distributed-retry-max-delay-ms: ${CURMERCE_RELEASE_DISTRIBUTED_RETRY_MAX_DELAY_MS:30000}
+    # Kafka mode persists a purchase command and a transactional Outbox record
+    # before it is delivered to a consumer group. It is intentionally opt-in:
+    # enable only together with curmerce.outbox.transport=kafka after the
+    # migration and multi-instance drill have passed.
+    kafka-queue-enabled: ${CURMERCE_RELEASE_KAFKA_QUEUE_ENABLED:false}
+    kafka-max-attempts: ${CURMERCE_RELEASE_KAFKA_MAX_ATTEMPTS:5}
+    kafka-retry-base-delay-ms: ${CURMERCE_RELEASE_KAFKA_RETRY_BASE_DELAY_MS:500}
+    kafka-retry-max-delay-ms: ${CURMERCE_RELEASE_KAFKA_RETRY_MAX_DELAY_MS:30000}
+    kafka-processing-lease-seconds: ${CURMERCE_RELEASE_KAFKA_PROCESSING_LEASE_SECONDS:120}
+    kafka-recovery-delay-ms: ${CURMERCE_RELEASE_KAFKA_RECOVERY_DELAY_MS:5000}
+    # Disabled by default; select one point only for a disposable local drill.
+    fault-injection-point: ${CURMERCE_RELEASE_FAULT_INJECTION_POINT:NONE}
+    fault-injection-fail-once: ${CURMERCE_RELEASE_FAULT_INJECTION_FAIL_ONCE:true}
   auction:
     # Core rejects legacy Auction writes once the independent service is cut over.
     local-store-enabled: ${CURMERCE_AUCTION_LOCAL_STORE_ENABLED:false}
+    # The Core-owned compatibility path also uses the Redis/Lua bid gate.
+    redis-gate-enabled: ${CURMERCE_AUCTION_REDIS_GATE_ENABLED:true}
   outbox:
     transport: ${CURMERCE_OUTBOX_TRANSPORT:redis}
     kafka:
       bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:19092}
       topic: ${CURMERCE_KAFKA_TOPIC:curmerce.events.v1}
+      agent-projection-topic: ${CURMERCE_AGENT_EVENT_PROJECTION_KAFKA_TOPIC:curmerce.agent.events.v1}
       consumer-group: ${CURMERCE_KAFKA_CONSUMER_GROUP:curmerce-core-ledger-v1}
       publish-timeout: ${CURMERCE_KAFKA_PUBLISH_TIMEOUT:5s}
+  community-search-outbox:
+    # Enable alongside curmerce.outbox.transport=kafka so product and post
+    # state events reach Search and Agent on the same ordered topic.
+    transport: ${CURMERCE_COMMUNITY_OUTBOX_TRANSPORT:none}
+    publish-delay-ms: ${CURMERCE_COMMUNITY_OUTBOX_PUBLISH_DELAY_MS:5000}
+    kafka:
+      bootstrap-servers: ${CURMERCE_COMMUNITY_KAFKA_BOOTSTRAP_SERVERS:${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:19092}}
+      topic: ${CURMERCE_COMMUNITY_KAFKA_TOPIC:${CURMERCE_KAFKA_TOPIC:curmerce.events.v1}}
+      agent-projection-topic: ${CURMERCE_AGENT_EVENT_PROJECTION_KAFKA_TOPIC:curmerce.agent.events.v1}
+      publish-timeout: ${CURMERCE_COMMUNITY_KAFKA_PUBLISH_TIMEOUT:5s}
   media:
     max-upload-size: ${CURMERCE_MEDIA_MAX_UPLOAD_SIZE:10MB}
     derivatives-enabled: ${CURMERCE_MEDIA_DERIVATIVES_ENABLED:true}
