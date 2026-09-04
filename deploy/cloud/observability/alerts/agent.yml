@@ -1,0 +1,39 @@
+groups:
+  - name: curmerce-agent-reliability
+    rules:
+      - alert: CurmerceAgentCircuitBreakerOpen
+        expr: max by (instance, name) (resilience4j_circuitbreaker_state{name=~"coreService|communityService|modelService",state="open"}) == 1
+        for: 1m
+        labels:
+          severity: warning
+          service: curmerce-agent
+        annotations:
+          summary: Curmerce Agent downstream circuit breaker is open
+          description: "{{ $labels.name }} is open on {{ $labels.instance }} for at least one minute. Agent requests are serving a degraded result or rejecting the affected dependency."
+      - alert: CurmerceAgentKnowledgeQueueBacklog
+        expr: max by (instance) (curmerce_agent_knowledge_queue_pending + curmerce_agent_knowledge_queue_retry_waiting) > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: curmerce-agent
+        annotations:
+          summary: Curmerce Agent knowledge queue has a sustained backlog
+          description: "{{ $labels.instance }} has more than 50 pending or retry-waiting knowledge jobs for five minutes. Inspect the consumer, Redis, embedding service, and vector backend."
+      - alert: CurmerceAgentRateLimitDenySpike
+        expr: sum by (instance, reason) (increase(curmerce_agent_policy_denied_total{reason=~"rate-limit|rate-limit-store-unavailable"}[5m])) > 20
+        for: 2m
+        labels:
+          severity: warning
+          service: curmerce-agent
+        annotations:
+          summary: Curmerce Agent request denials are spiking
+          description: "{{ $labels.instance }} has more than 20 Agent policy denials for {{ $labels.reason }} in five minutes."
+      - alert: CurmerceAgentExternalProjectionRepairBacklog
+        expr: sum by (instance) (curmerce_agent_knowledge_external_pending_upserts + curmerce_agent_knowledge_external_pending_deletes) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: curmerce-agent
+        annotations:
+          summary: Curmerce Agent external vector projection requires repair
+          description: "{{ $labels.instance }} has pending external vector upserts or deletes for ten minutes. The local knowledge mirror remains authoritative, but the external projection needs repair."

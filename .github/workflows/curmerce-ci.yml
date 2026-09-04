@@ -1,0 +1,54 @@
+name: Curmerce CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r script; do bash -n "$script"; done < <(find script -type f -name '*.sh' -print | sort)
+      - name: Run commerce, auction, and agent tests
+        run: >-
+          mvn -pl curmerce-module-commerce,curmerce-services/curmerce-auction-service,curmerce-services/curmerce-agent-service
+          -am -Dtest='*Test' -Dsurefire.failIfNoSpecifiedTests=false -Dflatten.skip=true test
+      - name: Run deterministic Agent evaluation contract
+        run: >-
+          mvn -pl curmerce-services/curmerce-agent-service -am
+          -Dtest='AgentEvaluationServiceTest,AgentGroundingValidatorTest,AgentToolExecutorTest'
+          -Dsurefire.failIfNoSpecifiedTests=false -Dflatten.skip=true test
+      - name: Check patch whitespace
+        run: git diff --check
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: curmerce-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: curmerce-web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:components

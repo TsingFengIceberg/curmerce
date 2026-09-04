@@ -97,6 +97,7 @@ services:
       - "--web.listen-address=127.0.0.1:19090"
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts:/etc/prometheus/alerts:ro
       - prometheus-data:/prometheus
 
   grafana:

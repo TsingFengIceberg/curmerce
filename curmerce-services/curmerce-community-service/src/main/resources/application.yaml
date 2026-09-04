@@ -95,6 +95,8 @@ curmerce:
     kafka-topic: ${CURMERCE_SEARCH_KAFKA_TOPIC:curmerce.events.v1}
     publish-delay-ms: ${CURMERCE_SEARCH_PUBLISH_DELAY_MS:2000}
     max-attempts: ${CURMERCE_SEARCH_MAX_ATTEMPTS:5}
+  agent-projection:
+    kafka-topic: ${CURMERCE_AGENT_EVENT_PROJECTION_KAFKA_TOPIC:curmerce.agent.events.v1}
   cloud:
     core:
       base-url: ${CURMERCE_CORE_BASE_URL:http://127.0.0.1:48080}

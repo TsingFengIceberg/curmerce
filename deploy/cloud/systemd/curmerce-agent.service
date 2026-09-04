@@ -8,6 +8,7 @@ Wants=curmerce-yudao-server.service curmerce-community.service
 Type=simple
 WorkingDirectory=/home/wugang/Data/Projects/curmerce
 EnvironmentFile=-/home/wugang/.config/curmerce-services/runtime.env
+EnvironmentFile=-/home/wugang/.config/curmerce-services/credentials.env
 Environment=NACOS_SERVER_ADDR=127.0.0.1:8848
 Environment=CURMERCE_CORE_BASE_URL=http://127.0.0.1:48080
 Environment=CURMERCE_COMMUNITY_BASE_URL=http://127.0.0.1:48083

@@ -20,15 +20,18 @@ public class CommunitySearchEventPublisher {
     private final CommunitySearchOutboxMapper outboxMapper;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final String topic;
+    private final String agentProjectionTopic;
     private final int maxAttempts;
 
     public CommunitySearchEventPublisher(CommunitySearchOutboxMapper outboxMapper,
                                          KafkaTemplate<String, String> kafkaTemplate,
                                          @Value("${curmerce.search.kafka-topic:curmerce.events.v1}") String topic,
+                                         @Value("${curmerce.agent-projection.kafka-topic:curmerce.agent.events.v1}") String agentProjectionTopic,
                                          @Value("${curmerce.search.max-attempts:5}") int maxAttempts) {
         this.outboxMapper = outboxMapper;
         this.kafkaTemplate = kafkaTemplate;
         this.topic = topic;
+        this.agentProjectionTopic = agentProjectionTopic;
         this.maxAttempts = Math.max(1, maxAttempts);
     }
 
@@ -44,8 +47,11 @@ public class CommunitySearchEventPublisher {
                 envelope.put("aggregateType", event.getAggregateType());
                 envelope.put("aggregateId", event.getAggregateId());
                 envelope.put("payload", event.getPayload());
-                kafkaTemplate.send(topic, String.valueOf(event.getAggregateId()), JsonUtils.toJsonString(envelope))
-                        .get(5, java.util.concurrent.TimeUnit.SECONDS);
+                String body = JsonUtils.toJsonString(envelope);
+                publishTo(topic, event.getAggregateId(), body);
+                if ("POST_CHANGED".equals(event.getEventType()) && agentTopicEnabled()) {
+                    publishTo(agentProjectionTopic, event.getAggregateId(), body);
+                }
                 outboxMapper.markPublished(event.getId(), LocalDateTime.now().withNano(0));
             } catch (Exception ex) {
                 int attempts = (event.getAttempts() == null ? 0 : event.getAttempts()) + 1;
@@ -60,5 +66,14 @@ public class CommunitySearchEventPublisher {
                 }
             }
         }
+    }
+
+    private void publishTo(String destination, Long aggregateId, String body) throws Exception {
+        kafkaTemplate.send(destination, String.valueOf(aggregateId), body)
+                .get(5, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private boolean agentTopicEnabled() {
+        return agentProjectionTopic != null && !agentProjectionTopic.isBlank() && !agentProjectionTopic.equals(topic);
     }
 }
