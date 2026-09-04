@@ -20,6 +20,7 @@ import cn.iocoder.yudao.module.commerce.controller.app.catalog.vo.PublicProductS
 import cn.iocoder.yudao.module.commerce.service.catalog.PublicCatalogService;
 import cn.iocoder.yudao.module.commerce.service.auction.AuctionCoreIntegrationService;
 import cn.iocoder.yudao.module.commerce.service.order.OrderService;
+import cn.iocoder.yudao.module.commerce.service.refund.RefundService;
 import cn.iocoder.yudao.module.infra.api.file.FileApi;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
@@ -52,6 +53,7 @@ public class CoreInternalController {
     @Resource private FileApi fileApi;
     @Resource private AuctionCoreIntegrationService auctionIntegrationService;
     @Resource private OrderService orderService;
+    @Resource private RefundService refundService;
 
     @PostMapping("/auth/check")
     public CommonResult<OAuth2AccessTokenCheckRespDTO> checkToken(
@@ -157,6 +159,14 @@ public class CoreInternalController {
                 .setShippingTime(order.getShippingTime()).setCompletionTime(order.getCompletionTime())
                 .setLogisticsCompany(order.getLogisticsCompany()).setTrackingNo(order.getTrackingNo());
         return success(response);
+    }
+
+    @GetMapping("/refund/{userId}/{orderId}/status")
+    public CommonResult<cn.iocoder.yudao.module.commerce.controller.app.refund.vo.RefundRespVO> getOwnRefundStatus(
+            @RequestHeader(INTERNAL_TOKEN_HEADER) String internalToken,
+            @PathVariable Long userId, @PathVariable Long orderId) {
+        requestGuard.check(internalToken);
+        return success(refundService.getRefundByOrder(userId, orderId));
     }
 
     private static CoreMemberUserRespDTO toMember(MemberUserRespDTO source) {

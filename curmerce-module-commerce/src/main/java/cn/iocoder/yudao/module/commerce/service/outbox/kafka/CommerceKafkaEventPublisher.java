@@ -18,30 +18,49 @@ public class CommerceKafkaEventPublisher implements CommerceOutboxMessagePublish
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final String topic;
+    private final String agentProjectionTopic;
     private final Duration publishTimeout;
 
     public CommerceKafkaEventPublisher(KafkaTemplate<String, String> kafkaTemplate,
                                        @Value("${curmerce.outbox.kafka.topic:curmerce.events.v1}") String topic,
+                                       @Value("${curmerce.outbox.kafka.agent-projection-topic:curmerce.agent.events.v1}") String agentProjectionTopic,
                                        @Value("${curmerce.outbox.kafka.publish-timeout:5s}") Duration publishTimeout) {
         this.kafkaTemplate = kafkaTemplate;
         this.topic = topic;
+        this.agentProjectionTopic = agentProjectionTopic;
         this.publishTimeout = publishTimeout;
     }
 
     @Override
     public void publish(CommerceOutboxEventDO event) {
         CommerceKafkaEventMessage message = new CommerceKafkaEventMessage()
-                .setEventId(event.getId()).setEventType(event.getEventType())
+                .setEventId(event.getId()).setTenantId(event.getTenantId() == null || event.getTenantId().isBlank() ? "default" : event.getTenantId())
+                .setEventType(event.getEventType())
                 .setEventKey(event.getEventKey()).setAggregateType(event.getAggregateType())
                 .setAggregateId(event.getAggregateId()).setPayload(event.getPayload());
         try {
-            kafkaTemplate.send(topic, String.valueOf(event.getAggregateId()), JsonUtils.toJsonString(message))
-                    .get(publishTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            String body = JsonUtils.toJsonString(message);
+            publishTo(topic, message.getTenantId(), event.getAggregateId(), body);
+            // Agent consumes only product knowledge changes on its own topic.
+            // Publishing both records before returning preserves the Outbox
+            // retry contract if the Agent projection broker path is unavailable.
+            if ("PRODUCT_CHANGED".equals(event.getEventType()) && agentTopicEnabled()) {
+                publishTo(agentProjectionTopic, message.getTenantId(), event.getAggregateId(), body);
+            }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Kafka publish interrupted", ex);
         } catch (Exception ex) {
             throw new IllegalStateException("Kafka publish failed", ex);
         }
+    }
+
+    private void publishTo(String destination, String tenantId, Long aggregateId, String body) throws Exception {
+        kafkaTemplate.send(destination, tenantId + ":" + aggregateId, body)
+                .get(publishTimeout.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private boolean agentTopicEnabled() {
+        return agentProjectionTopic != null && !agentProjectionTopic.isBlank() && !agentProjectionTopic.equals(topic);
     }
 }

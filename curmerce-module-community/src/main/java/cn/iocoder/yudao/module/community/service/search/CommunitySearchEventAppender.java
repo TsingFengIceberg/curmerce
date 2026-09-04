@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 
 @Component
 public class CommunitySearchEventAppender {
@@ -18,12 +19,19 @@ public class CommunitySearchEventAppender {
 
     public void appendState(Long postId, Map<String, Object> payload) {
         if (postId == null) return;
+        String tenantId = tenantId();
         String serialized = payload == null ? "{}" : JsonUtils.toJsonString(payload);
         String eventKey = CommunitySearchEventTypeEnum.POST_CHANGED.name() + ":" + postId + ":" + sha256(serialized);
         if (outboxMapper.selectByTypeAndKey(CommunitySearchEventTypeEnum.POST_CHANGED.name(), eventKey) != null) return;
         outboxMapper.insert(new CommunitySearchOutboxDO().setEventType(CommunitySearchEventTypeEnum.POST_CHANGED.name())
+                .setTenantId(tenantId)
                 .setEventKey(eventKey).setAggregateType("community_post").setAggregateId(postId)
                 .setPayload(serialized).setStatus(10).setAttempts(0));
+    }
+
+    public static String tenantId() {
+        Long value = TenantContextHolder.getTenantId();
+        return value == null ? "default" : String.valueOf(value);
     }
 
     private static String sha256(String value) {

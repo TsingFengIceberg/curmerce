@@ -10,6 +10,7 @@ import org.apache.ibatis.annotations.Mapper;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import cn.iocoder.yudao.module.commerce.service.outbox.CommerceOutboxEventAppender;
 
 @Mapper
 public interface CommerceOutboxMapper extends BaseMapperX<CommerceOutboxEventDO> {
@@ -17,7 +18,8 @@ public interface CommerceOutboxMapper extends BaseMapperX<CommerceOutboxEventDO>
     default CommerceOutboxEventDO selectByTypeAndKey(String eventType, String eventKey) {
         return selectOne(new LambdaQueryWrapper<CommerceOutboxEventDO>()
                 .eq(CommerceOutboxEventDO::getEventType, eventType)
-                .eq(CommerceOutboxEventDO::getEventKey, eventKey));
+                .eq(CommerceOutboxEventDO::getEventKey, eventKey)
+                .eq(CommerceOutboxEventDO::getTenantId, CommerceOutboxEventAppender.tenantId()));
     }
 
     /**

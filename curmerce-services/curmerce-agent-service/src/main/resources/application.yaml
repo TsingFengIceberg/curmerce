@@ -1,6 +1,38 @@
 spring:
   application:
     name: curmerce-agent-service
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:16379}
+      username: ${REDIS_USER:curmerce}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+  ai:
+    # Spring AI otherwise assumes every OpenAI model type is active when its
+    # starter is on the classpath. Keep unused model families disabled until a
+    # Provider, model name and API key are deliberately configured.
+    model:
+      chat: ${CURMERCE_AGENT_SPRING_AI_CHAT_PROVIDER:none}
+      embedding: ${CURMERCE_AGENT_SPRING_AI_EMBEDDING_PROVIDER:none}
+      audio:
+        speech: none
+        transcription: none
+      image: none
+      moderation: none
+    openai:
+      # These properties are consumed only when spring-ai-enabled=true. The
+      # compatible HTTP client remains the default provider for local runs.
+      base-url: ${CURMERCE_AGENT_SPRING_AI_BASE_URL:${CURMERCE_AGENT_MODEL_BASE_URL:http://127.0.0.1:11434/v1}}
+      api-key: ${CURMERCE_AGENT_SPRING_AI_API_KEY:${CURMERCE_AGENT_MODEL_API_KEY:}}
+      chat:
+        enabled: ${CURMERCE_AGENT_SPRING_AI_CHAT_ENABLED:${CURMERCE_AGENT_SPRING_AI_ENABLED:false}}
+        options:
+          model: ${CURMERCE_AGENT_MODEL_NAME:curmerce-local}
+      embedding:
+        enabled: ${CURMERCE_AGENT_SPRING_AI_EMBEDDING_ENABLED:${CURMERCE_AGENT_SPRING_AI_ENABLED:false}}
+        options:
+          model: ${CURMERCE_AGENT_EMBEDDING_MODEL:curmerce-embedding}
   cloud:
     nacos:
       discovery:
@@ -20,12 +52,59 @@ curmerce:
     connect-timeout: ${CURMERCE_AGENT_CONNECT_TIMEOUT:1s}
     read-timeout: ${CURMERCE_AGENT_READ_TIMEOUT:2s}
     model-enabled: ${CURMERCE_AGENT_MODEL_ENABLED:false}
+    spring-ai-enabled: ${CURMERCE_AGENT_SPRING_AI_ENABLED:false}
     model-base-url: ${CURMERCE_AGENT_MODEL_BASE_URL:http://127.0.0.1:11434/v1}
     model-api-key: ${CURMERCE_AGENT_MODEL_API_KEY:}
     model-name: ${CURMERCE_AGENT_MODEL_NAME:curmerce-local}
     input-cost-per-thousand-tokens: ${CURMERCE_AGENT_INPUT_COST_PER_1K:0}
     output-cost-per-thousand-tokens: ${CURMERCE_AGENT_OUTPUT_COST_PER_1K:0}
     internal-token: ${CURMERCE_INTERNAL_TOKEN:${CURMERCE_OAUTH_CLIENT_SECRET:}}
+    requests-per-minute: ${CURMERCE_AGENT_REQUESTS_PER_MINUTE:30}
+    embedding-enabled: ${CURMERCE_AGENT_EMBEDDING_ENABLED:false}
+    embedding-base-url: ${CURMERCE_AGENT_EMBEDDING_BASE_URL:${CURMERCE_AGENT_MODEL_BASE_URL:http://127.0.0.1:11434/v1}}
+    embedding-api-key: ${CURMERCE_AGENT_EMBEDDING_API_KEY:${CURMERCE_AGENT_MODEL_API_KEY:}}
+    embedding-model: ${CURMERCE_AGENT_EMBEDDING_MODEL:curmerce-embedding}
+    vector-backend: ${CURMERCE_AGENT_VECTOR_BACKEND:redis}
+    vector-base-url: ${CURMERCE_AGENT_VECTOR_BASE_URL:http://127.0.0.1:19200}
+    vector-index-name: ${CURMERCE_AGENT_VECTOR_INDEX:curmerce-agent-knowledge}
+    vector-api-key: ${CURMERCE_AGENT_VECTOR_API_KEY:}
+    max-tool-rounds: ${CURMERCE_AGENT_MAX_TOOL_ROUNDS:2}
+    max-context-chars: ${CURMERCE_AGENT_MAX_CONTEXT_CHARS:12000}
+    knowledge-poll-ms: ${CURMERCE_AGENT_KNOWLEDGE_POLL_MS:500}
+    knowledge-max-attempts: ${CURMERCE_AGENT_KNOWLEDGE_MAX_ATTEMPTS:3}
+    knowledge-retry-base-delay-ms: ${CURMERCE_AGENT_KNOWLEDGE_RETRY_BASE_DELAY_MS:500}
+    knowledge-retry-max-delay-ms: ${CURMERCE_AGENT_KNOWLEDGE_RETRY_MAX_DELAY_MS:30000}
+    knowledge-pending-idle-seconds: ${CURMERCE_AGENT_KNOWLEDGE_PENDING_IDLE_SECONDS:30}
+    knowledge-processing-lease-seconds: ${CURMERCE_AGENT_KNOWLEDGE_PROCESSING_LEASE_SECONDS:120}
+    knowledge-reconcile-ms: ${CURMERCE_AGENT_KNOWLEDGE_RECONCILE_MS:60000}
+    event-projection:
+      # Disabled until Kafka and the product/community Outboxes are enabled.
+      # The projection consumer acknowledges an event only after the Agent
+      # Redis knowledge mirror and its aggregate checkpoint have been updated.
+      enabled: ${CURMERCE_AGENT_EVENT_PROJECTION_ENABLED:false}
+      kafka-bootstrap-servers: ${CURMERCE_AGENT_EVENT_PROJECTION_KAFKA_BOOTSTRAP_SERVERS:${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:19092}}
+      kafka-topic: ${CURMERCE_AGENT_EVENT_PROJECTION_KAFKA_TOPIC:curmerce.agent.events.v1}
+      kafka-consumer-group: ${CURMERCE_AGENT_EVENT_PROJECTION_KAFKA_CONSUMER_GROUP:curmerce-agent-knowledge-v1}
+      retry-backoff-ms: ${CURMERCE_AGENT_EVENT_PROJECTION_RETRY_BACKOFF_MS:1000}
+      max-retries: ${CURMERCE_AGENT_EVENT_PROJECTION_MAX_RETRIES:3}
+      lock-seconds: ${CURMERCE_AGENT_EVENT_PROJECTION_LOCK_SECONDS:120}
+    daily-token-limit: ${CURMERCE_AGENT_DAILY_TOKEN_LIMIT:0}
+    daily-cost-limit: ${CURMERCE_AGENT_DAILY_COST_LIMIT:0}
+    audit-jdbc-enabled: ${CURMERCE_AGENT_AUDIT_JDBC_ENABLED:false}
+    audit-jdbc-url: ${CURMERCE_AGENT_AUDIT_JDBC_URL:jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:13306}/${MYSQL_DATABASE:curmerce}?useSSL=false&serverTimezone=Asia/Shanghai}
+    audit-jdbc-username: ${CURMERCE_AGENT_AUDIT_JDBC_USERNAME:${MYSQL_USER:curmerce}}
+    audit-jdbc-password: ${CURMERCE_AGENT_AUDIT_JDBC_PASSWORD:${MYSQL_PASSWORD:}}
+    audit-retention-days: ${CURMERCE_AGENT_AUDIT_RETENTION_DAYS:30}
+    audit-retention-cleanup-ms: ${CURMERCE_AGENT_AUDIT_RETENTION_CLEANUP_MS:3600000}
+    rules-jdbc-enabled: ${CURMERCE_AGENT_RULES_JDBC_ENABLED:false}
+    rules-jdbc-url: ${CURMERCE_AGENT_RULES_JDBC_URL:jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:13306}/${MYSQL_DATABASE:curmerce}?useSSL=false&serverTimezone=Asia/Shanghai}
+    rules-jdbc-username: ${CURMERCE_AGENT_RULES_JDBC_USERNAME:${MYSQL_USER:curmerce}}
+    rules-jdbc-password: ${CURMERCE_AGENT_RULES_JDBC_PASSWORD:${MYSQL_PASSWORD:}}
+    rules:
+      payment-timeout-minutes: ${CURMERCE_AGENT_PAYMENT_TIMEOUT_MINUTES:30}
+      refund-policy: ${CURMERCE_AGENT_REFUND_POLICY:已发货订单需商家审核，退款状态异步更新}
+      stock-source: ${CURMERCE_AGENT_STOCK_SOURCE:MySQL 事务库存为最终事实来源}
+      auction: ${CURMERCE_AGENT_AUCTION_RULE:出价按金额和入库顺序确定领先者}
 
 resilience4j:
   circuitbreaker:
@@ -45,6 +124,14 @@ resilience4j:
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+      modelService:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: ${CURMERCE_AGENT_MODEL_CIRCUIT_WAIT:15s}
+        permitted-number-of-calls-in-half-open-state: 2
         automatic-transition-from-open-to-half-open-enabled: true
 
 management:

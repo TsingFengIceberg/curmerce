@@ -41,10 +41,38 @@ public class AgentCoreClient {
         }
     }
 
+    public JsonNode requestRefund(String authorization, Long orderId, String reason) {
+        authenticate(authorization);
+        if (orderId == null || reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("退款订单和原因不能为空");
+        }
+        try {
+            JsonNode body = client.post().uri("/commerce/refund/apply")
+                    .header("Authorization", authorization)
+                    .header("tenant-id", AgentRequestContext.tenantId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("orderId", orderId, "reason", reason.trim()))
+                    .retrieve().body(JsonNode.class);
+            check(body);
+            return body.path("data");
+        } catch (AgentServiceException | AgentAuthorizationException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new AgentServiceException("退款服务暂时不可用", ex);
+        }
+    }
+
+    public JsonNode getOwnRefundStatus(String authorization, Long orderId) {
+        Long userId = authenticate(authorization);
+        JsonNode body = get("/internal-api/curmerce/core/refund/" + userId + "/" + orderId + "/status");
+        return body.path("data");
+    }
+
     private JsonNode post(String path, Object request) {
         requireInternalToken();
         try {
             JsonNode body = client.post().uri(path).header("X-Curmerce-Internal-Token", properties.internalToken())
+                    .header("tenant-id", AgentRequestContext.tenantId())
                     .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class);
             check(body);
             return body;
@@ -59,6 +87,7 @@ public class AgentCoreClient {
         requireInternalToken();
         try {
             JsonNode body = client.get().uri(path).header("X-Curmerce-Internal-Token", properties.internalToken())
+                    .header("tenant-id", AgentRequestContext.tenantId())
                     .retrieve().body(JsonNode.class);
             check(body);
             return body;

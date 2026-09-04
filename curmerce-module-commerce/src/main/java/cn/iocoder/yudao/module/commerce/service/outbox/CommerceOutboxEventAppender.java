@@ -12,6 +12,7 @@ import java.util.Map;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 
 /**
  * 事务性 Outbox 事件追加器。
@@ -41,6 +42,7 @@ public class CommerceOutboxEventAppender {
             return;
         }
         CommerceOutboxEventDO event = new CommerceOutboxEventDO()
+                .setTenantId(tenantId())
                 .setEventType(type.name())
                 .setEventKey(eventKey)
                 .setAggregateType(type.getAggregateType())
@@ -67,10 +69,17 @@ public class CommerceOutboxEventAppender {
             return;
         }
         outboxMapper.insert(new CommerceOutboxEventDO()
+                .setTenantId(tenantId())
                 .setEventType(type.name()).setEventKey(eventKey)
                 .setAggregateType(type.getAggregateType()).setAggregateId(aggregateId)
                 .setPayload(serialized).setStatus(CommerceOutboxStatusEnum.PENDING.getStatus())
                 .setAttempts(0));
+    }
+
+    /** Captures the tenant before a scheduled publisher loses request context. */
+    public static String tenantId() {
+        Long value = TenantContextHolder.getTenantId();
+        return value == null ? "default" : String.valueOf(value);
     }
 
     private static String sha256(String value) {

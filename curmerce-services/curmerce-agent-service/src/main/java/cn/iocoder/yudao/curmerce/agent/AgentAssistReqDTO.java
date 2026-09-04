@@ -9,4 +9,6 @@ public class AgentAssistReqDTO {
     @NotBlank
     @Size(min = 2, max = 100)
     private String query;
+    @Size(max = 80)
+    private String conversationId;
 }

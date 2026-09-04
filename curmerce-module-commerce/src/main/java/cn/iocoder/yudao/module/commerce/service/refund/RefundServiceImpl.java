@@ -110,6 +110,17 @@ public class RefundServiceImpl implements RefundService {
 
     @Override
     @Transactional(readOnly = true)
+    public RefundRespVO getRefundByOrder(Long userId, Long orderId) {
+        memberUserApi.validateActiveUser(userId);
+        CommerceRefundDO refund = refundMapper.selectByOrderId(orderId);
+        if (refund == null || !userId.equals(refund.getMemberUserId())) {
+            throw exception(REFUND_NOT_FOUND);
+        }
+        return toResponse(refund);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PageResult<RefundRespVO> getAdminRefundPage(RefundPageReqVO reqVO) {
         return toPage(refundMapper.selectPageAdmin(reqVO));
     }

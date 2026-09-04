@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Mapper;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import cn.iocoder.yudao.module.community.service.search.CommunitySearchEventAppender;
 
 @Mapper
 public interface CommunitySearchOutboxMapper extends BaseMapperX<CommunitySearchOutboxDO> {
@@ -15,7 +16,8 @@ public interface CommunitySearchOutboxMapper extends BaseMapperX<CommunitySearch
     default CommunitySearchOutboxDO selectByTypeAndKey(String eventType, String eventKey) {
         return selectOne(new LambdaQueryWrapper<CommunitySearchOutboxDO>()
                 .eq(CommunitySearchOutboxDO::getEventType, eventType)
-                .eq(CommunitySearchOutboxDO::getEventKey, eventKey));
+                .eq(CommunitySearchOutboxDO::getEventKey, eventKey)
+                .eq(CommunitySearchOutboxDO::getTenantId, CommunitySearchEventAppender.tenantId()));
     }
 
     default List<CommunitySearchOutboxDO> selectPending(int batchSize) {

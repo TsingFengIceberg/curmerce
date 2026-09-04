@@ -15,6 +15,8 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(callSuper = true)
 public class CommunitySearchOutboxDO extends BaseDO {
     @TableId private Long id;
+    /** Stable tenant value captured at append time for asynchronous publishers. */
+    private String tenantId;
     private String eventType;
     private String eventKey;
     private String aggregateType;

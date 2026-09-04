@@ -16,6 +16,8 @@ public interface RefundService {
 
     RefundRespVO getRefund(Long userId, Long id);
 
+    RefundRespVO getRefundByOrder(Long userId, Long orderId);
+
     PageResult<RefundRespVO> getAdminRefundPage(RefundPageReqVO reqVO);
 
     RefundRespVO getAdminRefund(Long id);

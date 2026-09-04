@@ -15,4 +15,12 @@ public class AgentAssistRespDTO {
     private boolean modelBacked;
     private String modelAnswer;
     private AgentUsageRecorder.Usage usage;
+    private List<SpringAiCompatibleChatClient.ToolCall> toolCalls;
+    private List<SpringAiCompatibleChatClient.ToolResult> toolResults;
+    private List<String> groundingWarnings;
+    /** Stable, bounded references used to verify an answer in the UI or audit log. */
+    private List<AgentSourceReference> references;
+
+    public record AgentSourceReference(String source, String id, String title,
+                                       String excerpt, String path) { }
 }

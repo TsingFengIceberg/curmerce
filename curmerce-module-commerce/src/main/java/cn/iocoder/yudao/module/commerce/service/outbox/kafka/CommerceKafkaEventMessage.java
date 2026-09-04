@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 public class CommerceKafkaEventMessage {
     private Long eventId;
+    private String tenantId;
     private String eventType;
     private String eventKey;
     private String aggregateType;

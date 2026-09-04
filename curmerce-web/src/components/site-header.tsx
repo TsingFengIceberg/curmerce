@@ -14,6 +14,7 @@ import {
   Search,
   ShoppingBag,
   ShoppingCart,
+  Sparkles,
   Store,
   Timer,
   X,
@@ -42,6 +43,7 @@ const publicLinks = [
   { href: "/community", label: "发现", icon: Compass },
   { href: "/catalog", label: "商城", icon: Store },
   { href: "/search", label: "搜索", icon: Search },
+  { href: "/agent", label: "助手", icon: Sparkles },
   { href: "/releases", label: "限时发售", icon: Timer },
   { href: "/auctions", label: "拍卖", icon: Gavel },
 ];
